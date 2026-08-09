@@ -1,0 +1,330 @@
+Metadata-Version: 2.4
+Name: abm-analysis
+Version: 0.1.0
+Summary: Python analysis workflow for behavioural-finance ABM experiment archives.
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: arch>=8.0
+Requires-Dist: jinja2>=3.1
+Requires-Dist: kaleido>=1.3
+Requires-Dist: numpy>=1.26
+Requires-Dist: optuna>=4.0
+Requires-Dist: pandas>=2.3
+Requires-Dist: plotly>=6.1
+Requires-Dist: psycopg[binary]>=3.2
+Requires-Dist: scipy>=1.13
+Requires-Dist: sqlalchemy>=2.0
+Requires-Dist: statsmodels>=0.14
+Provides-Extra: test
+Requires-Dist: pytest>=8.0; extra == "test"
+
+# Agent-Based Modelling Integrating Behavioural Finance Theory
+
+This repository contains a C++ agent-based market model used to study whether
+behavioural-finance mechanisms can reproduce financial-market stylised facts,
+especially during crisis-like regimes.
+
+For a class-level view of the current C++ implementation, see the
+[Mermaid architecture diagram](docs/class_architecture.mmd).
+
+## Scalable Project Structure
+
+The C++ build keeps the top-level `CMakeLists.txt` focused on target wiring.
+Domain code is compiled as small targets and exposed through the compatibility
+aggregate `abm_core`, which is still what `simulate` and tests link against.
+Reusable build policy is separated into small CMake modules:
+
+- `cmake/AbmCompilerOptions.cmake`: warning levels, optional warnings-as-errors,
+  and sanitizer flags.
+- `cmake/AbmBuildMetadata.cmake`: model version, Git commit, and dirty-tree
+  provenance compiled into run metadata.
+- `cmake/AbmSourceSets.cmake`: domain-owned source lists for utility,
+  configuration, market mechanics, behavioural finance, agents, simulation,
+  analysis, output, archive/workflow, application, and tests.
+
+When adding a new C++ module, place the implementation under the matching
+`src/<Domain>/` folder and register its `.cpp` file in the corresponding source
+set inside `cmake/AbmSourceSets.cmake`. The main domain targets are
+`abm_utility`, `abm_config`, `abm_market`, `abm_behavioural_finance`,
+`abm_agents`, `abm_results`, `abm_simulation`, `abm_analysis`, `abm_output`,
+`abm_archive`, and `abm_application`.
+
+Configuration records are split by modelling role under
+`src/ControlParameters/`; `SimulationConfig.h` remains the stable facade include.
+Completed-run DTOs live in `src/Results/SimulationRunResult.h`, while
+`src/Simulation/SimulationRunResult.h` remains a transitional include wrapper.
+Output CSV writers are split by artefact so step time series, agent snapshots,
+trade ledgers, summary metrics, and stylised-fact screens can evolve
+independently. A build-level diagram is available in
+[docs/build_structure.mmd](docs/build_structure.mmd).
+
+## Experiment Data Storage
+
+The C++ simulator still writes completed runs into a portable staging folder
+before any database import:
+
+```text
+data/experiments/<experiment_name>/<run_id>/
+```
+
+The `run_id` is numeric and reproducible in structure:
+
+```text
+YYYYMMDDHHMMSS_<prospect_theory>_<prospect_heterogeneity>_<social_enabled>_<short_sale>_<num_fundamentalists>_<num_chartists>_<num_noise_traders>_<num_buy_and_hold_agents>_<time_steps>_<seed>
+```
+
+`num_noise_traders` records the population of random-liquidity agents, while
+`num_buy_and_hold_agents` records passive allocation agents. Legacy archives
+without these fields are still accepted by the Python analysis workflow and are
+interpreted as having zero missing populations.
+
+Each run directory contains:
+
+```text
+config_used.cfg
+config.json
+metadata.json
+step_timeseries.csv
+agents_final.csv
+trade_ledger.csv   # only when trade_ledger_enabled = 1
+summary_metrics.csv
+stylised_facts.csv
+logs/run.log
+```
+
+`config_used.cfg` preserves the exact human-edited input file. `config.json`
+stores the resolved parameter set in a normalised machine-readable form, and
+`metadata.json` records provenance such as local creation time, Git commit,
+compiler, and `config_hash`. Paths recorded inside `metadata.json` are portable
+references relative to the run folder, not machine-specific absolute paths.
+The detailed counterparty-level trade ledger is disabled by default because it
+is an audit artefact that can become large in calibration sweeps; enable
+`trade_ledger_enabled = 1` only for order-flow or microstructure inspection.
+
+PostgreSQL is the primary long-term research store when
+`database_output_enabled = 1`. Set `ABM_DATABASE_URL` to a SQLAlchemy-style
+PostgreSQL URL such as `postgresql+psycopg://user:password@localhost:5432/abm`
+and keep credentials out of config files. The importer stores run identifiers,
+experiment labels, normalized config JSON, sanitized metadata, simulation time
+series, final agent snapshots, trade ledger rows, summary metrics, stylised-fact
+screens, benchmark series, and import audit records. It does not store local
+filesystem paths.
+
+The staging folder remains useful for failed imports, portability, and legacy
+inspection. If `database_prune_after_import = 1`, staging CSV/JSON/log files are
+deleted only after the PostgreSQL import succeeds.
+
+The latent fundamental value is generated as an additive process with optional
+drift and a positive floor:
+`F_next = max(F_min, F_current + fundamental_drift_per_step + shock)`. Use
+`fundamental_drift_per_step` to impose a steady expected increase while
+`fundamental_shock_std_dev` controls exogenous valuation noise.
+
+Parameter-sweep templates live in `config/experiments/`. They are deliberately
+CSV-only so the experiment design remains easy to inspect, version, and discuss
+in thesis documentation.
+
+## Agent Populations
+
+The model supports four strategy populations:
+
+- `num_fundamentalists`: value-oriented agents trading on fundamental
+  mispricing.
+- `num_chartists`: technical agents trading on momentum, mean reversion, RSI,
+  or Donchian-style breakout signals. `chartist_strategy_mode = random` samples
+  across all four rules with the configured deterministic seed.
+- `num_noise_traders`: uninformed random-liquidity agents whose orders are
+  driven by zero-mean stochastic log-belief shocks.
+- `num_buy_and_hold_agents`: passive allocation agents that preserve a target
+  risky-asset weight.
+
+Noise traders are configured with `noise_trader_belief_shock_std_dev`,
+`noise_trader_order_size_fraction`, and `noise_trader_max_short_weight`. The
+implementation follows the noise-trader-risk interpretation of De Long,
+Shleifer, Summers, and Waldmann, while remaining compatible with the continuous
+auction role of random noise traders in Kyle-style market microstructure.
+
+When `control_prospect_theory_enabled = 1`, the setting
+`control_prospect_theory_agent_fraction` selects the exact seeded fraction of
+the total population carrying Prospect Theory preferences. This allows mixed
+expected-utility and CPT populations in one run while preserving reproducible
+agent assignment for a fixed seed.
+
+## PostgreSQL Import Workflow
+
+Install the Python analysis dependencies into the project virtual environment:
+
+```text
+.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -e .
+```
+
+Initialise the database schema:
+
+```text
+export ABM_DATABASE_URL='postgresql+psycopg://user:password@localhost:5432/abm'
+.venv/bin/python -m abm_analysis db init
+```
+
+Import existing experiment archives and empirical benchmark CSVs:
+
+```text
+.venv/bin/python -m abm_analysis db import-all \
+  --experiments-root data/experiments \
+  --benchmark-dir "data/Stock Data/Candle Chart"
+```
+
+Validate source row counts against PostgreSQL:
+
+```text
+.venv/bin/python -m abm_analysis db validate \
+  --experiments-root data/experiments \
+  --benchmark-dir "data/Stock Data/Candle Chart"
+```
+
+For one completed staging run, use:
+
+```text
+.venv/bin/python -m abm_analysis db import-run data/experiments/demo/<run_id>
+```
+
+Add `--prune-source` only when the run has imported successfully and the CSV/JSON
+staging files should be removed.
+
+## Python Analysis Workflow
+
+The project uses Python, not R, for experiment visualisation and comparison.
+Install the analysis dependencies into the project virtual environment from the
+repository root:
+
+```text
+.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -e .
+```
+
+Generate a SQL-backed report for one imported run:
+
+```text
+.venv/bin/python -m abm_analysis run <run_id>
+```
+
+The command-line report workflow reads PostgreSQL by default. Use
+`--source files` to analyse legacy staging folders directly:
+
+```text
+.venv/bin/python -m abm_analysis run data/experiments/demo/<run_id> --source files
+```
+
+In database mode, empirical benchmark comparisons come from imported benchmark
+tables unless `--benchmark-dir <path>` is supplied. Disable benchmark comparison
+with `--no-benchmark`, select specific benchmarks with `--benchmark-series
+SPX,NAQ`, or use `--export-images` to attempt PNG and SVG figure exports through
+Kaleido.
+
+The C++ executable can also generate these reports automatically after a
+simulation finishes. In `config/simulation.cfg`, keep
+`python_analysis_enabled = 1` and set `python_analysis_python` to the project
+virtual environment. The automatic single-run report is written to
+`<run_id>/python_analysis/index.html` and opened in the default browser; the
+refreshed experiment comparison is written to
+`comparison_reports/latest/index.html` but is not opened automatically.
+
+Generate a full static comparison report for all imported runs in an experiment:
+
+```text
+.venv/bin/python -m abm_analysis compare demo
+```
+
+Legacy file mode remains available:
+
+```text
+.venv/bin/python -m abm_analysis compare data/experiments/demo --source files
+```
+
+## Automatic Calibration Workflow
+
+The Python analysis package can run an Optuna search around the C++ simulator.
+The simulator remains the deterministic model engine; Python proposes config
+values, launches archived runs, scores simulated returns against empirical
+benchmarks, and records the best seed-robust candidates.
+
+```text
+.venv/bin/python -m abm_analysis calibrate \
+  --base-config config/simulation.cfg \
+  --search-space config/calibration/search_space.json \
+  --simulator build/simulate \
+  --trials 200 \
+  --seeds 55,66,77 \
+  --benchmark-series SPX
+```
+
+Calibration outputs are written under `data/calibration/<calibration_name>/`:
+
+```text
+calibration_trials.csv
+best_config.cfg
+best_config.json
+best_runs/
+calibration_summary.json
+holdout_validation/
+```
+
+During calibration, large per-run simulator CSV files are used only long enough
+to score the objective and are then pruned by default. Pass `--keep-run-csv`
+only when you deliberately want to inspect each trial's raw simulator exports.
+Each trial is also scored in a fresh Python worker process by default, so
+pandas, NumPy, statsmodels, and ARCH memory is returned to macOS after every
+trial. Pass `--no-isolate-trials` only for debugging the calibration internals.
+The C++ simulator's per-step progress bar is shown for every calibration
+simulation; pass `--quiet-simulation-progress` when running unattended batches.
+
+The default score is lower-is-better and combines K-S distance, Wasserstein
+distance, tail-quantile errors, raw/absolute/squared-return ACF distances, and
+penalties for missing stylised facts. Treat the result as simulation-based
+minimum-distance calibration, not proof of a unique true parameter set; define
+the benchmark period, search bounds, seeds, and any holdout benchmark before
+running large searches.
+
+Comparison reports are written under:
+
+```text
+data/experiments/<experiment_name>/comparison_reports/<YYYYMMDDHHMMSS>/
+```
+
+Each report contains an `index.html` file that opens directly in a browser and
+CSV files for thesis tables:
+
+```text
+runs_index.csv
+stylised_fact_diagnostics.csv
+pairwise_ks_log_returns.csv
+benchmark_diagnostics.csv
+simulation_vs_benchmark.csv
+seed_robustness_summary.csv
+stress_regime_diagnostics.csv
+figure_index.csv
+```
+
+When the simulation output contains continuous limit-order-book diagnostics,
+the report also includes microstructure panels for best bid/ask quotes,
+midquote, last trade price, bid-ask spread, visible depth, depth imbalance,
+market-order share, cancellations, expiries, and executed trades.
+When trade-ledger and final-agent snapshot files are available, the log-return
+distribution stacks each histogram bin by agent strategy participation.
+It also includes agent-level panels for final wealth, cash, inventory, wealth
+change, trading activity, and CPT/reference-point diagnostics, plus an
+`agent_summary_statistics.csv` table grouped by run and strategy.
+
+The diagnostics use established Python libraries: pandas and NumPy for data
+handling, Plotly for static interactive HTML figures, SciPy for two-sample
+Kolmogorov-Smirnov comparisons, statsmodels for Ljung-Box/Jarque-Bera/ARCH
+tests, and arch for Student-t GARCH(1,1) estimation. These tests support the
+stylised-fact interpretation of weak raw-return autocorrelation, fat tails, and
+volatility clustering.
+
+The thesis-validation report also compares simulated returns against empirical
+benchmarks using K-S distance, Wasserstein distance, return-quantile errors, and
+ACF-distance summaries for raw, absolute, and squared returns. Stress-regime
+tables use a common rule for simulated and empirical series: a row is classified
+as stressed when 30-period rolling volatility is in the top 20% of that series
+or drawdown is at least 10%.

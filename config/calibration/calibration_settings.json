@@ -1,0 +1,35 @@
+{
+  "score_weights": {
+    "ks_statistic": 1.0,
+    "normalised_wasserstein": 1.0,
+    "tail_quantile_error": 1.0,
+    "acf_raw_rmse": 0.5,
+    "acf_absolute_rmse": 1.0,
+    "acf_squared_rmse": 1.0,
+    "autocorrelation_penalty": 0.75,
+    "fat_tail_penalty": 0.75,
+    "volatility_clustering_penalty": 0.75
+  },
+  "verdict_thresholds": {
+    "cov_pass": 0.10,
+    "cov_borderline": 0.25,
+    "success_rate_pass": 0.80,
+    "success_rate_borderline": 0.60,
+    "ks_insignificant_share_pass": 0.75,
+    "ks_insignificant_share_borderline": 0.50,
+    "strong_rejection_p_value": 0.01,
+    "adf_rejection_rate_pass": 0.90,
+    "adf_rejection_rate_borderline": 0.75,
+    "relative_ci_half_width_pass": 0.10,
+    "relative_ci_half_width_borderline": 0.20,
+    "minimum_seeds_for_verdicts": 5
+  },
+  "ranking": {
+    "robustness_penalty_weight": 1.0,
+    "borderline_credit": 0.5
+  },
+  "budget": {
+    "max_total_runs": 300,
+    "recommended_min_validation_seeds": 10
+  }
+}

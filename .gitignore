@@ -1,0 +1,78 @@
+# Ignore every file and folder by default.
+#
+# This repository is intended to publish only the core C++ ABM research code,
+# tests, configuration, and project documentation. Local build products,
+# editor settings, analysis outputs, data files, virtual environments, and
+# temporary research artefacts remain private unless they are explicitly added
+# to the allow-list below.
+*
+
+# Keep this ignore policy visible in the repository.
+!.gitignore
+
+# Project documentation and application entry points.
+!CHANGELOG.md
+!README.md
+!requirements.txt
+!pyproject.toml
+!formalism.tex
+!docs/
+!docs/**
+!CMakePresets.json
+!.clang-format
+!.clang-tidy
+!.github/
+!.github/**
+!app/
+!app/**
+!UML
+!UML/**
+!pictures/**
+!pictures/
+# CMake project files.
+!CMakeLists.txt
+!CmakeList.txt
+!cmake/
+!cmake/**
+
+# Source code, headers, tests, analysis scripts, and reproducible configuration.
+!src/
+!src/**
+!tests/
+!tests/**
+!include/
+!include/**
+!analysis/
+!analysis/**
+!config/
+!config/**
+
+# Local artefacts re-ignored after the allow-list above.
+#
+# Keep these rules at the end of the file. Earlier allow-list rules such as
+# !analysis/** and !src/** intentionally re-include project source trees, so
+# generated files inside those trees must be excluded again here.
+**/.DS_Store
+**/.idea/
+**/.idea/**
+**/.pytest_cache/
+**/.pytest_cache/**
+**/__pycache__/
+**/__pycache__/**
+**/*.py[cod]
+
+# Local Python environments and dependency caches.
+**/.venv/
+**/.venv/**
+**/.cache/
+**/.cache/**
+
+# Build and generated output directories.
+build/
+build/**
+cmake-build-*/
+cmake-build-*/**
+app/build/
+app/build/**
+data/
+data/**

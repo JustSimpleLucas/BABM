@@ -1,0 +1,143 @@
+%%{init: {"theme": "base", "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryBorderColor": "#94a3b8", "primaryTextColor": "#0f172a", "lineColor": "#64748b", "secondaryColor": "#eff6ff", "tertiaryColor": "#f0fdf4", "fontFamily": "Arial, sans-serif"}}}%%
+flowchart LR
+    subgraph cxxProducer["C++ Simulation Data Producer"]
+        runtimeConfig["RuntimeConfig"]
+        dataWorkflow["ExperimentDataWorkflow"]
+        runManager["ExperimentRunManager"]
+        artifactWriter["RunArtifactWriter"]
+        pythonRunner["PythonAnalysisRunner"]
+    end
+
+    subgraph staging["Temporary Staging Artefacts"]
+        runFolder["data/experiments/<experiment>/<run_id>/"]
+        configSnapshot["config_used.cfg and config.json"]
+        metadata["metadata.json with portable provenance"]
+        timeSeries["step_timeseries.csv with market, microstructure, allocative-efficiency, and wealth-Gini diagnostics"]
+        assetTimeSeries["asset_timeseries.csv long-format per (step, asset) with per-asset prices, microstructure, allocative efficiency, and mean agent portfolio weights"]
+        agents["agents_final.csv"]
+        optionalLedger["trade_ledger.csv when enabled"]
+        metrics["summary_metrics.csv with final-wealth Gini and mean allocative efficiency, and stylised_facts.csv screened per asset"]
+    end
+
+    subgraph postgres["PostgreSQL Primary Research Store"]
+        experiments["experiments"]
+        runs["runs with config and sanitized metadata"]
+        sqlTimeSeries["step_timeseries with market, microstructure, allocative-efficiency, and wealth-Gini diagnostics"]
+        sqlAssetTimeSeries["asset_timeseries per (step, asset) including allocative efficiency and mean agent portfolio weights"]
+        sqlAgents["agent_snapshots"]
+        sqlLedger["trade_ledger"]
+        sqlMetrics["summary_metrics with final-wealth Gini and mean allocative efficiency, and per-asset stylised_facts"]
+        sqlMechanisms["mechanism and agent-step diagnostics"]
+        sqlBenchmarks["benchmark_series, metadata, and prices"]
+        audit["schema_migrations and import_audit provenance"]
+    end
+
+    subgraph pythonAccess["Python Analysis and Calibration"]
+        dbCli["abm_analysis db commands"]
+        compressCli["abm_analysis compress in-place gzip of large run CSVs"]
+        seedReplication["abm_analysis replicate seed runner"]
+        calibrateCli["abm_analysis calibrate Optuna search with seed-averaged scoring and seed-robust candidate validation"]
+        robustnessCli["abm_analysis robustness report regenerator"]
+        sqlReports["SQL-backed run and comparison reports"]
+        staticFigures["figures/ publication PNG, PDF, and SVG exports via Kaleido"]
+        fileFallback["--source files legacy fallback"]
+        seedRobustnessReport["robustness_reports/latest_seed_robustness report with cross-seed tests, convergence, verdicts, and CSV exports"]
+        benchmarkImport["empirical benchmark CSV and manifest import"]
+        inspectRun["db inspect-run provenance summary"]
+    end
+
+    subgraph calibrationStore["Calibration Study Outputs"]
+        calibrationDir["data/calibration/<study>/ with trial_configs and simulation_runs"]
+        calibrationTrials["calibration_trials.csv appended per trial"]
+        calibrationBest["best_config.cfg, candidate ranking, holdout validation, and summary"]
+        calibrationReports["calibration report and best-runs robustness report"]
+    end
+
+    runtimeConfig --> dataWorkflow
+    dataWorkflow --> runManager
+    dataWorkflow --> artifactWriter
+    artifactWriter --> runFolder
+    artifactWriter --> configSnapshot
+    artifactWriter --> metadata
+    artifactWriter --> timeSeries
+    artifactWriter --> assetTimeSeries
+    artifactWriter --> agents
+    artifactWriter --> optionalLedger
+    artifactWriter --> metrics
+
+    pythonRunner --> dbCli
+    pythonRunner --> sqlReports
+    seedReplication --> runtimeConfig
+    seedReplication --> runFolder
+    calibrateCli --> runtimeConfig
+    calibrateCli --> calibrationDir
+    calibrateCli --> calibrationTrials
+    calibrateCli --> calibrationBest
+    calibrateCli --> calibrationReports
+    runFolder --> dbCli
+    configSnapshot --> dbCli
+    metadata --> dbCli
+    timeSeries --> dbCli
+    assetTimeSeries --> dbCli
+    agents --> dbCli
+    optionalLedger --> dbCli
+    metrics --> dbCli
+
+    dbCli --> experiments
+    dbCli --> runs
+    dbCli --> sqlTimeSeries
+    dbCli --> sqlAssetTimeSeries
+    dbCli --> sqlAgents
+    dbCli --> sqlLedger
+    dbCli --> sqlMetrics
+    dbCli --> sqlMechanisms
+    dbCli --> audit
+    benchmarkImport --> sqlBenchmarks
+
+    postgres --> sqlReports
+    postgres --> inspectRun
+    staging --> fileFallback
+    seedReplication --> seedRobustnessReport
+    runFolder --> robustnessCli
+    robustnessCli --> seedRobustnessReport
+    seedRobustnessReport --> fileFallback
+    sqlReports --> dbCli
+    sqlReports --> staticFigures
+    seedRobustnessReport --> staticFigures
+
+    noteNoPaths["Database records do not store local filesystem paths"]
+    runs --> noteNoPaths
+    sqlBenchmarks --> noteNoPaths
+    audit --> noteNoPaths
+
+    notePrune["Staging artefacts may be pruned after successful import"]
+    dbCli --> notePrune
+    notePrune --> staging
+
+    noteHashes["Audit records store schema version, importer version, Git commit, and SHA-256 hashes"]
+    audit --> noteHashes
+
+    noteCompress["Archived CSVs may be gzipped in place; analysis and import read *.csv.gz transparently"]
+    runFolder --> compressCli
+    compressCli --> noteCompress
+    noteCompress --> runFolder
+
+    noteGuard["Import fails loudly on CSV columns unknown to the schema instead of silently dropping them"]
+    dbCli --> noteGuard
+
+    noteJobs["replicate and calibrate fan simulator seeds across --jobs workers; each new run directory is parsed from simulator stdout, never inferred by directory diffing"]
+    seedReplication --> noteJobs
+    calibrateCli --> noteJobs
+
+    classDef producer fill:#eff6ff,stroke:#60a5fa,stroke-width:1px,color:#0f172a
+    classDef staging fill:#fff7ed,stroke:#fb923c,stroke-width:1px,color:#0f172a
+    classDef database fill:#eef2ff,stroke:#6366f1,stroke-width:1px,color:#0f172a
+    classDef analysis fill:#f0fdf4,stroke:#4ade80,stroke-width:1px,color:#0f172a
+    classDef policy fill:#fef3c7,stroke:#d97706,stroke-width:1px,color:#0f172a
+
+    class runtimeConfig,dataWorkflow,runManager,artifactWriter,pythonRunner producer
+    class runFolder,configSnapshot,metadata,timeSeries,assetTimeSeries,agents,optionalLedger,metrics staging
+    class calibrationDir,calibrationTrials,calibrationBest,calibrationReports staging
+    class experiments,runs,sqlTimeSeries,sqlAssetTimeSeries,sqlAgents,sqlLedger,sqlMetrics,sqlMechanisms,sqlBenchmarks,audit database
+    class dbCli,compressCli,seedReplication,calibrateCli,robustnessCli,sqlReports,staticFigures,fileFallback,seedRobustnessReport,benchmarkImport,inspectRun analysis
+    class noteNoPaths,notePrune,noteHashes,noteCompress,noteGuard,noteJobs policy

@@ -1,0 +1,727 @@
+%%{init: {"theme": "base", "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryBorderColor": "#94a3b8", "primaryTextColor": "#0f172a", "lineColor": "#64748b", "fontFamily": "Arial, sans-serif"}}}%%
+classDiagram
+direction LR
+
+class SimulationApplication {
+  <<module>>
+  +runSimulationApplication(argc_argv) int
+}
+
+class CliParseResult {
+  +bool shouldExit
+  +int exitCode
+  +RuntimeConfig runtimeConfig
+}
+
+class RuntimeConfig {
+  +SimulationConfig simulation
+  +OutputConfig output
+  +string sourcePath
+}
+
+class OutputConfig {
+  +bool experimentOutputEnabled
+  +string experimentRootPath
+  +string runId
+  +string simulationCsvPath
+  +string agentCsvPath
+  +bool tradeLedgerEnabled
+  +string tradeLedgerCsvPath
+  +bool databaseOutputEnabled
+  +bool databasePruneAfterImport
+  +bool pythonAnalysisEnabled
+  +bool pythonAnalysisComparisonEnabled
+}
+
+class SimulationConfigFacade {
+  <<header facade>>
+  +includes BehaviouralConfig
+  +includes StrategyConfig
+  +includes MarketConfig
+  +includes ModelConfig
+  +includes OutputConfig
+}
+
+class BehaviouralConfig {
+  <<header>>
+  +ProspectReferencePointMode
+  +ControlParameters
+}
+
+class StrategyConfig {
+  <<header>>
+  +ChartistStrategyMode
+  +AllocationConfig
+  +FundamentalistConfig
+  +ChartistConfig
+  +NoiseTraderConfig
+  +BuyAndHoldConfig
+}
+
+class MarketConfig {
+  <<header>>
+  +MarketMicrostructureMode
+  +FundamentalProcessType
+  +AssetDefinition
+  +ShortSaleConfig
+  +SocialInfluenceConfig
+  +MicrostructureConfig
+  +WarmupPriceProcessConfig
+}
+
+class AssetDefinition {
+  +string name
+  +bool enabled
+  +FundamentalProcessType fundamentalProcess
+  +double initialPrice
+  +double initialStock
+  +double priceTickSize
+  +double fundamentalShockStdDev
+  +double fundamentalDriftPerStep
+  +double minimumFundamentalValue
+}
+
+class ModelConfig {
+  <<header>>
+  +SimulationConfig
+}
+
+class SimulationConfig {
+  +string assetName
+  +size_t timeSteps
+  +size_t warmupSteps
+  +size_t numFundamentalists
+  +size_t numChartists
+  +size_t numNoiseTraders
+  +size_t numBuyAndHoldAgents
+  +bool shortSellingEnabled
+  +uint64_t seed
+  +ControlParameters control
+  +FundamentalistConfig fundamentalist
+  +ChartistConfig chartist
+  +NoiseTraderConfig noiseTrader
+  +BuyAndHoldConfig buyAndHold
+  +TransactionCostConfig transactionCosts
+  +SocialInfluenceConfig social
+  +MicrostructureConfig microstructure
+}
+
+class ControlParameters {
+  +bool prospectTheoryEnabled
+  +double prospectTheoryAgentFraction
+  +bool prospectParameterHeterogeneityEnabled
+  +double lossAversion
+  +double referencePoint
+  +ProspectReferencePointMode referencePointMode
+  +size_t prospectScenarioCount
+}
+
+class FundamentalistConfig
+class ChartistConfig
+class NoiseTraderConfig
+class BuyAndHoldConfig
+class ShortSaleConfig
+class TransactionCostConfig {
+  +double rate
+  +bool affectsDecisions
+  +bool applyToForcedBuyIns
+}
+class SocialInfluenceConfig
+class MicrostructureConfig
+class WarmupPriceProcessConfig
+
+class SimulationEngine {
+  -SimulationConfig config_
+  -Market market_
+  -RandomEngine random_
+  -SimulationPopulation population_
+  -SocialInfluenceModel socialInfluenceModel_
+  -AgentActivationScheduler activationScheduler_
+  -OrderCollector orderCollector_
+  -MarketClearingEngine marketClearingEngine_
+  -RiskControlService riskControlService_
+  -DiagnosticsRecorder diagnosticsRecorder_
+  +run(progressCallback_recordTradeLedger) SimulationRunResult
+  +config() SimulationConfig
+}
+
+class SimulationPopulation {
+  +Vector~AgentRecord~ records
+  +Vector~AgentPointer~ agentsById
+}
+
+class AgentRecord {
+  +Agent agent
+  +string initialStrategyType
+  +UniquePtr~TradingStrategy~ currentStrategy
+}
+
+class Agent {
+  -uint32_t numericalId
+  -double cash
+  -double stock
+  -double wealth
+  -double averageEntryPrice
+  -double cumulativeTransactionCostsPaid
+  -ProspectTheory prospectTheoryPreferences
+  -bool prospectTheoryEnabled
+  +updateCash(newCash)
+  +updateStock(newStock)
+  +updateWealth(marketPrice)
+  +recordExecutedTrade(side_price_quantity)
+  +recordTransactionCost(cost)
+  +setSocialProfile(x_y_gamma_stdDev)
+  +generateOrder(type_price_quantity) Order
+}
+
+class TradingStrategy {
+  <<abstract>>
+  +strategyType() string
+  +generateOrder(agent_market_step_context) OptionalOrder
+}
+
+class TradingOrderContext {
+  +bool useValuationLimitPrice
+  +double socialOpinion
+  +double opinionKappa
+  +double holdTolerance
+  +double priceTickSize
+  +double transactionCostRate
+  +bool transactionCostAffectsDecisions
+}
+
+class ChartistStrategyParameters {
+  +string assetName
+  +AssetAllocationLine allocationLine
+  +size_t volatilityWindow
+  +double riskFreeRate
+  +double maxShortWeight
+  +ProspectReferencePointMode referencePointMode
+  +size_t referenceMovingAverageWindow
+}
+
+class MomentumChartistStrategyParameters {
+  +ChartistStrategyParameters commonParameters
+  +size_t shortWindow
+  +size_t longWindow
+  +double momentumSignalThreshold
+}
+
+class MeanReversionChartistStrategyParameters {
+  +ChartistStrategyParameters commonParameters
+  +size_t longWindow
+}
+
+class BreakoutChartistStrategyParameters {
+  +ChartistStrategyParameters commonParameters
+  +size_t breakoutWindow
+}
+
+class FundamentalistStrategyParameters {
+  +string assetName
+  +AssetAllocationLine allocationLine
+  +double mispricingThreshold
+  +FundamentalistRiskThresholds riskThresholds
+  +size_t volatilityWindow
+  +double riskFreeRate
+}
+
+class FundamentalistRiskThresholds {
+  +double stopLossThreshold
+  +double takeProfitThreshold
+}
+
+class FundamentalistStrategy {
+  -string assetName_
+  -AssetAllocationLine allocationLine_
+  -double mispricingThreshold_
+  -double stopLossThreshold_
+  -double takeProfitThreshold_
+  +FundamentalistStrategy(parameters)
+  +setRiskThresholds(thresholds)
+  +generateOrder(agent_market_step_context) OptionalOrder
+}
+
+class ChartistStrategy {
+  <<abstract>>
+  -string assetName_
+  -AssetAllocationLine allocationLine_
+  -size_t volatilityWindow_
+  -double maxShortWeight_
+  +generateOrder(agent_market_step_context) OptionalOrder
+  +generateSignal(market) AgentAction
+  +forecastExcessReturn(market) double
+}
+
+class MomentumChartistStrategy {
+  -size_t shortWindow_
+  -size_t longWindow_
+  -double momentumSignalThreshold_
+}
+
+class MeanReversionChartistStrategy {
+  -size_t longWindow_
+}
+
+class RelativeStrengthIndexChartistStrategy {
+  +strategyType() string
+}
+
+class BreakoutChartistStrategy {
+  -size_t breakoutWindow_
+}
+
+class ChartistStrategyFactory {
+  +createChartistStrategy(config_allocation_random) UniquePtr~TradingStrategy~
+}
+
+class NoiseTraderStrategy {
+  -string assetName_
+  -double beliefShockStdDev_
+  -double orderSizeFraction_
+  -double maxShortWeight_
+  -RandomEngine random_
+  +generateOrder(parameters) OptionalOrder
+}
+
+class BuyAndHoldStrategy {
+  -string assetName_
+  -double targetRiskyWeight_
+  +setTargetRiskyWeight(weight)
+  +generateOrder(agent_market_step_context) OptionalOrder
+}
+
+class ProspectTheory {
+  -double lossAversion_
+  -double curvatureForGain_
+  -double curvatureForLoss_
+  -double referencePoint_
+  -size_t scenarioCount_
+  +valueFunction(relativeOutcome) double
+  +probabilityWeight(probability_domain) double
+  +calculateProspectValue(outcomes) double
+  +prospectAdjustedReturn(expectedReturn_volatility) double
+}
+
+class AssetAllocationLine {
+  -double riskAversion_
+  -double minRiskyWeight_
+  -double maxRiskyWeight_
+  +optimalRiskyWeight(mu_rf_sigma) double
+}
+
+class PopulationFactory {
+  +createPopulation(config_random)$ SimulationPopulation
+  +resetRunState(population)$
+}
+
+class SocialInfluenceModel {
+  -Vector~Vector_SocialNeighbor~ socialNeighbors_
+  -Vector~double~ nextOpinionScratch_
+  +initialize(population_config_random)
+  +prepareForRun(population)
+  +updateOpinions(population_config_random)
+}
+
+note for SocialInfluenceModel "initialize assigns social profiles, then builds the radius-based neighbour graph with a transient spatial hash."
+
+class MarketProcess {
+  +initializeMarket(market_config_random)$ MarketInitializationResult
+  +accrueRiskFreeCash(population_riskFreeRate)$
+  +generateNextFundamental(market_config)$ double
+  +generateNextFundamentals(market_config)$ Vector~double~
+  +resolvePriceAfterClearing(referencePrice_result)$ PriceFormationResult
+  +initializeAgentWealths(population_marketPrice)$
+  +refreshAgentWealths(population_marketPrice)$
+}
+
+class AgentActivationScheduler {
+  +schedule(request_random) Vector~size_t~
+}
+
+class OrderCollector {
+  +resetForRun()
+  +collectOrders(step_activeAgents_population_market_config_random) Vector~Order~
+}
+
+class TransactionCosts {
+  <<utility>>
+  +oneSideCost(price_quantity_rate)$ double
+  +grossNotional(price_quantity)$ double
+  +affordableBuyQuantity(cash_price_rate)$ double
+  +roundTripLogHurdle(rate)$ double
+  +roundTripReturnHurdle(rate)$ double
+}
+
+class AllocativeEfficiency {
+  <<utility>>
+  +calculateMaximumAllocativeSurplus(orders)$ double
+  +calculateRealizedAllocativeSurplus(trades)$ double
+  +calculateAllocativeEfficiency(orders_trades)$ AllocativeEfficiencyResult
+}
+
+class MarketClearingEngine {
+  -LimitOrderBook orderBook_
+  +clear()
+  +processRestingOrders(request_random) RestingOrderLifecycleCounts
+  +executeOrders(request) MicrostructureStepResult
+}
+
+class RiskControlService {
+  -double cachedInitialShareSupply_
+  -double cachedAggregateShortInterest_
+  +reset(population_config)
+  +updateAgentStockWithShortInterest(agent_newStock)
+  +enforceMaintenanceMargin(price_step_config_agentsById_ledger_nextTradeId_recordLedger) ForcedBuyInResult
+}
+
+class ForcedBuyInResult {
+  +double volume
+  +double transactionCosts
+}
+
+class DiagnosticsRecorder {
+  -SimulationStats stats_
+  -Vector~StepDetails~ stepDetails_
+  -Vector~AgentSnapshot~ agentSnapshots_
+  -Vector~ExternalTradeLedgerRecord~ externalTradeLedger_
+  +resetForRun(config_populationSize_market_recordLedger)
+  +recordStep(request)
+  +completeRun(population)
+  +buildResult(config_market) SimulationRunResult
+}
+
+class Market {
+  -Map~string_VectorDouble~ marketValues_
+  -Map~string_VectorDouble~ trueValues_
+  -UniquePtr~RandomEngine~ randomEngine_
+  +storeMarketValue(asset_value)
+  +storeTrueValue(asset_value)
+  +calculateMovingAverage(asset_window) double
+  +calculateLogReturnStandardDeviation(asset_window) double
+  +generateFundamentalValue(asset_parameters) double
+  +generateCorrelatedFundamentalValues(assets_parameters_rho) Vector~double~
+  +generateTrueValues(asset_parameters) Vector~double~
+}
+
+class LimitOrderBook {
+  -Multiset~Order_BidOrderPriority~ bids_
+  -Multiset~Order_AskOrderPriority~ asks_
+  -size_t nextSequence_
+  +submitRestingOrder(order)
+  +canMatch(order) bool
+  +bestOpposingOrder(order) ConstOrderRef
+  +reduceBestOpposingOrder(order_fillQuantity)
+  +removeBestOpposingOrder(order)
+  +expireOrders(step) size_t
+  +cancelStaleOrders(referencePrice_baseProb_sensitivity_random) size_t
+  +metrics(depthLevels) LimitOrderBookMetrics
+  +restingOrdersSnapshot() LimitOrderBookSnapshot
+}
+
+class BidOrderPriority {
+  +operator(lhs_rhs) bool
+}
+
+class AskOrderPriority {
+  +operator(lhs_rhs) bool
+}
+
+note for LimitOrderBook "Bids and asks are stored in priority-preserving multisets; matching mutates resting orders only through explicit book methods."
+
+class Order {
+  +int orderId
+  +int ownerAgentId
+  +OrderType type
+  +OrderStyle style
+  +double price
+  +double quantity
+  +double remainingQuantity
+  +size_t expiryTimeStep
+}
+
+class SimulationRunResult {
+  <<Results module>>
+  -SimulationConfig config_
+  -Vector~double~ marketPriceHistory_
+  -Vector~double~ fundamentalPriceHistory_
+  -SimulationStats stats_
+  -Vector~StepDetails~ stepDetails_
+  -Vector~AgentSnapshot~ agentSnapshots_
+  -Vector~ExternalTradeLedgerRecord~ externalTradeLedger_
+}
+
+class SimulationStats {
+  +double totalTradedVolume
+  +double totalTransactionCosts
+}
+
+class StepDetails {
+  +double tradedVolume
+  +double totalTransactionCosts
+  +double realizedAllocativeSurplus
+  +double maximumAllocativeSurplus
+  +double allocativeEfficiency
+}
+
+class AgentSnapshot {
+  +double cumulativeTransactionCostsPaid
+}
+
+class ExternalTradeLedgerRecord {
+  +double grossNotional
+  +double transactionCost
+  +double netCashFlow
+}
+
+class RunArtifactWriter {
+  +writeCompletedRun(runtimeConfig_result_metrics_writeResult_error)$ bool
+}
+
+class StepTimeseriesCsvWriter {
+  +exportSimulationDetailsCsv(path_result_error)$ bool
+}
+
+class AgentSnapshotCsvWriter {
+  +exportAgentDetailsCsv(path_result_error)$ bool
+}
+
+class TradeLedgerCsvWriter {
+  +exportTradeLedgerCsv(path_result_error)$ bool
+}
+
+class RunSummaryCsvWriter {
+  +exportSummaryMetricsCsv(path_runtime_result_metrics_hash_error)$ bool
+}
+
+class StylisedFactCsvWriter {
+  +exportStylisedFactsCsv(path_metrics_error)$ bool
+}
+
+class ExperimentDataWorkflow {
+  +prepareRunArchive(runtimeConfig_error)$ bool
+  +writeCompletedRun(runtimeConfig_result_metrics_writeResult_error)$ bool
+}
+
+class RunArchiveSchema {
+  +validatePreparedRunArchive(runtimeConfig_error) bool
+  +requiredRunArtifactPaths(output) Vector~RunArchivePathRequirement~
+}
+
+class ExperimentRunManager {
+  +buildRunId(config_timestamp)$ string
+  +prepareOutputLayout(runtimeConfig_error)$ bool
+}
+
+class PythonAnalysisRunner {
+  +generatePostRunReports(runtimeConfig) PythonAnalysisRunResult
+}
+
+class RunMetrics {
+  +double excessKurtosis
+  +double maxDrawdown
+  +double finalWealthGiniCoefficient
+  +double meanAllocativeEfficiency
+  +size_t allocativeEfficiencyObservations
+  +double lag1ReturnAutocorrelation
+  +double lag1AbsoluteReturnAutocorrelation
+  +string fatTailsConclusion
+  +string volatilityClusteringConclusion
+}
+
+RuntimeConfig *-- SimulationConfig
+RuntimeConfig *-- OutputConfig
+SimulationConfigFacade ..> BehaviouralConfig
+SimulationConfigFacade ..> StrategyConfig
+SimulationConfigFacade ..> MarketConfig
+SimulationConfigFacade ..> ModelConfig
+SimulationConfigFacade ..> OutputConfig
+BehaviouralConfig ..> ControlParameters
+StrategyConfig ..> FundamentalistConfig
+StrategyConfig ..> ChartistConfig
+StrategyConfig ..> NoiseTraderConfig
+StrategyConfig ..> BuyAndHoldConfig
+MarketConfig ..> AssetDefinition
+MarketConfig ..> ShortSaleConfig
+MarketConfig ..> SocialInfluenceConfig
+MarketConfig ..> MicrostructureConfig
+MarketConfig ..> WarmupPriceProcessConfig
+ModelConfig ..> SimulationConfig
+SimulationConfig *-- ControlParameters
+SimulationConfig *-- FundamentalistConfig
+SimulationConfig *-- ChartistConfig
+SimulationConfig *-- NoiseTraderConfig
+SimulationConfig *-- BuyAndHoldConfig
+SimulationConfig *-- ShortSaleConfig
+SimulationConfig *-- TransactionCostConfig
+SimulationConfig *-- SocialInfluenceConfig
+SimulationConfig *-- MicrostructureConfig
+SimulationConfig *-- WarmupPriceProcessConfig
+
+SimulationApplication ..> CliParseResult
+SimulationApplication ..> SimulationEngine
+SimulationApplication ..> ExperimentDataWorkflow
+SimulationApplication ..> PythonAnalysisRunner
+
+SimulationEngine *-- SimulationConfig
+SimulationEngine *-- Market
+SimulationEngine *-- RandomEngine
+SimulationEngine *-- SimulationPopulation
+SimulationEngine ..> PopulationFactory
+SimulationEngine *-- SocialInfluenceModel
+SimulationEngine ..> MarketProcess
+SimulationEngine *-- AgentActivationScheduler
+SimulationEngine *-- OrderCollector
+SimulationEngine *-- MarketClearingEngine
+SimulationEngine *-- RiskControlService
+SimulationEngine *-- DiagnosticsRecorder
+
+SimulationPopulation *-- AgentRecord
+AgentRecord *-- Agent
+AgentRecord *-- TradingStrategy
+Agent *-- ProspectTheory
+TradingStrategy <|-- FundamentalistStrategy
+TradingStrategy <|-- ChartistStrategy
+TradingStrategy <|-- NoiseTraderStrategy
+TradingStrategy <|-- BuyAndHoldStrategy
+ChartistStrategy <|-- MomentumChartistStrategy
+ChartistStrategy <|-- MeanReversionChartistStrategy
+ChartistStrategy <|-- RelativeStrengthIndexChartistStrategy
+ChartistStrategy <|-- BreakoutChartistStrategy
+MomentumChartistStrategy ..> MomentumChartistStrategyParameters
+MeanReversionChartistStrategy ..> MeanReversionChartistStrategyParameters
+RelativeStrengthIndexChartistStrategy ..> ChartistStrategyParameters
+BreakoutChartistStrategy ..> BreakoutChartistStrategyParameters
+MomentumChartistStrategyParameters *-- ChartistStrategyParameters
+MeanReversionChartistStrategyParameters *-- ChartistStrategyParameters
+BreakoutChartistStrategyParameters *-- ChartistStrategyParameters
+FundamentalistStrategy *-- AssetAllocationLine
+ChartistStrategy *-- AssetAllocationLine
+NoiseTraderStrategy *-- RandomEngine
+
+PopulationFactory ..> AgentRecord
+PopulationFactory ..> ProspectTheory
+PopulationFactory ..> ChartistStrategyFactory
+PopulationFactory ..> BuyAndHoldStrategy
+ChartistStrategyFactory ..> MomentumChartistStrategy
+ChartistStrategyFactory ..> MeanReversionChartistStrategy
+ChartistStrategyFactory ..> RelativeStrengthIndexChartistStrategy
+ChartistStrategyFactory ..> BreakoutChartistStrategy
+SocialInfluenceModel ..> Agent
+OrderCollector ..> TradingStrategy
+OrderCollector ..> Order
+OrderCollector ..> TransactionCosts
+MarketProcess ..> Market
+MarketProcess ..> SimulationPopulation
+
+MarketClearingEngine *-- LimitOrderBook
+MarketClearingEngine ..> RiskControlService
+MarketClearingEngine ..> Order
+MarketClearingEngine ..> TransactionCosts
+MarketClearingEngine ..> AllocativeEfficiency
+LimitOrderBook *-- Order
+LimitOrderBook *-- BidOrderPriority
+LimitOrderBook *-- AskOrderPriority
+RiskControlService ..> Agent
+RiskControlService ..> ForcedBuyInResult
+RiskControlService ..> TransactionCosts
+
+DiagnosticsRecorder ..> SimulationRunResult
+SimulationRunResult *-- SimulationConfig
+SimulationRunResult *-- SimulationStats
+SimulationRunResult *-- StepDetails
+SimulationRunResult *-- AgentSnapshot
+SimulationRunResult *-- ExternalTradeLedgerRecord
+ExperimentDataWorkflow ..> ExperimentRunManager
+ExperimentDataWorkflow ..> RunArchiveSchema
+ExperimentDataWorkflow ..> RunArtifactWriter
+RunArtifactWriter ..> SimulationRunResult
+RunArtifactWriter ..> RunMetrics
+RunArtifactWriter ..> StepTimeseriesCsvWriter
+RunArtifactWriter ..> AgentSnapshotCsvWriter
+RunArtifactWriter ..> TradeLedgerCsvWriter
+RunArtifactWriter ..> RunSummaryCsvWriter
+RunArtifactWriter ..> StylisedFactCsvWriter
+PythonAnalysisRunner ..> RuntimeConfig
+ExperimentRunManager ..> RuntimeConfig
+
+classDef application fill:#eff6ff,stroke:#60a5fa,stroke-width:1px,color:#0f172a
+classDef config fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,color:#0f172a
+classDef engine fill:#f0fdf4,stroke:#4ade80,stroke-width:1px,color:#0f172a
+classDef agent fill:#fff7ed,stroke:#fb923c,stroke-width:1px,color:#0f172a
+classDef behavioural fill:#fefce8,stroke:#eab308,stroke-width:1px,color:#0f172a
+classDef market fill:#ecfeff,stroke:#22d3ee,stroke-width:1px,color:#0f172a
+classDef output fill:#f5f3ff,stroke:#a78bfa,stroke-width:1px,color:#0f172a
+
+class SimulationApplication application
+class CliParseResult application
+
+class RuntimeConfig config
+class OutputConfig config
+class SimulationConfigFacade config
+class BehaviouralConfig config
+class StrategyConfig config
+class MarketConfig config
+class ModelConfig config
+class SimulationConfig config
+class ControlParameters config
+class FundamentalistConfig config
+class ChartistConfig config
+class NoiseTraderConfig config
+class ShortSaleConfig config
+class TransactionCostConfig config
+class SocialInfluenceConfig config
+class MicrostructureConfig config
+class WarmupPriceProcessConfig config
+
+class SimulationEngine engine
+class SimulationPopulation engine
+class PopulationFactory engine
+class SocialInfluenceModel engine
+class MarketProcess engine
+class AgentActivationScheduler engine
+class OrderCollector engine
+class RiskControlService engine
+class ForcedBuyInResult engine
+class DiagnosticsRecorder engine
+class TransactionCosts engine
+class AllocativeEfficiency engine
+
+class AgentRecord agent
+class Agent agent
+class TradingStrategy agent
+class FundamentalistStrategy agent
+class ChartistStrategy agent
+class MomentumChartistStrategy agent
+class MeanReversionChartistStrategy agent
+class RelativeStrengthIndexChartistStrategy agent
+class BreakoutChartistStrategy agent
+class ChartistStrategyFactory agent
+class NoiseTraderStrategy agent
+
+class ProspectTheory behavioural
+class AssetAllocationLine behavioural
+
+class Market market
+class MarketClearingEngine market
+class LimitOrderBook market
+class BidOrderPriority market
+class AskOrderPriority market
+class Order market
+
+class SimulationRunResult output
+class SimulationStats output
+class StepDetails output
+class AgentSnapshot output
+class ExternalTradeLedgerRecord output
+class StepTimeseriesCsvWriter output
+class AgentSnapshotCsvWriter output
+class TradeLedgerCsvWriter output
+class RunSummaryCsvWriter output
+class StylisedFactCsvWriter output
+class ExperimentDataWorkflow output
+class RunArchiveSchema output
+class RunArtifactWriter output
+class ExperimentRunManager output
+class PythonAnalysisRunner output
+class RunMetrics output

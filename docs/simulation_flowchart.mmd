@@ -1,0 +1,110 @@
+%%{init: {"theme": "base", "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryBorderColor": "#94a3b8", "primaryTextColor": "#0f172a", "lineColor": "#64748b", "secondaryColor": "#eff6ff", "tertiaryColor": "#f0fdf4", "fontFamily": "Arial, sans-serif"}}}%%
+flowchart TD
+    subgraph applicationLayer["Application Layer"]
+        start(["Start CLI executable"])
+        runApp["runSimulationApplication(argc, argv)"]
+        parseConfig["parseSimulationCommandLine()"]
+        parseDecision{"Parse result exits early?"}
+        returnParseExit(["Return parse exit code"])
+        runtimeConfig["RuntimeConfig loaded"]
+        prepareOutput["ExperimentDataWorkflow.prepareRunArchive()"]
+        outputDecision{"Output layout prepared?"}
+        returnOutputFailure(["Return output setup failure"])
+        constructEngine["Construct SimulationEngine(config)"]
+    end
+
+    subgraph engineInitialisation["Engine Initialisation"]
+        validateConfig["validateSimulationConfig(config_)"]
+        normaliseConfig["normaliseSimulationConfig(config_)"]
+        createPopulation["PopulationFactory.createPopulation()"]
+        initialiseSocial["SocialInfluenceModel.initialize()"]
+        initialiseMarket["MarketProcess.initializeMarket()"]
+        initialiseWealth["MarketProcess.initializeAgentWealths()"]
+        createClock["Create SimulationClock(timeSteps)"]
+        resetPopulation["PopulationFactory.resetRunState()"]
+        resetDiagnostics["DiagnosticsRecorder.resetForRun()"]
+        resetCollector["OrderCollector.resetForRun()"]
+        clearBook["MarketClearingEngine.clear()"]
+        resetRisk["RiskControlService.reset()"]
+        prepareSocial["SocialInfluenceModel.prepareForRun()"]
+    end
+
+    subgraph simulationLoop["Per-Step Simulation Loop"]
+        loopDecision{"More simulation steps?"}
+        accrueCash["MarketProcess.accrueRiskFreeCash()"]
+        updateFundamental["MarketProcess.generateNextFundamental()"]
+        updateOpinions["SocialInfluenceModel.updateOpinions()"]
+        getReferencePrice["Read latest market price"]
+        processRestingOrders["MarketClearingEngine.processRestingOrders()"]
+        scheduleAgents["AgentActivationScheduler.schedule(request)"]
+        collectOrders["OrderCollector.collectOrders() with cost-aware decision context"]
+        executeOrders["MarketClearingEngine.executeOrders() with fee accounting and allocative-efficiency benchmark"]
+        resolvePrice["MarketProcess.resolvePriceAfterClearing()"]
+        storePrice["Market.storeMarketValue()"]
+        refreshWealthBeforeMargin["MarketProcess.refreshAgentWealths()"]
+        enforceMargin["RiskControlService.enforceMaintenanceMargin() with optional buy-in costs"]
+        refreshWealthAfterMargin["MarketProcess.refreshAgentWealths() only if a forced buy-in traded"]
+        recordStep["DiagnosticsRecorder.recordStep(request) stores cost, allocative-efficiency, and wealth-inequality diagnostics"]
+        updateProgress["SimulationClock.markStepCompleted()"]
+    end
+
+    subgraph outputAndAnalysis["Output and Analysis"]
+        completeRun["DiagnosticsRecorder.completeRun()"]
+        buildResult["DiagnosticsRecorder.buildResult()"]
+        sampleMemory["sampleProcessMemoryUsage() for terminal RAM diagnostics"]
+        calculateMetrics["calculateRunMetrics(simulationResult) including final-wealth Gini and mean allocative efficiency"]
+        writeArtifacts["ExperimentDataWorkflow.writeCompletedRun()"]
+        artifactDecision{"Artifacts written?"}
+        returnArtifactFailure(["Return artifact failure"])
+        printSummary["printCompletedSimulationSummary()"]
+        runPythonAnalysis["PythonAnalysisRunner.generatePostRunReports()"]
+        importDatabase["db import-run into PostgreSQL when database output is enabled"]
+        buildRunReport["Build single-run report from database or file source"]
+        refreshComparison["Refresh experiment comparison report in comparison_reports/latest"]
+        openRunReport["Open single-run HTML report in default browser"]
+        printPythonStatus["printPythonAnalysisStatus()"]
+        returnSuccess(["Return success"])
+    end
+
+    start --> runApp --> parseConfig --> parseDecision
+    parseDecision -- "Yes" --> returnParseExit
+    parseDecision -- "No" --> runtimeConfig --> prepareOutput --> outputDecision
+    outputDecision -- "No" --> returnOutputFailure
+    outputDecision -- "Yes" --> constructEngine
+
+    constructEngine --> validateConfig --> normaliseConfig --> createPopulation
+    createPopulation --> initialiseSocial --> initialiseMarket --> initialiseWealth
+    initialiseWealth --> createClock --> resetPopulation --> resetDiagnostics
+    resetDiagnostics --> resetCollector --> clearBook --> resetRisk --> prepareSocial --> loopDecision
+
+    loopDecision -- "Yes" --> accrueCash --> updateFundamental --> updateOpinions
+    updateOpinions --> getReferencePrice --> processRestingOrders --> scheduleAgents
+    scheduleAgents --> collectOrders --> executeOrders --> resolvePrice --> storePrice
+    storePrice --> refreshWealthBeforeMargin --> enforceMargin --> refreshWealthAfterMargin
+    refreshWealthAfterMargin --> recordStep --> updateProgress --> loopDecision
+
+    loopDecision -- "No" --> completeRun --> buildResult --> sampleMemory --> calculateMetrics --> writeArtifacts
+    writeArtifacts --> artifactDecision
+    artifactDecision -- "No" --> returnArtifactFailure
+    artifactDecision -- "Yes" --> printSummary --> runPythonAnalysis --> importDatabase --> buildRunReport --> refreshComparison --> openRunReport --> printPythonStatus --> returnSuccess
+
+    classDef startEnd fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0f172a
+    classDef application fill:#eff6ff,stroke:#60a5fa,stroke-width:1px,color:#0f172a
+    classDef initialisation fill:#f0fdf4,stroke:#4ade80,stroke-width:1px,color:#0f172a
+    classDef simulation fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,color:#0f172a
+    classDef output fill:#fff7ed,stroke:#fb923c,stroke-width:1px,color:#0f172a
+    classDef decision fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#0f172a
+    classDef failure fill:#fee2e2,stroke:#ef4444,stroke-width:2px,color:#7f1d1d
+
+    class start,returnSuccess startEnd
+    class runApp,parseConfig,runtimeConfig,prepareOutput,constructEngine application
+    class validateConfig,normaliseConfig,createPopulation,initialiseSocial,initialiseMarket,initialiseWealth,createClock,resetPopulation,resetDiagnostics,resetCollector,clearBook,resetRisk,prepareSocial initialisation
+    class accrueCash,updateFundamental,updateOpinions,getReferencePrice,processRestingOrders,scheduleAgents,collectOrders,executeOrders,resolvePrice,storePrice,refreshWealthBeforeMargin,enforceMargin,refreshWealthAfterMargin,recordStep,updateProgress simulation
+    class completeRun,buildResult,sampleMemory,calculateMetrics,writeArtifacts,printSummary,runPythonAnalysis,importDatabase,buildRunReport,refreshComparison,openRunReport,printPythonStatus output
+    class parseDecision,outputDecision,loopDecision,artifactDecision decision
+    class returnParseExit,returnOutputFailure,returnArtifactFailure failure
+
+    style applicationLayer fill:#f8fbff,stroke:#bfdbfe,stroke-width:1px,color:#0f172a
+    style engineInitialisation fill:#f7fef9,stroke:#bbf7d0,stroke-width:1px,color:#0f172a
+    style simulationLoop fill:#ffffff,stroke:#cbd5e1,stroke-width:1px,color:#0f172a
+    style outputAndAnalysis fill:#fffaf3,stroke:#fed7aa,stroke-width:1px,color:#0f172a

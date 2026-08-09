@@ -1,0 +1,108 @@
+%%{init: {"theme": "base", "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryBorderColor": "#94a3b8", "primaryTextColor": "#0f172a", "lineColor": "#64748b", "secondaryColor": "#eff6ff", "tertiaryColor": "#f0fdf4", "fontFamily": "Arial, sans-serif"}}}%%
+flowchart TD
+    root["CMakeLists.txt"]
+    compiler["cmake/AbmCompilerOptions.cmake"]
+    metadata["cmake/AbmBuildMetadata.cmake"]
+    sources["cmake/AbmSourceSets.cmake"]
+
+    includes["abm_project_includes"]
+    buildMetadata["abm_build_metadata"]
+    core["abm_core compatibility aggregate"]
+    app["simulate executable"]
+
+    utility["abm_utility<br/>RandomGenerator, Utility"]
+    config["abm_config<br/>ControlParameters"]
+    market["abm_market<br/>Market, OrderBook, RiskManagement"]
+    behavioural["abm_behavioural_finance<br/>ProspectTheory"]
+    agents["abm_agents<br/>Agent, AgentStrategy"]
+    results["abm_results<br/>completed-run DTOs"]
+    simulation["abm_simulation<br/>Simulation engine services"]
+    analysis["abm_analysis<br/>stylised-fact metrics"]
+    output["abm_output<br/>CSV, JSON, metadata, run logs"]
+    archive["abm_archive<br/>DataManagement, Experiment"]
+    application["abm_application<br/>CLI, console, Python analysis runner"]
+
+    modelTests["abm_model_tests"]
+    parsingTests["abm_config_parsing_tests"]
+    archiveTests["abm_archive_workflow_tests"]
+    validationTests["abm_config_validation_tests"]
+    artifactTests["abm_run_artifact_writer_tests"]
+
+    root --> compiler
+    root --> metadata
+    root --> sources
+    root --> includes
+    metadata --> buildMetadata
+
+    sources --> utility
+    sources --> config
+    sources --> market
+    sources --> behavioural
+    sources --> agents
+    sources --> simulation
+    sources --> analysis
+    sources --> output
+    sources --> archive
+    sources --> application
+
+    includes --> utility
+    includes --> config
+    includes --> market
+    includes --> behavioural
+    includes --> agents
+    includes --> simulation
+    includes --> analysis
+    includes --> output
+    includes --> archive
+    includes --> application
+
+    utility --> config
+    utility --> market
+    utility --> behavioural
+    config --> behavioural
+    config --> results
+    market --> results
+    behavioural --> agents
+    config --> agents
+    market --> agents
+    agents --> simulation
+    results --> simulation
+    simulation --> application
+    results --> analysis
+    analysis --> output
+    results --> output
+    config --> output
+    buildMetadata --> output
+    output --> archive
+    archive --> application
+
+    application --> core
+    archive --> core
+    output --> core
+    analysis --> core
+    simulation --> core
+    agents --> core
+    behavioural --> core
+    market --> core
+    config --> core
+    results --> core
+    utility --> core
+
+    core --> app
+    core --> modelTests
+    core --> parsingTests
+    core --> archiveTests
+    core --> validationTests
+    core --> artifactTests
+
+    classDef cmake fill:#eff6ff,stroke:#60a5fa,stroke-width:1px,color:#0f172a
+    classDef interface fill:#fefce8,stroke:#eab308,stroke-width:1px,color:#0f172a
+    classDef domain fill:#ffffff,stroke:#cbd5e1,stroke-width:1px,color:#0f172a
+    classDef target fill:#f0fdf4,stroke:#4ade80,stroke-width:1px,color:#0f172a
+    classDef test fill:#f5f3ff,stroke:#8b5cf6,stroke-width:1px,color:#0f172a
+
+    class root,compiler,metadata,sources cmake
+    class includes,buildMetadata,core interface
+    class utility,config,market,behavioural,agents,results,simulation,analysis,output,archive,application domain
+    class app target
+    class modelTests,parsingTests,archiveTests,validationTests,artifactTests test

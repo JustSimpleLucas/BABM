@@ -1,0 +1,59 @@
+{
+  "parameters": {
+    "control_prospect_theory_agent_fraction": {
+      "type": "float",
+      "low": 0.0,
+      "high": 1.0,
+      "step": 0.05
+    },
+    "control_loss_aversion": {
+      "type": "float",
+      "low": 1.0,
+      "high": 4.0
+    },
+    "control_loss_aversion_std_dev": {
+      "type": "float",
+      "low": 0.0,
+      "high": 0.8
+    },
+    "num_fundamentalists": {
+      "type": "int",
+      "low": 0,
+      "high": 400,
+      "step": 20
+    },
+    "num_chartists": {
+      "type": "int",
+      "low": 0,
+      "high": 400,
+      "step": 20
+    },
+    "agent_activity_rate": {
+      "type": "float",
+      "low": 0.2,
+      "high": 1.0
+    },
+    "noise_trader_belief_shock_std_dev": {
+      "type": "float",
+      "low": 0.001,
+      "high": 0.02,
+      "log": true
+    },
+    "noise_trader_order_size_fraction": {
+      "type": "float",
+      "low": 0.02,
+      "high": 0.5
+    },
+    "market_order_probability": {
+      "type": "float",
+      "low": 0.02,
+      "high": 0.4
+    },
+    "cancellation_base_probability": {
+      "type": "float",
+      "low": 0.002,
+      "high": 0.08,
+      "log": true
+    }
+  }
+}

@@ -1,0 +1,133 @@
+%%{init: {"theme": "base", "themeVariables": {"background": "#ffffff", "primaryColor": "#edf4ff", "primaryBorderColor": "#2563eb", "primaryTextColor": "#0f172a", "actorBkg": "#dbeafe", "actorBorder": "#1d4ed8", "actorTextColor": "#0f172a", "actorLineColor": "#1d4ed8", "signalColor": "#334155", "signalTextColor": "#0f172a", "labelBoxBkgColor": "#f8fafc", "labelBoxBorderColor": "#64748b", "labelTextColor": "#0f172a", "loopTextColor": "#0f172a", "activationBkgColor": "#bfdbfe", "activationBorderColor": "#1d4ed8", "noteBkgColor": "#fef3c7", "noteTextColor": "#0f172a", "sequenceNumberColor": "#ffffff", "sequenceNumberBackground": "#2563eb"}}}%%
+sequenceDiagram
+    autonumber
+
+    box rgb(232,240,254) Application Layer
+    actor User
+    participant CLI as CLI executable
+    participant App as SimulationApplication
+    participant Parser as CliOptions
+    participant Workflow as ExperimentDataWorkflow
+    end
+
+    box rgb(236,253,245) Simulation Core
+    participant Engine as SimulationEngine
+    participant Factory as PopulationFactory
+    participant Social as SocialInfluenceModel
+    participant Process as MarketProcess
+    participant Scheduler as AgentActivationScheduler
+    participant Collector as OrderCollector
+    participant Clearing as MarketClearingEngine
+    participant Risk as RiskControlService
+    participant Diagnostics as DiagnosticsRecorder
+    end
+
+    box rgb(255,247,237) Output and Analysis
+    participant Metrics as StylisedFactMetrics
+    participant Writer as RunArtifactWriter
+    participant Memory as ProcessMemoryUsage
+    participant Reporter as ConsoleReporter
+    participant Python as PythonAnalysisRunner
+    participant Browser as Default Browser
+    end
+
+    User->>CLI: Start simulation executable
+    CLI->>App: runSimulationApplication(argc argv)
+    App->>Parser: parseSimulationCommandLine(argc argv)
+
+    alt Help requested or parse-only exit
+        Parser-->>App: CliParseResult shouldExit
+        App-->>CLI: Return parse exit code
+    else Runtime configuration loaded
+        Parser-->>App: RuntimeConfig
+        App->>Workflow: prepareRunArchive(runtimeConfig error)
+        Note over Workflow: Delegates to ExperimentRunManager.prepareOutputLayout and validates the run archive schema.
+
+        alt Output layout setup failed
+            Workflow-->>App: false
+            App-->>CLI: Return failure
+        else Output layout ready
+            Workflow-->>App: true
+            App->>Engine: Construct SimulationEngine(config)
+            Engine->>Engine: validateSimulationConfig(config)
+            Engine->>Engine: normaliseSimulationConfig(config)
+            Engine->>Factory: createPopulation(config random)
+            Factory-->>Engine: SimulationPopulation
+            Engine->>Social: initialize(population socialConfig random)
+            Engine->>Process: initializeMarket(market config random)
+            Process-->>Engine: MarketInitializationResult
+            Engine->>Process: initializeAgentWealths(population marketPrice)
+
+            App->>Engine: run(progressCallback recordTradeLedger)
+            Engine->>Factory: resetRunState(population)
+            Engine->>Diagnostics: resetForRun(config populationSize market recordLedger)
+            Engine->>Collector: resetForRun()
+            Engine->>Clearing: clear()
+            Engine->>Risk: reset(population config)
+            Engine->>Social: prepareForRun(population)
+
+            loop Each simulation step
+                Engine->>Process: accrueRiskFreeCash(population riskFreeRate)
+                Engine->>Process: generateNextFundamental(market config)
+                Process-->>Engine: newFundamental
+                Engine->>Social: updateOpinions(population socialConfig random)
+                Engine->>Clearing: processRestingOrders(step referencePrice microstructure random)
+                Clearing-->>Engine: RestingOrderLifecycleCounts
+                Engine->>Scheduler: schedule(activationRequest random)
+                Scheduler-->>Engine: activeAgentIndices
+                Engine->>Collector: collectOrders(step activeAgents population market config random)
+                Note over Collector: TradingOrderContext carries transaction-cost rate and decision-hurdle switch.
+                Collector-->>Engine: orders
+                Engine->>Clearing: executeOrders(orders referencePrice lifecycle config agentsById risk ledger nextTradeId recordLedger)
+                Note over Clearing: Buyer and seller pay proportional costs. Allocative efficiency uses gross reservation surplus before fees.
+                Clearing->>Risk: updateAgentStockWithShortInterest(agent newStock)
+                Clearing->>Diagnostics: append gross notional, transaction cost, and net cash flow if enabled
+                Clearing-->>Engine: MicrostructureStepResult with surplus and book diagnostics
+                Engine->>Process: resolvePriceAfterClearing(referencePrice microstructureResult)
+                Process-->>Engine: PriceFormationResult
+                Engine->>Process: refreshAgentWealths(population nextPrice)
+                Engine->>Risk: enforceMaintenanceMargin(nextPrice step config agentsById ledger nextTradeId recordLedger)
+                Risk->>Diagnostics: append forced buy-in records with costs when enabled
+                Risk-->>Engine: ForcedBuyInResult volume and transactionCosts
+                opt forcedBuyIns.volume > 0
+                    Engine->>Process: refreshAgentWealths(population nextPrice)
+                end
+                Engine->>Diagnostics: recordStep(stepRecordingRequest)
+                Engine-->>App: progressCallback(completedSteps totalSteps)
+            end
+
+            Engine->>Diagnostics: completeRun(population)
+            Engine->>Diagnostics: buildResult(config market)
+            Diagnostics-->>Engine: SimulationRunResult
+            Engine-->>App: SimulationRunResult
+            App->>Memory: sampleProcessMemoryUsage()
+            Memory-->>App: ProcessMemoryUsage
+
+            App->>Metrics: calculateRunMetrics(simulationResult)
+            Metrics-->>App: RunMetrics
+            App->>Workflow: writeCompletedRun(runtimeConfig simulationResult metrics result error)
+            Workflow->>Writer: writeCompletedRun(runtimeConfig simulationResult metrics result error)
+            Writer-->>Workflow: success flag
+
+            alt Artifact writing failed
+                Workflow-->>App: false
+                App-->>CLI: Return failure
+            else Artifacts written
+                Workflow-->>App: true
+                App->>Reporter: printCompletedSimulationSummary(runtimeConfig simulationResult metrics memoryUsage)
+                App->>Python: generatePostRunReports(runtimeConfig)
+                opt Database output enabled
+                    Python->>Python: abm_analysis db import-run on the staged run directory
+                    Note over Python: A failed import keeps staging artefacts for recovery and skips report generation.
+                end
+                Python->>Python: abm_analysis run report from database or file source
+                opt Experiment comparison enabled
+                    Python->>Python: abm_analysis compare into comparison_reports/latest
+                end
+                Python->>Browser: open single-run python_analysis/index.html
+                Python-->>App: PythonAnalysisRunResult
+                App->>App: printPythonAnalysisStatus(result)
+                App-->>CLI: Return success
+            end
+        end
+    end

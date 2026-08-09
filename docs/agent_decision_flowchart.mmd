@@ -1,0 +1,213 @@
+%%{init: {"theme": "base", "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryBorderColor": "#94a3b8", "primaryTextColor": "#0f172a", "lineColor": "#64748b", "secondaryColor": "#eff6ff", "tertiaryColor": "#f0fdf4", "fontFamily": "Arial, sans-serif"}}}%%
+flowchart TD
+    subgraph collector["Order Collector Context"]
+        start(["Scheduled active agent"])
+        strategyExists{"Current strategy exists?"}
+        skipNoStrategy(["No order"])
+        commonInputs["Read market state, agent state, social opinion, tick size, transaction-cost controls"]
+        chooseStrategy{"Strategy type"}
+    end
+
+    subgraph fundamentalist["Fundamentalist Decision"]
+        fPrice["Read latest market price and fundamental value"]
+        fWealth["Update mark-to-market wealth"]
+        fRiskExit{"Stop-loss or take-profit triggered?"}
+        fMispricing["Compute mispricing: fundamental minus market price"]
+        fSignal{"Mispricing exceeds threshold plus cost hurdle?"}
+        fForecast["Forecast excess return from mispricing"]
+        fVolatility["Estimate realised log-return volatility"]
+        fProspect{"Prospect Theory enabled?"}
+        fCpt["Resolve reference point and apply CPT adjustment"]
+        fExpected["Use expected excess return"]
+        fAllocation["Mean-variance target risky units"]
+        fQuote["Quote around fundamental value adjusted by social opinion"]
+        fHold{"Absolute log price gap within hold tolerance plus cost hurdle?"}
+        fSide["Choose buy or sell from log price gap"]
+        fLiquidate["Force sell to target zero risky units"]
+        fQuantity["Clip quantity by cost-aware cash, holdings, and target units"]
+    end
+
+    subgraph chartist["Chartist Decision"]
+        cPrice["Read latest market price"]
+        cWealth["Update mark-to-market wealth"]
+        cRule{"Technical rule"}
+        cMomentum["Momentum: compare short and long moving averages"]
+        cMeanReversion["Mean reversion: compare price with long moving average"]
+        cRsi["RSI: buy below 30 and sell above 70"]
+        cBreakout["Breakout: compare latest price with previous channel high and low"]
+        cSignal["Convert technical signal into forecast excess return"]
+        cVolatility["Estimate realised log-return volatility"]
+        cProspect{"Prospect Theory enabled?"}
+        cCpt["Resolve reference point and apply CPT adjustment"]
+        cExpected["Use expected excess return"]
+        cAllocation["Mean-variance target risky units with short cap"]
+        cQuote["Quote around behavioural price adjusted by social opinion"]
+        cHold{"Absolute log price gap within hold tolerance plus cost hurdle?"}
+        cSide["Choose buy or sell from log price gap"]
+        cQuantity["Clip quantity by cost-aware cash, holdings, short cap, and target units"]
+    end
+
+    subgraph noiseTrader["Noise-Trader Decision"]
+        nPrice["Read latest market price"]
+        nWealth["Update mark-to-market wealth"]
+        nShock["Draw zero-mean log-belief shock"]
+        nZero{"Belief shock equals zero?"}
+        nSide["Positive shock buys; negative shock sells"]
+        nQuote["Quote market price multiplied by exp bounded shock"]
+        nCostBand{"Log belief gap exceeds hold tolerance plus cost hurdle?"}
+        nQuantity["Target notional equals wealth times order-size fraction"]
+        nClip["Clip buy by cost-aware cash or sell by strategy short cap"]
+    end
+
+    subgraph buyHold["Buy-and-Hold Decision"]
+        bPrice["Read latest market price"]
+        bWealth["Update mark-to-market wealth"]
+        bTarget["Compute target risky units from wealth times target weight"]
+        bReached{"Current stock at or above target?"}
+        bQuantity["Buy full remaining target gap, clipped by cost-aware cash"]
+        bQuote["Quote latest market price on the buy-side tick grid"]
+    end
+
+    subgraph orderFinalisation["Order Finalisation"]
+        minQuantity{"Quantity above minimum order size?"}
+        noOrder(["No order"])
+        createOrder["Agent.generateOrder(side, price, quantity)"]
+        collectorStyle["OrderCollector computes log price gap"]
+        marketOrderDecision{"Large log gap or random market-order draw?"}
+        marketOrder["Assign MARKET order style"]
+        limitOrder["Assign LIMIT order style"]
+        annotateOrder["Set remaining quantity, time step, creation step, expiry step"]
+        outputOrder(["Scheduled order returned to clearing engine"])
+    end
+
+    start --> strategyExists
+    strategyExists -- "No" --> skipNoStrategy
+    strategyExists -- "Yes" --> commonInputs --> chooseStrategy
+
+    chooseStrategy -- "Fundamentalist" --> fPrice --> fWealth --> fRiskExit
+    fRiskExit -- "Yes" --> fLiquidate --> fQuantity
+    fRiskExit -- "No" --> fMispricing --> fSignal
+    fSignal -- "Hold" --> fForecast
+    fSignal -- "Buy or sell" --> fForecast
+    fForecast --> fVolatility --> fProspect
+    fProspect -- "Yes" --> fCpt --> fAllocation
+    fProspect -- "No" --> fExpected --> fAllocation
+    fAllocation --> fQuote --> fHold
+    fHold -- "Yes" --> noOrder
+    fHold -- "No" --> fSide --> fQuantity
+    fQuantity --> minQuantity
+
+    chooseStrategy -- "Chartist" --> cPrice --> cWealth --> cRule
+    cRule -- "Momentum" --> cMomentum --> cSignal
+    cRule -- "Mean reversion" --> cMeanReversion --> cSignal
+    cRule -- "RSI" --> cRsi --> cSignal
+    cRule -- "Breakout" --> cBreakout --> cSignal
+    cSignal --> cVolatility --> cProspect
+    cProspect -- "Yes" --> cCpt --> cAllocation
+    cProspect -- "No" --> cExpected --> cAllocation
+    cAllocation --> cQuote --> cHold
+    cHold -- "Yes" --> noOrder
+    cHold -- "No" --> cSide --> cQuantity --> minQuantity
+
+    chooseStrategy -- "Noise trader" --> nPrice --> nWealth --> nShock --> nZero
+    nZero -- "Yes" --> noOrder
+    nZero -- "No" --> nSide --> nQuote --> nCostBand
+    nCostBand -- "No" --> noOrder
+    nCostBand -- "Yes" --> nQuantity --> nClip --> minQuantity
+
+    chooseStrategy -- "Buy and hold" --> bPrice --> bWealth --> bTarget --> bReached
+    bReached -- "Yes" --> noOrder
+    bReached -- "No" --> bQuote --> bQuantity --> minQuantity
+
+    minQuantity -- "No" --> noOrder
+    minQuantity -- "Yes" --> createOrder --> collectorStyle --> marketOrderDecision
+    marketOrderDecision -- "Yes" --> marketOrder --> annotateOrder
+    marketOrderDecision -- "No" --> limitOrder --> annotateOrder
+    annotateOrder --> outputOrder
+
+    classDef startEnd fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0f172a
+    classDef collectorClass fill:#eff6ff,stroke:#60a5fa,stroke-width:1px,color:#0f172a
+    classDef fundamentalistClass fill:#f0fdf4,stroke:#4ade80,stroke-width:1px,color:#0f172a
+    classDef chartistClass fill:#fff7ed,stroke:#fb923c,stroke-width:1px,color:#0f172a
+    classDef noiseClass fill:#f5f3ff,stroke:#a78bfa,stroke-width:1px,color:#0f172a
+    classDef buyHoldClass fill:#f0fdfa,stroke:#14b8a6,stroke-width:1px,color:#0f172a
+    classDef finalClass fill:#ecfeff,stroke:#22d3ee,stroke-width:1px,color:#0f172a
+    classDef decisionClass fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#0f172a
+    classDef noOrderClass fill:#fee2e2,stroke:#ef4444,stroke-width:2px,color:#7f1d1d
+
+    class start startEnd
+    class outputOrder startEnd
+
+    class strategyExists decisionClass
+    class chooseStrategy decisionClass
+    class fRiskExit decisionClass
+    class fSignal decisionClass
+    class fProspect decisionClass
+    class fHold decisionClass
+    class cRule decisionClass
+    class cProspect decisionClass
+    class cHold decisionClass
+    class nZero decisionClass
+    class nCostBand decisionClass
+    class bReached decisionClass
+    class minQuantity decisionClass
+    class marketOrderDecision decisionClass
+
+    class skipNoStrategy noOrderClass
+    class noOrder noOrderClass
+
+    class commonInputs collectorClass
+    class collectorStyle collectorClass
+
+    class fPrice fundamentalistClass
+    class fWealth fundamentalistClass
+    class fMispricing fundamentalistClass
+    class fForecast fundamentalistClass
+    class fVolatility fundamentalistClass
+    class fCpt fundamentalistClass
+    class fExpected fundamentalistClass
+    class fAllocation fundamentalistClass
+    class fQuote fundamentalistClass
+    class fSide fundamentalistClass
+    class fLiquidate fundamentalistClass
+    class fQuantity fundamentalistClass
+
+    class cPrice chartistClass
+    class cWealth chartistClass
+    class cMomentum chartistClass
+    class cMeanReversion chartistClass
+    class cRsi chartistClass
+    class cBreakout chartistClass
+    class cSignal chartistClass
+    class cVolatility chartistClass
+    class cCpt chartistClass
+    class cExpected chartistClass
+    class cAllocation chartistClass
+    class cQuote chartistClass
+    class cSide chartistClass
+    class cQuantity chartistClass
+
+    class nPrice noiseClass
+    class nWealth noiseClass
+    class nShock noiseClass
+    class nSide noiseClass
+    class nQuote noiseClass
+    class nQuantity noiseClass
+    class nClip noiseClass
+
+    class bPrice buyHoldClass
+    class bWealth buyHoldClass
+    class bTarget buyHoldClass
+    class bQuantity buyHoldClass
+    class bQuote buyHoldClass
+
+    class createOrder finalClass
+    class marketOrder finalClass
+    class limitOrder finalClass
+    class annotateOrder finalClass
+
+    style collector fill:#f8fbff,stroke:#bfdbfe,stroke-width:1px,color:#0f172a
+    style fundamentalist fill:#f7fef9,stroke:#bbf7d0,stroke-width:1px,color:#0f172a
+    style chartist fill:#fffaf3,stroke:#fed7aa,stroke-width:1px,color:#0f172a
+    style noiseTrader fill:#faf7ff,stroke:#ddd6fe,stroke-width:1px,color:#0f172a
+    style orderFinalisation fill:#f0fdff,stroke:#a5f3fc,stroke-width:1px,color:#0f172a

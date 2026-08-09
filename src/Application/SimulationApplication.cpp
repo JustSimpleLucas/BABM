@@ -1,0 +1,111 @@
+// SimulationApplication.cpp
+
+#include "Application/SimulationApplication.h"
+
+#include "Analysis/StylisedFactMetrics.h"
+#include "Application/CliOptions.h"
+#include "Application/ConsoleReporter.h"
+#include "Application/PythonAnalysisRunner.h"
+#include "DataManagement/ExperimentDataWorkflow.h"
+#include "Simulation/SimulationEngine.h"
+#include "Utility/ConsoleProgressBar.h"
+#include "Utility/ProcessMemoryUsage.h"
+
+#include <exception>
+#include <iostream>
+#include <string>
+#include <vector>
+
+namespace abm {
+namespace {
+
+void printPythonAnalysisStatus(const PythonAnalysisRunResult& result) {
+    if (!result.attempted) {
+        return;
+    }
+
+    if (result.databaseImportAttempted && result.databaseImportSucceeded) {
+        std::cout << "PostgreSQL import: completed\n";
+    }
+    if (result.databaseImportAttempted && !result.databaseImportSucceeded) {
+        std::cerr << "PostgreSQL import warning: " << result.databaseImportMessage << '\n';
+    }
+    if (result.runReportAttempted && result.runReportSucceeded) {
+        std::cout << "Python run analysis report: " << result.runReportPath << '\n';
+    }
+    if (result.comparisonReportAttempted && result.comparisonReportSucceeded) {
+        std::cout << "Python comparison report: " << result.comparisonReportPath << '\n';
+    }
+    if (result.runReportOpenAttempted && result.runReportOpenSucceeded) {
+        std::cout << "Opened Python run analysis report in default browser: "
+                  << result.runReportPath << '\n';
+    }
+    if ((result.runReportAttempted && !result.runReportSucceeded) ||
+        (result.comparisonReportAttempted && !result.comparisonReportSucceeded)) {
+        std::cerr << "Python analysis warning: " << result.message << '\n';
+    }
+    if (result.runReportOpenAttempted && !result.runReportOpenSucceeded) {
+        std::cerr << "Python report browser warning: " << result.runReportOpenMessage << '\n';
+    }
+}
+
+} // namespace
+
+int runSimulationApplication(int argc, char** argv) {
+    RuntimeConfig runtimeConfig;
+    const std::vector<std::string> arguments(argv, argv + argc);
+    const std::string programName = arguments.empty() ? "simulate" : arguments.front();
+
+    try {
+        const CliParseResult parseResult = parseSimulationCommandLine(argc, argv);
+        if (parseResult.shouldExit) {
+            return parseResult.exitCode;
+        }
+        runtimeConfig = parseResult.runtimeConfig;
+    } catch (const std::exception& ex) {
+        std::cerr << "Configuration error: " << ex.what() << '\n';
+        printSimulationApplicationUsage(programName);
+        return 1;
+    }
+
+    try {
+        std::string error;
+        if (!ExperimentDataWorkflow::prepareRunArchive(runtimeConfig, error)) {
+            std::cerr << "Output setup failed: " << error << '\n';
+            return 1;
+        }
+
+        const SimulationConfig& config = runtimeConfig.simulation;
+        SimulationEngine simulationEngine(config);
+        ConsoleProgressBar progressBar(std::cout, config.timeSteps);
+        const SimulationRunResult simulationResult = simulationEngine.run(
+            [&progressBar](std::size_t completedSteps, std::size_t /* totalSteps */) {
+                progressBar.update(completedSteps);
+            },
+            runtimeConfig.output.tradeLedgerEnabled);
+        progressBar.finish();
+        const ProcessMemoryUsage memoryUsage = sampleProcessMemoryUsage();
+
+        const RunMetrics metrics = calculateRunMetrics(simulationResult);
+        RunArtifactWriteResult artifactResult;
+        if (!ExperimentDataWorkflow::writeCompletedRun(runtimeConfig, simulationResult, metrics,
+                                                       artifactResult, error)) {
+            std::cerr << error << '\n';
+            return 1;
+        }
+
+        printCompletedSimulationSummary(runtimeConfig, simulationResult, metrics, memoryUsage);
+        std::cout.flush();
+
+        const PythonAnalysisRunResult pythonAnalysisResult =
+            PythonAnalysisRunner::generatePostRunReports(runtimeConfig);
+        printPythonAnalysisStatus(pythonAnalysisResult);
+    } catch (const std::exception& ex) {
+        std::cerr << "Simulation failed: " << ex.what() << '\n';
+        return 1;
+    }
+
+    return 0;
+}
+
+} // namespace abm

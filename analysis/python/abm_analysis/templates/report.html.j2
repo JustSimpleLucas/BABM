@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1c1c1c;
+      --muted: #575757;
+      --accent: #14646d;
+      --rule-heavy: #1c1c1c;
+      --rule-light: #cccccc;
+      --rule-faint: #ececec;
+      --font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: #ffffff;
+      color: var(--ink);
+      font-family: var(--font-serif);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    a {
+      color: var(--accent);
+    }
+    p {
+      margin: 0;
+    }
+    .titleblock {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 52px 24px 30px;
+      text-align: center;
+      border-bottom: 1px solid var(--rule-light);
+    }
+    h1 {
+      margin: 0;
+      font-family: var(--font-serif);
+      font-size: 29px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+    .meta {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .page {
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 36px 24px 90px;
+    }
+    @media (min-width: 1120px) {
+      .page {
+        display: grid;
+        grid-template-columns: 224px minmax(0, 1fr);
+        gap: 48px;
+        align-items: start;
+      }
+      .toc {
+        position: sticky;
+        top: 24px;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
+      }
+    }
+    main {
+      min-width: 0;
+      max-width: 1080px;
+    }
+    .toc {
+      margin-bottom: 36px;
+    }
+    .toc-heading {
+      margin: 0 0 10px;
+      font-family: var(--font-sans);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .toc ol {
+      margin: 0;
+      padding-left: 22px;
+      font-size: 13.5px;
+    }
+    .toc ul {
+      margin: 8px 0 0;
+      padding: 0;
+      list-style: none;
+      font-size: 13.5px;
+    }
+    .toc li {
+      margin-bottom: 7px;
+      line-height: 1.4;
+    }
+    .toc a {
+      color: var(--ink);
+      text-decoration: none;
+    }
+    .toc a:hover {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+    .section {
+      margin: 0 0 46px;
+    }
+    h2 {
+      margin: 0 0 6px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--rule-light);
+      font-family: var(--font-serif);
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .section-intro {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 14.5px;
+    }
+    .section-footnote {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      font-style: italic;
+    }
+    figure {
+      margin: 0 0 32px;
+    }
+    .figure-caption {
+      margin-top: 9px;
+      font-size: 13.5px;
+      line-height: 1.45;
+    }
+    .caption-label {
+      font-weight: 700;
+    }
+    .table-caption {
+      margin: 0 0 8px;
+      font-size: 13.5px;
+      line-height: 1.45;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      margin: 0 0 26px;
+    }
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      border-top: 2px solid var(--rule-heavy);
+      border-bottom: 2px solid var(--rule-heavy);
+      font-family: var(--font-sans);
+      font-size: 12.5px;
+      white-space: nowrap;
+    }
+    .data-table th {
+      border-bottom: 1px solid var(--rule-heavy);
+      padding: 8px 10px;
+      text-align: left;
+      font-weight: 700;
+      background: none;
+    }
+    .data-table td {
+      border-bottom: 1px solid var(--rule-faint);
+      padding: 7px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .data-table tr:last-child td {
+      border-bottom: none;
+    }
+    .key-metrics td,
+    .evidence-table td {
+      white-space: normal;
+    }
+    .evidence-table th:nth-child(1) {
+      width: 16%;
+    }
+    .evidence-table th:nth-child(2) {
+      width: 37%;
+    }
+    .evidence-table th:nth-child(3) {
+      width: 32%;
+    }
+    .evidence-table th:nth-child(4) {
+      width: 15%;
+    }
+    .table-note {
+      margin: 0 0 6px;
+      font-family: var(--font-sans);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .table-footnotes {
+      margin-top: 8px;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+    .table-footnotes p {
+      margin: 0 0 5px;
+    }
+    .empty-note {
+      color: var(--muted);
+      font-size: 13px;
+      font-style: italic;
+    }
+    .file-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+    .file-list li {
+      margin-bottom: 7px;
+    }
+    @media (max-width: 860px) {
+      .titleblock {
+        padding: 34px 16px 24px;
+      }
+      h1 {
+        font-size: 24px;
+      }
+      .page {
+        padding: 26px 14px 60px;
+      }
+    }
+    @media print {
+      body {
+        font-size: 12pt;
+      }
+      .titleblock {
+        padding-top: 0;
+      }
+      .page {
+        display: block;
+        padding: 24px 0 0;
+      }
+      .toc {
+        position: static;
+        max-height: none;
+        overflow: visible;
+        page-break-after: always;
+      }
+      figure,
+      .table-wrap,
+      .table-footnotes {
+        break-inside: avoid;
+      }
+      a {
+        color: var(--ink);
+        text-decoration: none;
+      }
+    }
+  </style>
+  <script>{{ plotly_js | safe }}</script>
+</head>
+<body>
+  {% set section_offset = 2 if evidence_rows else 1 %}
+  <header class="titleblock">
+    <h1>{{ title }}</h1>
+    <p class="meta">{{ meta_line }} &middot; Generated {{ generated_at }}</p>
+  </header>
+  <div class="page">
+    <nav class="toc" aria-label="Table of contents">
+      <p class="toc-heading">Contents</p>
+      <ol>
+        <li><a href="#summary">Summary</a></li>
+        {% if evidence_rows %}
+          <li><a href="#evidence">{{ evidence_title | default("Stylised-Fact Evidence", true) }}</a></li>
+        {% endif %}
+        {% for section in sections %}
+          <li><a href="#{{ section.slug }}">{{ section.title }}</a></li>
+        {% endfor %}
+      </ol>
+      {% if appendices %}
+        <ul>
+          {% for appendix in appendices %}
+            <li><a href="#{{ appendix.slug }}">Appendix {{ "ABCDE"[loop.index0] }}. {{ appendix.title }}</a></li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </nav>
+    <main>
+      {% set ns = namespace(figure_counter=0, table_counter=0) %}
+      <section class="section" id="summary">
+        <h2>1. Summary</h2>
+        <p class="section-intro">Headline diagnostics use cautious empirical-finance wording: they report evidence consistent with stylised facts, not causal proof.</p>
+        {% set ns.table_counter = ns.table_counter + 1 %}
+        <p class="table-caption"><span class="caption-label">Table {{ ns.table_counter }}.</span> Key metrics.</p>
+        <div class="table-wrap">
+          <table class="data-table key-metrics">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Value</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in key_metrics %}
+                <tr>
+                  <td>{{ row.metric }}</td>
+                  <td>{{ row.value }}</td>
+                  <td>{{ row.note }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {% if evidence_rows %}
+        <section class="section" id="evidence">
+          <h2>2. {{ evidence_title | default("Stylised-Fact Evidence", true) }}</h2>
+          <p class="section-intro">{{ evidence_intro | default("Each row states the hypothesis, diagnostic threshold, and quantitative reason for treating the stylised fact as evidenced or not evidenced.", true) }}</p>
+          {% set ns.table_counter = ns.table_counter + 1 %}
+          <p class="table-caption"><span class="caption-label">Table {{ ns.table_counter }}.</span> {{ evidence_caption | default("Stylised-fact hypothesis tests and verdicts.", true) }}</p>
+          <div class="table-wrap">
+            <table class="data-table evidence-table">
+              <thead>
+                <tr>
+                  <th>{{ evidence_fact_header | default("Stylised fact", true) }}</th>
+                  <th>Hypothesis and test</th>
+                  <th>Decision rule and statistic</th>
+                  <th>Verdict</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in evidence_rows %}
+                  <tr>
+                    <td>{{ row.fact }}</td>
+                    <td>{{ row.hypothesis }}</td>
+                    <td>{{ row.quantitative_evidence }}</td>
+                    <td>{{ row.verdict }}<sup>{{ loop.index }}</sup></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="table-footnotes">
+            {% for row in evidence_rows %}
+              <p><sup>{{ loop.index }}</sup> {{ row.interpretation }}</p>
+            {% endfor %}
+            <p>Thresholds are fixed decision rules applied independently to each diagnostic; they are not adjusted for multiple comparisons across the table above.</p>
+          </div>
+        </section>
+      {% endif %}
+
+      {% for section in sections %}
+        <section class="section" id="{{ section.slug }}">
+          <h2>{{ loop.index + section_offset }}. {{ section.title }}</h2>
+          <p class="section-intro">{{ section.paragraph }}</p>
+          {% for figure in section.figures %}
+            {% set ns.figure_counter = ns.figure_counter + 1 %}
+            <figure id="figure-{{ figure.name }}">
+              {{ figure.html | safe }}
+              <figcaption class="figure-caption"><span class="caption-label">Figure {{ ns.figure_counter }}.</span> {{ figure.title }}</figcaption>
+            </figure>
+          {% endfor %}
+          {% for table in section.tables %}
+            {% set ns.table_counter = ns.table_counter + 1 %}
+            <p class="table-caption"><span class="caption-label">Table {{ ns.table_counter }}.</span> {{ table.title }}</p>
+            <div class="table-wrap">{{ table.html | safe }}</div>
+          {% endfor %}
+          {% if section.footnote %}
+            <p class="section-footnote">Note: {{ section.footnote }}</p>
+          {% endif %}
+        </section>
+      {% endfor %}
+
+      {% for appendix in appendices %}
+        <section class="section" id="{{ appendix.slug }}">
+          <h2>Appendix {{ "ABCDE"[loop.index0] }}. {{ appendix.title }}</h2>
+          <p class="section-intro">{{ appendix.paragraph }}</p>
+          {% for table in appendix.tables %}
+            {% set ns.table_counter = ns.table_counter + 1 %}
+            <p class="table-caption"><span class="caption-label">Table {{ ns.table_counter }}.</span> {{ table.title }}</p>
+            <div class="table-wrap">{{ table.html | safe }}</div>
+          {% endfor %}
+          {% if appendix.files %}
+            <ul class="file-list">
+              {% for output_file in appendix.files %}
+                <li><a href="{{ output_file }}" target="_blank" rel="noopener">{{ output_file }}</a></li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+          {% if appendix.footnote %}
+            <p class="section-footnote">Note: {{ appendix.footnote }}</p>
+          {% endif %}
+        </section>
+      {% endfor %}
+    </main>
+  </div>
+  <script>
+    (function () {
+      var plotlyConfig = {responsive: true, displaylogo: false};
+      var lazyPlots = document.querySelectorAll(".plotly-lazy");
+
+      function renderPlot(container) {
+        var target = container.querySelector(".plotly-graph-div");
+        var specTag = container.querySelector(".plotly-spec");
+        if (!target || !specTag || target.dataset.rendered) {
+          return;
+        }
+        var spec = JSON.parse(specTag.textContent);
+        Plotly.newPlot(target, spec.data, spec.layout, plotlyConfig);
+        target.dataset.rendered = "true";
+      }
+
+      if ("IntersectionObserver" in window) {
+        var observer = new IntersectionObserver(
+          function (entries) {
+            entries.forEach(function (entry) {
+              if (entry.isIntersecting) {
+                renderPlot(entry.target);
+                observer.unobserve(entry.target);
+              }
+            });
+          },
+          {rootMargin: "600px 0px", threshold: 0.01}
+        );
+        lazyPlots.forEach(function (el) {
+          observer.observe(el);
+        });
+      } else {
+        lazyPlots.forEach(renderPlot);
+      }
+
+      window.addEventListener("beforeprint", function () {
+        lazyPlots.forEach(renderPlot);
+      });
+    })();
+  </script>
+</body>
+</html>
