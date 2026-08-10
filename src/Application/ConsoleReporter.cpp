@@ -76,6 +76,112 @@ void printSection(const std::string& title) {
     return described.str();
 }
 
+/** End-of-run figures for one traded asset. */
+struct AssetOutcome {
+    std::string name;
+    bool primary{false};
+    double finalMarketPrice{0.0};
+    double finalFundamentalPrice{0.0};
+    double tradedVolume{0.0};
+    double transactionCosts{0.0};
+};
+
+/**
+ * Collects end-of-run figures for every traded asset.
+ *
+ * The model treats its assets symmetrically -- neither is analytically
+ * privileged -- so the summary reports all of them rather than only the asset
+ * nominated as primary for the single-asset CSV projection. Volume and costs are
+ * accumulated from the per-(step, asset) records, which are the same rows that
+ * back asset_timeseries.csv.
+ */
+[[nodiscard]] std::vector<AssetOutcome> collectAssetOutcomes(const SimulationRunResult& result) {
+    const MultiAssetRunData& multiAsset = result.multiAssetData();
+    const std::size_t primaryIndex = result.config().assets.primaryIndex();
+
+    std::vector<AssetOutcome> outcomes;
+    outcomes.reserve(multiAsset.assetNames.size());
+    for (std::size_t assetIndex = 0; assetIndex < multiAsset.assetNames.size(); ++assetIndex) {
+        AssetOutcome outcome;
+        outcome.name = multiAsset.assetNames[assetIndex];
+        outcome.primary = assetIndex == primaryIndex;
+        if (assetIndex < multiAsset.marketPriceHistories.size() &&
+            !multiAsset.marketPriceHistories[assetIndex].empty()) {
+            outcome.finalMarketPrice = multiAsset.marketPriceHistories[assetIndex].back();
+        }
+        if (assetIndex < multiAsset.fundamentalPriceHistories.size() &&
+            !multiAsset.fundamentalPriceHistories[assetIndex].empty()) {
+            outcome.finalFundamentalPrice = multiAsset.fundamentalPriceHistories[assetIndex].back();
+        }
+        outcomes.push_back(std::move(outcome));
+    }
+
+    for (const AssetStepDetails& record : multiAsset.assetStepDetails) {
+        if (record.assetIndex < outcomes.size()) {
+            outcomes[record.assetIndex].tradedVolume += record.tradedVolume;
+            outcomes[record.assetIndex].transactionCosts += record.totalTransactionCosts;
+        }
+    }
+
+    return outcomes;
+}
+
+/** Renders the tail of a price history as a single spaced row. */
+[[nodiscard]] std::string describePriceTail(const std::vector<double>& history,
+                                            std::size_t tailCount) {
+    std::ostringstream tail;
+    tail << std::fixed << std::setprecision(4);
+    const std::size_t shown = std::min(tailCount, history.size());
+    for (auto priceIt = std::prev(history.cend(), static_cast<std::ptrdiff_t>(shown));
+         priceIt != history.cend(); ++priceIt) {
+        tail << ' ' << *priceIt;
+    }
+    return tail.str();
+}
+
+/**
+ * Prints the per-asset outcome table with a market-wide total row.
+ *
+ * The total is the sum of the rows above it rather than SimulationStats, whose
+ * totalTradedVolume and totalTransactionCosts accumulate the primary asset's
+ * order book alone. Deriving the total here keeps the table internally
+ * consistent instead of showing a headline figure that its own rows contradict.
+ */
+void printAssetOutcomeTable(const std::vector<AssetOutcome>& outcomes) {
+    const std::string totalLabel = "all assets";
+    std::size_t nameWidth = std::max(std::string("Asset").size(), totalLabel.size());
+    for (const AssetOutcome& outcome : outcomes) {
+        const std::size_t labelWidth = outcome.name.size() + (outcome.primary ? 10 : 0);
+        nameWidth = std::max(nameWidth, labelWidth);
+    }
+
+    constexpr int kFigureWidth = 16;
+    std::cout << "  " << std::left << std::setw(static_cast<int>(nameWidth)) << "Asset"
+              << std::right << std::setw(kFigureWidth) << "final price" << std::setw(kFigureWidth)
+              << "fundamental" << std::setw(kFigureWidth) << "volume" << std::setw(kFigureWidth)
+              << "costs" << '\n';
+
+    double totalVolume = 0.0;
+    double totalCosts = 0.0;
+    for (const AssetOutcome& outcome : outcomes) {
+        const std::string label = outcome.name + (outcome.primary ? " (primary)" : "");
+        std::cout << "  " << std::left << std::setw(static_cast<int>(nameWidth)) << label
+                  << std::right << std::setw(kFigureWidth) << outcome.finalMarketPrice
+                  << std::setw(kFigureWidth) << outcome.finalFundamentalPrice
+                  << std::setw(kFigureWidth) << outcome.tradedVolume << std::setw(kFigureWidth)
+                  << outcome.transactionCosts << '\n';
+        totalVolume += outcome.tradedVolume;
+        totalCosts += outcome.transactionCosts;
+    }
+
+    if (outcomes.size() > 1) {
+        std::cout << "  " << std::left << std::setw(static_cast<int>(nameWidth)) << totalLabel
+                  << std::right << std::setw(kFigureWidth) << "" << std::setw(kFigureWidth) << ""
+                  << std::setw(kFigureWidth) << totalVolume << std::setw(kFigureWidth) << totalCosts
+                  << '\n';
+    }
+}
+
 } // namespace
 
 void printRunPlan(const RuntimeConfig& runtimeConfig,
@@ -109,15 +215,13 @@ void printCompletedSimulationSummary(const RuntimeConfig& runtimeConfig,
                                      const ProcessMemoryUsage& memoryUsage) {
     const SimulationConfig& config = result.config();
     const SimulationStats& stats = result.stats();
-    const auto& prices = result.marketPriceHistory();
-    const auto& fundamentals = result.fundamentalPriceHistory();
 
     std::cout << std::fixed << std::setprecision(4);
     std::cout << "Simulation completed.\n";
 
     printSection("Configuration");
     printRow("Config file", runtimeConfig.sourcePath);
-    printRow("Asset", config.assetName());
+    printRow("Assets", describeEnabledAssets(config));
     printRow("Steps", stats.completedSteps);
     printRow("Agents", describeAgentMix(config));
     printRow("Short selling", onOff(config.shortSellingEnabled));
@@ -130,30 +234,29 @@ void printCompletedSimulationSummary(const RuntimeConfig& runtimeConfig,
     printRow("Costs affect decisions", onOff(config.transactionCosts.affectsDecisions));
 
     printSection("Market outcome");
-    printRow("Final market price", stats.finalMarketPrice);
-    printRow("Final fundamental price", stats.finalFundamentalPrice);
-    printRow("Total traded volume", stats.totalTradedVolume);
-    printRow("Total transaction costs", stats.totalTransactionCosts);
-    printRow("Avg abs order imbalance", stats.averageAbsoluteOrderImbalance);
+    /*
+     * Order imbalance is measured on the primary asset's book alone, so it is
+     * labelled with that asset rather than presented as a market-wide figure.
+     */
+    printRow("Avg abs order imbalance (" + config.assetName() + ")",
+             stats.averageAbsoluteOrderImbalance);
+    std::cout << '\n';
 
-    {
-        const std::size_t tailCount = std::min<std::size_t>(5, prices.size());
-        std::ostringstream tail;
-        for (auto priceIt = std::prev(prices.cend(), static_cast<std::ptrdiff_t>(tailCount));
-             priceIt != prices.cend(); ++priceIt) {
-            tail << ' ' << *priceIt;
-        }
-        printRow("Last " + std::to_string(tailCount) + " market prices", tail.str());
+    const std::vector<AssetOutcome> assetOutcomes = collectAssetOutcomes(result);
+    printAssetOutcomeTable(assetOutcomes);
+
+    const MultiAssetRunData& multiAsset = result.multiAssetData();
+    constexpr std::size_t kPriceTailCount = 5;
+    std::cout << "\n  Last " << kPriceTailCount << " market prices\n";
+    for (std::size_t assetIndex = 0; assetIndex < assetOutcomes.size(); ++assetIndex) {
+        printRow("  " + assetOutcomes[assetIndex].name,
+                 describePriceTail(multiAsset.marketPriceHistories[assetIndex], kPriceTailCount));
     }
-    {
-        const std::size_t tailCount = std::min<std::size_t>(5, fundamentals.size());
-        std::ostringstream tail;
-        for (auto fundamentalIt =
-                 std::prev(fundamentals.cend(), static_cast<std::ptrdiff_t>(tailCount));
-             fundamentalIt != fundamentals.cend(); ++fundamentalIt) {
-            tail << ' ' << *fundamentalIt;
-        }
-        printRow("Last " + std::to_string(tailCount) + " fundamentals", tail.str());
+    std::cout << "  Last " << kPriceTailCount << " fundamentals\n";
+    for (std::size_t assetIndex = 0; assetIndex < assetOutcomes.size(); ++assetIndex) {
+        printRow(
+            "  " + assetOutcomes[assetIndex].name,
+            describePriceTail(multiAsset.fundamentalPriceHistories[assetIndex], kPriceTailCount));
     }
 
     printSection("Diagnostics");

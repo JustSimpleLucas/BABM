@@ -32,6 +32,43 @@ namespace {
     return collapsed;
 }
 
+/*
+ * The console summary must report every traded asset, not only the one
+ * nominated as primary for the single-asset CSV projection. The model treats
+ * its assets symmetrically, so a two-asset run whose summary mentions one asset
+ * is hiding half the market from the reader.
+ */
+void testConsoleSummaryReportsEveryTradedAsset(int& failures) {
+    abm::RuntimeConfig runtimeConfig;
+    runtimeConfig.simulation = abm::test::deterministicSmokeConfig();
+    runtimeConfig.simulation.numNoiseTraders = 8;
+    runtimeConfig.simulation.assets.declare(
+        {abm::test::makeAssetDefinition("alpha", 100.0, 5.0, 0.01, 0.01, 0.02, 1.0),
+         abm::test::makeAssetDefinition("beta", 40.0, 5.0, 0.05, 0.02, -0.01, 1.0)});
+    runtimeConfig.simulation.primaryAssetName = "alpha";
+
+    abm::SimulationEngine simulation(runtimeConfig.simulation);
+    const abm::SimulationRunResult simulationResult = simulation.run({}, false);
+    const abm::RunMetrics metrics = abm::calculateRunMetrics(simulationResult);
+
+    std::ostringstream consoleOutput;
+    std::streambuf* originalBuffer = std::cout.rdbuf(consoleOutput.rdbuf());
+    abm::printCompletedSimulationSummary(runtimeConfig, simulationResult, metrics,
+                                         abm::ProcessMemoryUsage{});
+    std::cout.rdbuf(originalBuffer);
+
+    const std::string console = collapseWhitespace(consoleOutput.str());
+    abm::test::expect(console.find("alpha (primary)") != std::string::npos,
+                      "the summary should mark the primary asset in the outcome table", failures);
+    abm::test::expect(console.find("\n beta ") != std::string::npos ||
+                          console.find(" beta ") != std::string::npos,
+                      "the summary should report the non-primary asset too", failures);
+    abm::test::expect(console.find("all assets") != std::string::npos,
+                      "a multi-asset summary should total across assets", failures);
+    abm::test::expect(console.find("Assets: alpha, beta") != std::string::npos,
+                      "the configuration block should list every enabled asset", failures);
+}
+
 void testRunArtifactWriterProducesRequiredFiles(int& failures) {
     namespace fs = std::filesystem;
 
@@ -430,6 +467,7 @@ namespace abm::test {
 void runRunArtifactWriterTests(int& failures) {
     testRunArtifactWriterProducesRequiredFiles(failures);
     testRunArtifactWriterSkipsDisabledTradeLedger(failures);
+    testConsoleSummaryReportsEveryTradedAsset(failures);
 }
 
 } // namespace abm::test
