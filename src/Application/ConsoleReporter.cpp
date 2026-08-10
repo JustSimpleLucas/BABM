@@ -17,6 +17,8 @@
 namespace abm {
 namespace {
 
+constexpr int kLabelColumnWidth = 34;
+
 [[nodiscard]] std::string formatMemoryMebibytes(const std::optional<std::size_t>& bytes) {
     if (!bytes.has_value()) {
         return "unavailable";
@@ -29,7 +31,78 @@ namespace {
     return formatted.str();
 }
 
+[[nodiscard]] std::string onOff(bool enabled) {
+    return enabled ? "enabled" : "disabled";
+}
+
+/**
+ * Prints one aligned label/value row.
+ *
+ * Aligning the values keeps the summary scannable and makes it usable verbatim
+ * as a thesis appendix, which is also why no colour or terminal control codes
+ * are emitted.
+ */
+template <typename Value> void printRow(const std::string& label, const Value& value) {
+    std::cout << "  " << std::left << std::setw(kLabelColumnWidth) << (label + ':') << ' ' << value
+              << '\n';
+}
+
+void printSection(const std::string& title) {
+    std::cout << '\n' << title << '\n';
+}
+
+/** Comma-separated names of the assets that will actually trade. */
+[[nodiscard]] std::string describeEnabledAssets(const SimulationConfig& config) {
+    std::string described;
+    for (const AssetDefinition& asset : config.assets) {
+        if (!asset.enabled) {
+            continue;
+        }
+        if (!described.empty()) {
+            described += ", ";
+        }
+        described += asset.name;
+    }
+    return described.empty() ? "none" : described;
+}
+
+[[nodiscard]] std::string describeAgentMix(const SimulationConfig& config) {
+    std::ostringstream described;
+    described << (config.numFundamentalists + config.numChartists + config.numNoiseTraders +
+                  config.numBuyAndHoldAgents)
+              << " (" << config.numFundamentalists << " fundamentalists, " << config.numChartists
+              << " chartists, " << config.numNoiseTraders << " noise traders, "
+              << config.numBuyAndHoldAgents << " buy-and-hold agents)";
+    return described.str();
+}
+
 } // namespace
+
+void printRunPlan(const RuntimeConfig& runtimeConfig,
+                  const std::vector<std::string>& defaultedKeys) {
+    const SimulationConfig& config = runtimeConfig.simulation;
+
+    std::cout << "Run plan\n";
+    printRow("Config file", runtimeConfig.sourcePath);
+    printRow("Assets", describeEnabledAssets(config));
+    printRow("Agents", describeAgentMix(config));
+    printRow("Steps", std::to_string(config.timeSteps) + " (" + std::to_string(config.warmupSteps) +
+                          " warm-up)");
+    printRow("Seed", config.seed);
+    printRow("Prospect theory", onOff(config.control.prospectTheoryEnabled));
+    printRow("Prospect heterogeneity", onOff(config.control.prospectParameterHeterogeneityEnabled));
+    printRow("Social influence", onOff(config.social.enabled));
+    printRow("Short selling", onOff(config.shortSellingEnabled));
+    if (runtimeConfig.output.experimentOutputEnabled) {
+        printRow("Experiment", runtimeConfig.output.experimentName);
+    }
+    if (!defaultedKeys.empty()) {
+        printRow("Defaulted settings",
+                 std::to_string(defaultedKeys.size()) + " (listed in the run log)");
+    }
+    std::cout << '\n';
+    std::cout.flush();
+}
 
 void printCompletedSimulationSummary(const RuntimeConfig& runtimeConfig,
                                      const SimulationRunResult& result, const RunMetrics& metrics,
@@ -41,80 +114,88 @@ void printCompletedSimulationSummary(const RuntimeConfig& runtimeConfig,
 
     std::cout << std::fixed << std::setprecision(4);
     std::cout << "Simulation completed.\n";
-    std::cout << "Config file: " << runtimeConfig.sourcePath << '\n';
-    std::cout << "Asset: " << config.assetName() << '\n';
-    std::cout << "Steps: " << stats.completedSteps << '\n';
-    std::cout << "Agents: "
-              << (config.numFundamentalists + config.numChartists + config.numNoiseTraders +
-                  config.numBuyAndHoldAgents)
-              << " (" << config.numFundamentalists << " fundamentalists, " << config.numChartists
-              << " chartists, " << config.numNoiseTraders << " noise traders, "
-              << config.numBuyAndHoldAgents << " buy-and-hold agents)\n";
-    std::cout << "Short selling: " << (config.shortSellingEnabled ? "enabled" : "disabled") << '\n';
-    std::cout << "Transaction cost rate: " << config.transactionCosts.rate << '\n';
-    std::cout << "Transaction costs affect decisions: "
-              << (config.transactionCosts.affectsDecisions ? "enabled" : "disabled") << '\n';
+
+    printSection("Configuration");
+    printRow("Config file", runtimeConfig.sourcePath);
+    printRow("Asset", config.assetName());
+    printRow("Steps", stats.completedSteps);
+    printRow("Agents", describeAgentMix(config));
+    printRow("Short selling", onOff(config.shortSellingEnabled));
     if (config.shortSellingEnabled) {
-        std::cout << "Short-sale initial margin: " << config.shortSale.initialMarginRequirement
-                  << '\n';
-        std::cout << "Short-sale maintenance margin: "
-                  << config.shortSale.maintenanceMarginRequirement << '\n';
-        std::cout << "Borrowable supply ratio: " << config.shortSale.borrowableSupplyRatio << '\n';
+        printRow("Short-sale initial margin", config.shortSale.initialMarginRequirement);
+        printRow("Short-sale maintenance margin", config.shortSale.maintenanceMarginRequirement);
+        printRow("Borrowable supply ratio", config.shortSale.borrowableSupplyRatio);
     }
-    std::cout << "Final market price: " << stats.finalMarketPrice << '\n';
-    std::cout << "Final fundamental price: " << stats.finalFundamentalPrice << '\n';
-    std::cout << "Total traded volume: " << stats.totalTradedVolume << '\n';
-    std::cout << "Total transaction costs: " << stats.totalTransactionCosts << '\n';
-    std::cout << "Avg abs order imbalance: " << stats.averageAbsoluteOrderImbalance << '\n';
-    std::cout << "Mean allocative efficiency: " << metrics.meanAllocativeEfficiency << " over "
-              << metrics.allocativeEfficiencyObservations << " positive-surplus steps\n";
-    std::cout << "Resident memory after simulation: "
-              << formatMemoryMebibytes(memoryUsage.residentSetBytes) << '\n';
-    std::cout << "Peak resident memory during process: "
-              << formatMemoryMebibytes(memoryUsage.peakResidentSetBytes) << '\n';
+    printRow("Transaction cost rate", config.transactionCosts.rate);
+    printRow("Costs affect decisions", onOff(config.transactionCosts.affectsDecisions));
 
-    const std::size_t tailCount = std::min<std::size_t>(5, prices.size());
-    std::cout << "Last " << tailCount << " market prices:";
-    for (auto priceIt = std::prev(prices.cend(), static_cast<std::ptrdiff_t>(tailCount));
-         priceIt != prices.cend(); ++priceIt) {
-        std::cout << ' ' << *priceIt;
-    }
-    std::cout << '\n';
+    printSection("Market outcome");
+    printRow("Final market price", stats.finalMarketPrice);
+    printRow("Final fundamental price", stats.finalFundamentalPrice);
+    printRow("Total traded volume", stats.totalTradedVolume);
+    printRow("Total transaction costs", stats.totalTransactionCosts);
+    printRow("Avg abs order imbalance", stats.averageAbsoluteOrderImbalance);
 
-    const std::size_t tailFundCount = std::min<std::size_t>(5, fundamentals.size());
-    std::cout << "Last " << tailFundCount << " fundamental prices:";
-    for (auto fundamentalIt =
-             std::prev(fundamentals.cend(), static_cast<std::ptrdiff_t>(tailFundCount));
-         fundamentalIt != fundamentals.cend(); ++fundamentalIt) {
-        std::cout << ' ' << *fundamentalIt;
+    {
+        const std::size_t tailCount = std::min<std::size_t>(5, prices.size());
+        std::ostringstream tail;
+        for (auto priceIt = std::prev(prices.cend(), static_cast<std::ptrdiff_t>(tailCount));
+             priceIt != prices.cend(); ++priceIt) {
+            tail << ' ' << *priceIt;
+        }
+        printRow("Last " + std::to_string(tailCount) + " market prices", tail.str());
     }
-    std::cout << '\n';
-    std::cout << "CSV exported to: " << runtimeConfig.output.simulationCsvPath << '\n';
-    std::cout << "Agent CSV exported to: " << runtimeConfig.output.agentCsvPath << '\n';
-    if (runtimeConfig.output.tradeLedgerEnabled) {
-        std::cout << "Trade ledger CSV exported to: " << runtimeConfig.output.tradeLedgerCsvPath
-                  << '\n';
-    } else {
-        std::cout << "Trade ledger CSV: disabled\n";
+    {
+        const std::size_t tailCount = std::min<std::size_t>(5, fundamentals.size());
+        std::ostringstream tail;
+        for (auto fundamentalIt =
+                 std::prev(fundamentals.cend(), static_cast<std::ptrdiff_t>(tailCount));
+             fundamentalIt != fundamentals.cend(); ++fundamentalIt) {
+            tail << ' ' << *fundamentalIt;
+        }
+        printRow("Last " + std::to_string(tailCount) + " fundamentals", tail.str());
     }
-    std::cout << "Summary metrics CSV exported to: " << runtimeConfig.output.summaryMetricsCsvPath
-              << '\n';
-    std::cout << "Stylised-facts CSV exported to: " << runtimeConfig.output.stylisedFactsCsvPath
-              << '\n';
-    std::cout << "Config JSON exported to: " << runtimeConfig.output.configJsonPath << '\n';
-    std::cout << "Metadata JSON exported to: " << runtimeConfig.output.metadataJsonPath << '\n';
-    std::cout << "Run log exported to: " << runtimeConfig.output.runLogPath << '\n';
-    if (runtimeConfig.output.databaseOutputEnabled) {
-        std::cout << "PostgreSQL import: enabled via "
-                  << runtimeConfig.output.databaseUrlEnvironmentVariable << '\n';
-        std::cout << "Prune staging after database import: "
-                  << (runtimeConfig.output.databasePruneAfterImport ? "enabled" : "disabled")
-                  << '\n';
+
+    printSection("Diagnostics");
+    {
+        std::ostringstream efficiency;
+        efficiency << metrics.meanAllocativeEfficiency << " over "
+                   << metrics.allocativeEfficiencyObservations << " positive-surplus steps";
+        printRow("Mean allocative efficiency", efficiency.str());
     }
+    printRow("Resident memory", formatMemoryMebibytes(memoryUsage.residentSetBytes));
+    printRow("Peak resident memory", formatMemoryMebibytes(memoryUsage.peakResidentSetBytes));
+
+    printSection("Artefacts");
+    /*
+     * When archiving is on, every artefact lands in one run directory, so the
+     * directory is the useful thing to print. The individual paths are only
+     * listed when they can genuinely differ, which keeps the summary short in
+     * the common case without hiding anything in the uncommon one.
+     */
     if (runtimeConfig.output.experimentOutputEnabled) {
-        std::cout << "Experiment run directory: " << runtimeConfig.output.runDirectoryPath << '\n';
-        std::cout << "Experiment manifest: " << runtimeConfig.output.experimentManifestCsvPath
-                  << '\n';
+        printRow("Run directory", runtimeConfig.output.runDirectoryPath);
+        printRow("Experiment manifest", runtimeConfig.output.experimentManifestCsvPath);
+        printRow("Trade ledger", runtimeConfig.output.tradeLedgerEnabled
+                                     ? "written"
+                                     : "disabled (trade_ledger_enabled = 0)");
+    } else {
+        printRow("Step timeseries CSV", runtimeConfig.output.simulationCsvPath);
+        printRow("Agent CSV", runtimeConfig.output.agentCsvPath);
+        printRow("Trade ledger CSV", runtimeConfig.output.tradeLedgerEnabled
+                                         ? runtimeConfig.output.tradeLedgerCsvPath
+                                         : "disabled (trade_ledger_enabled = 0)");
+        printRow("Summary metrics CSV", runtimeConfig.output.summaryMetricsCsvPath);
+        printRow("Stylised-facts CSV", runtimeConfig.output.stylisedFactsCsvPath);
+        printRow("Config JSON", runtimeConfig.output.configJsonPath);
+        printRow("Metadata JSON", runtimeConfig.output.metadataJsonPath);
+        printRow("Run log", runtimeConfig.output.runLogPath);
+    }
+    if (runtimeConfig.output.databaseOutputEnabled) {
+        printRow("PostgreSQL import",
+                 "enabled via " + runtimeConfig.output.databaseUrlEnvironmentVariable);
+        printRow("Prune staging after import",
+                 onOff(runtimeConfig.output.databasePruneAfterImport));
     }
 }
 

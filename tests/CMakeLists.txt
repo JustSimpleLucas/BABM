@@ -6,6 +6,9 @@
 function(abm_add_test_executable target_name)
     add_executable(${target_name} ${ARGN} TestSupport.cpp)
     target_link_libraries(${target_name} PRIVATE abm_core)
+    # Tests that read repository fixtures resolve them from here rather than the
+    # working directory, which CTest sets to the build tree.
+    target_compile_definitions(${target_name} PRIVATE ABM_PROJECT_ROOT="${ABM_PROJECT_ROOT}")
     abm_apply_project_warnings(${target_name})
     abm_apply_project_sanitizers(${target_name})
     add_test(NAME ${target_name} COMMAND ${target_name})
@@ -25,6 +28,7 @@ abm_add_test_executable(abm_model_tests
 )
 
 abm_add_test_executable(abm_config_parsing_tests
+    ConfigKeyRegistryTests.cpp
     ConfigParsingTestMain.cpp
     ConfigParsingTests.cpp
 )

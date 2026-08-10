@@ -59,6 +59,7 @@ void runLimitOrderBookTests(int& failures);
 void runSimulationComponentTests(int& failures);
 void runSimulationIntegrationTests(int& failures);
 void runConfigParsingTests(int& failures);
+void runConfigKeyRegistryTests(int& failures);
 void runArchiveWorkflowTests(int& failures);
 void runConfigValidationTests(int& failures);
 void runRunArtifactWriterTests(int& failures);

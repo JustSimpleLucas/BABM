@@ -6,26 +6,51 @@
 #include "Utility/SimulationConstants.h"
 
 #include <algorithm>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
 namespace abm {
 namespace {
 
-void validateAllocationConfig(const AllocationConfig& allocation, const std::string& ownerName) {
-    const std::string riskAversionName = ownerName + " risk aversion";
-    const std::string minWeightName = ownerName + " minimum risky weight";
-    const std::string maxWeightName = ownerName + " maximum risky weight";
+/*
+ * Constraint failures name the parameter in prose and then the configuration key
+ * in parentheses. The prose keeps the message readable for a supervisor or
+ * examiner reading a run log; the parenthesised key is what lets the diagnostic
+ * renderer resolve the line in the config file the reader has to edit.
+ */
+[[nodiscard]] std::string named(const std::string& prose, const std::string& configKey) {
+    return prose + " (" + configKey + ")";
+}
+
+/** Formats a numeric value for a diagnostic without trailing zero noise. */
+[[nodiscard]] std::string describeValue(double value) {
+    std::ostringstream formatted;
+    formatted << value;
+    return formatted.str();
+}
+
+void validateAllocationConfig(const AllocationConfig& allocation, const std::string& ownerName,
+                              const std::string& keyPrefix) {
+    const std::string riskAversionName =
+        named(ownerName + " risk aversion", keyPrefix + "_risk_aversion");
+    const std::string minWeightName =
+        named(ownerName + " minimum risky weight", keyPrefix + "_min_risky_weight");
+    const std::string maxWeightName =
+        named(ownerName + " maximum risky weight", keyPrefix + "_max_risky_weight");
 
     requireStrictlyPositive(allocation.riskAversion, riskAversionName.c_str());
     requireFinite(allocation.minRiskyWeight, minWeightName.c_str());
     requireFinite(allocation.maxRiskyWeight, maxWeightName.c_str());
-    const std::string grossExposureName = ownerName + " maximum gross exposure";
+    const std::string grossExposureName =
+        named(ownerName + " maximum gross exposure", keyPrefix + "_max_gross_exposure");
     requireStrictlyPositive(allocation.maxGrossExposure, grossExposureName.c_str());
 
     if (allocation.minRiskyWeight > allocation.maxRiskyWeight) {
         throw std::invalid_argument(
-            ownerName + " allocation minimum risky weight cannot exceed maximum risky weight.");
+            ownerName + " allocation minimum risky weight (" + keyPrefix + "_min_risky_weight) = " +
+            describeValue(allocation.minRiskyWeight) + " cannot exceed maximum risky weight (" +
+            keyPrefix + "_max_risky_weight) = " + describeValue(allocation.maxRiskyWeight) + '.');
     }
 }
 
@@ -62,17 +87,20 @@ void requireWarmupAtLeast(std::size_t configuredWarmup, std::size_t requiredWarm
                           const std::string& reason) {
     if (configuredWarmup < requiredWarmup) {
         throw std::invalid_argument(
-            "Warm-up steps must be at least " + std::to_string(requiredWarmup) + " for " + reason +
-            ". Configured warm-up steps: " + std::to_string(configuredWarmup) + ".");
+            "Warm-up steps (warmup_steps) must be at least " + std::to_string(requiredWarmup) +
+            " for " + reason + ". Configured warm-up steps: " + std::to_string(configuredWarmup) +
+            ".");
     }
 }
 
 void validatePopulationConfig(const SimulationConfig& config) {
-    requirePositiveSize(config.timeSteps, "Simulation time steps");
+    requirePositiveSize(config.timeSteps, named("Simulation time steps", "time_steps").c_str());
     if (config.numFundamentalists + config.numChartists + config.numNoiseTraders +
             config.numBuyAndHoldAgents ==
         0) {
-        throw std::invalid_argument("At least one agent is required.");
+        throw std::invalid_argument(
+            "At least one agent is required: num_fundamentalists, num_chartists, "
+            "num_noise_traders and num_buy_and_hold_agents are all zero.");
     }
 }
 
@@ -83,66 +111,113 @@ void validatePopulationConfig(const SimulationConfig& config) {
  * because an undeclared universe still holds one asset.
  */
 void validateMarketStateConfig(const SimulationConfig& config) {
-    requireNonNegative(config.initialCash, "Initial cash");
-    requireFinite(config.riskFreeRate, "Risk-free rate");
-    requireFinite(config.agentActivityRate, "Agent activity rate");
-    requireNonNegative(config.warmupPriceProcess.noiseStdDev, "Warm-up price noise stddev");
-    requireNonNegative(config.warmupPriceProcess.fundamentalPullStrength,
-                       "Warm-up fundamental pull strength");
+    requireNonNegative(config.initialCash, named("Initial cash", "initial_cash").c_str());
+    requireFinite(config.riskFreeRate, named("Risk-free rate", "risk_free_rate").c_str());
+    requireFinite(config.agentActivityRate,
+                  named("Agent activity rate", "agent_activity_rate").c_str());
+    requireNonNegative(config.warmupPriceProcess.noiseStdDev,
+                       named("Warm-up price noise stddev", "warmup_price_noise_std_dev").c_str());
+    requireNonNegative(
+        config.warmupPriceProcess.fundamentalPullStrength,
+        named("Warm-up fundamental pull strength", "warmup_fundamental_pull_strength").c_str());
 
     if (config.riskFreeRate <= -1.0) {
-        throw std::invalid_argument("Risk-free rate must be greater than -1.0.");
+        throw std::invalid_argument(
+            "Risk-free rate (risk_free_rate) = " + describeValue(config.riskFreeRate) +
+            " must be greater than -1.0.");
     }
     if (config.covarianceWindow < 2) {
-        throw std::invalid_argument("Covariance window must be at least 2.");
+        throw std::invalid_argument(
+            "Covariance window (covariance_window) = " + std::to_string(config.covarianceWindow) +
+            " must be at least 2.");
     }
 }
 
 void validateMicrostructureConfig(const MicrostructureConfig& microstructure) {
-    requirePositiveSize(microstructure.orderExpirySteps, "Order expiry steps");
-    requireInClosedUnitInterval(microstructure.cancellationBaseProbability,
-                                "Cancellation base probability");
-    requireNonNegative(microstructure.cancellationMispricingSensitivity,
-                       "Cancellation mispricing sensitivity");
-    requireInClosedUnitInterval(microstructure.marketOrderProbability, "Market order probability");
-    requireNonNegative(microstructure.marketOrderLogGapThreshold, "Market order log-gap threshold");
-    requireNonNegative(microstructure.marketOrderPriceCollar, "Market order price collar");
-    requirePositiveSize(microstructure.bookDepthLevels, "Book depth levels");
+    requirePositiveSize(microstructure.orderExpirySteps,
+                        named("Order expiry steps", "order_expiry_steps").c_str());
+    requireInClosedUnitInterval(
+        microstructure.cancellationBaseProbability,
+        named("Cancellation base probability", "cancellation_base_probability").c_str());
+    requireNonNegative(
+        microstructure.cancellationMispricingSensitivity,
+        named("Cancellation mispricing sensitivity", "cancellation_mispricing_sensitivity")
+            .c_str());
+    requireInClosedUnitInterval(
+        microstructure.marketOrderProbability,
+        named("Market order probability", "market_order_probability").c_str());
+    requireNonNegative(
+        microstructure.marketOrderLogGapThreshold,
+        named("Market order log-gap threshold", "market_order_log_gap_threshold").c_str());
+    requireNonNegative(microstructure.marketOrderPriceCollar,
+                       named("Market order price collar", "market_order_price_collar").c_str());
+    requirePositiveSize(microstructure.bookDepthLevels,
+                        named("Book depth levels", "book_depth_levels").c_str());
 }
 
 void validateShortSaleConfig(const ShortSaleConfig& shortSale) {
-    requireStrictlyPositive(shortSale.initialMarginRequirement,
-                            "Short-sale initial margin requirement");
+    requireStrictlyPositive(
+        shortSale.initialMarginRequirement,
+        named("Short-sale initial margin requirement", "short_sale_initial_margin_requirement")
+            .c_str());
     requireStrictlyPositive(shortSale.maintenanceMarginRequirement,
-                            "Short-sale maintenance margin requirement");
-    requireInClosedUnitInterval(shortSale.borrowableSupplyRatio,
-                                "Short-sale borrowable supply ratio");
+                            named("Short-sale maintenance margin requirement",
+                                  "short_sale_maintenance_margin_requirement")
+                                .c_str());
+    requireInClosedUnitInterval(
+        shortSale.borrowableSupplyRatio,
+        named("Short-sale borrowable supply ratio", "short_sale_borrowable_supply_ratio").c_str());
     if (shortSale.maintenanceMarginRequirement > shortSale.initialMarginRequirement) {
-        throw std::invalid_argument("Short-sale maintenance margin cannot exceed initial margin.");
+        throw std::invalid_argument(
+            "Short-sale maintenance margin (short_sale_maintenance_margin_requirement) = " +
+            describeValue(shortSale.maintenanceMarginRequirement) +
+            " cannot exceed initial margin (short_sale_initial_margin_requirement) = " +
+            describeValue(shortSale.initialMarginRequirement) + '.');
     }
 }
 
 void validateTransactionCostConfig(const TransactionCostConfig& transactionCosts) {
-    requireNonNegative(transactionCosts.rate, "Transaction cost rate");
+    requireNonNegative(transactionCosts.rate,
+                       named("Transaction cost rate", "transaction_cost_rate").c_str());
     if (transactionCosts.rate >= 1.0) {
-        throw std::invalid_argument("Transaction cost rate must be less than 1.");
+        throw std::invalid_argument("Transaction cost rate (transaction_cost_rate) = " +
+                                    describeValue(transactionCosts.rate) + " must be less than 1.");
     }
 }
 
 void validateControlFiniteValues(const ControlParameters& control) {
-    requireInClosedUnitInterval(control.prospectTheoryAgentFraction,
-                                "Control Prospect Theory agent fraction");
-    requireFinite(control.lossAversion, "Control loss aversion");
-    requireFinite(control.lossAversionStdDev, "Control loss aversion stddev");
-    requireFinite(control.curvatureForGain, "Control curvature for gain");
-    requireFinite(control.curvatureForGainStdDev, "Control curvature for gain stddev");
-    requireFinite(control.curvatureForLoss, "Control curvature for loss");
-    requireFinite(control.curvatureForLossStdDev, "Control curvature for loss stddev");
-    requireFinite(control.probDistortionForGain, "Control probability distortion for gain");
-    requireFinite(control.probDistortionForLoss, "Control probability distortion for loss");
-    requireFinite(control.probabilityDistortionMin, "Control probability distortion min");
-    requireFinite(control.probabilityDistortionMax, "Control probability distortion max");
-    requireFinite(control.referencePoint, "Control reference point");
+    requireInClosedUnitInterval(
+        control.prospectTheoryAgentFraction,
+        named("Control Prospect Theory agent fraction", "control_prospect_theory_agent_fraction")
+            .c_str());
+    requireFinite(control.lossAversion,
+                  named("Control loss aversion", "control_loss_aversion").c_str());
+    requireFinite(control.lossAversionStdDev,
+                  named("Control loss aversion stddev", "control_loss_aversion_std_dev").c_str());
+    requireFinite(control.curvatureForGain,
+                  named("Control curvature for gain", "control_curvature_for_gain").c_str());
+    requireFinite(
+        control.curvatureForGainStdDev,
+        named("Control curvature for gain stddev", "control_curvature_for_gain_std_dev").c_str());
+    requireFinite(control.curvatureForLoss,
+                  named("Control curvature for loss", "control_curvature_for_loss").c_str());
+    requireFinite(
+        control.curvatureForLossStdDev,
+        named("Control curvature for loss stddev", "control_curvature_for_loss_std_dev").c_str());
+    requireFinite(control.probDistortionForGain, named("Control probability distortion for gain",
+                                                       "control_prob_distortion_for_gain")
+                                                     .c_str());
+    requireFinite(control.probDistortionForLoss, named("Control probability distortion for loss",
+                                                       "control_prob_distortion_for_loss")
+                                                     .c_str());
+    requireFinite(
+        control.probabilityDistortionMin,
+        named("Control probability distortion min", "control_probability_distortion_min").c_str());
+    requireFinite(
+        control.probabilityDistortionMax,
+        named("Control probability distortion max", "control_probability_distortion_max").c_str());
+    requireFinite(control.referencePoint,
+                  named("Control reference point", "control_reference_point").c_str());
 }
 
 void validateEnabledProspectTheoryConfig(const ControlParameters& control) {
@@ -150,90 +225,167 @@ void validateEnabledProspectTheoryConfig(const ControlParameters& control) {
         return;
     }
 
-    requireStrictlyPositive(control.lossAversion, "Control loss aversion");
-    requireNonNegative(control.lossAversionStdDev, "Control loss aversion stddev");
-    requireStrictlyPositive(control.curvatureForGain, "Control curvature for gain");
-    requireNonNegative(control.curvatureForGainStdDev, "Control curvature for gain stddev");
-    requireStrictlyPositive(control.curvatureForLoss, "Control curvature for loss");
-    requireNonNegative(control.curvatureForLossStdDev, "Control curvature for loss stddev");
-    requireStrictlyPositive(control.probDistortionForGain,
-                            "Control probability distortion for gain");
-    requireStrictlyPositive(control.probDistortionForLoss,
-                            "Control probability distortion for loss");
-    requireStrictlyPositive(control.probabilityDistortionMin, "Control probability distortion min");
-    requireStrictlyPositive(control.probabilityDistortionMax, "Control probability distortion max");
-    requireStrictlyPositive(control.referencePoint, "Control reference point");
+    requireStrictlyPositive(control.lossAversion,
+                            named("Control loss aversion", "control_loss_aversion").c_str());
+    requireNonNegative(
+        control.lossAversionStdDev,
+        named("Control loss aversion stddev", "control_loss_aversion_std_dev").c_str());
+    requireStrictlyPositive(
+        control.curvatureForGain,
+        named("Control curvature for gain", "control_curvature_for_gain").c_str());
+    requireNonNegative(
+        control.curvatureForGainStdDev,
+        named("Control curvature for gain stddev", "control_curvature_for_gain_std_dev").c_str());
+    requireStrictlyPositive(
+        control.curvatureForLoss,
+        named("Control curvature for loss", "control_curvature_for_loss").c_str());
+    requireNonNegative(
+        control.curvatureForLossStdDev,
+        named("Control curvature for loss stddev", "control_curvature_for_loss_std_dev").c_str());
+    requireStrictlyPositive(
+        control.probDistortionForGain,
+        named("Control probability distortion for gain", "control_prob_distortion_for_gain")
+            .c_str());
+    requireStrictlyPositive(
+        control.probDistortionForLoss,
+        named("Control probability distortion for loss", "control_prob_distortion_for_loss")
+            .c_str());
+    requireStrictlyPositive(
+        control.probabilityDistortionMin,
+        named("Control probability distortion min", "control_probability_distortion_min").c_str());
+    requireStrictlyPositive(
+        control.probabilityDistortionMax,
+        named("Control probability distortion max", "control_probability_distortion_max").c_str());
+    requireStrictlyPositive(control.referencePoint,
+                            named("Control reference point", "control_reference_point").c_str());
     if (control.referencePointMode == ProspectReferencePointMode::MovingAveragePrice) {
         requirePositiveSize(control.referenceMovingAverageWindow,
-                            "Control reference moving-average window");
+                            named("Control reference moving-average window",
+                                  "control_reference_moving_average_window")
+                                .c_str());
     }
     if (control.prospectScenarioCount < 3 || control.prospectScenarioCount % 2 == 0) {
         throw std::invalid_argument(
-            "Control prospect scenario count must be an odd integer greater than or equal to 3.");
+            "Control prospect scenario count (control_prospect_scenario_count) = " +
+            std::to_string(control.prospectScenarioCount) +
+            " must be an odd integer greater than or equal to 3.");
     }
     if (control.probabilityDistortionMin > control.probabilityDistortionMax) {
         throw std::invalid_argument(
-            "Control probability distortion bounds must satisfy min <= max.");
+            "Control probability distortion bounds must satisfy min <= max, but "
+            "(control_probability_distortion_min) = " +
+            describeValue(control.probabilityDistortionMin) +
+            " exceeds (control_probability_distortion_max) = " +
+            describeValue(control.probabilityDistortionMax) + '.');
     }
 }
 
 void validateFundamentalistConfig(const FundamentalistConfig& fundamentalist) {
-    requireInHalfOpenUnitInterval(fundamentalist.mispricingThreshold,
-                                  "Fundamentalist mispricing threshold");
-    requireInHalfOpenUnitInterval(fundamentalist.stopLossThreshold,
-                                  "Fundamentalist stop-loss threshold");
-    requireInHalfOpenUnitInterval(fundamentalist.takeProfitThreshold,
-                                  "Fundamentalist take-profit threshold");
-    requirePositiveSize(fundamentalist.volatilityWindow, "Fundamentalist volatility window");
-    validateAllocationConfig(fundamentalist.allocation, "Fundamentalist");
+    requireInHalfOpenUnitInterval(
+        fundamentalist.mispricingThreshold,
+        named("Fundamentalist mispricing threshold", "fundamentalist_mispricing_threshold")
+            .c_str());
+    requireInHalfOpenUnitInterval(
+        fundamentalist.stopLossThreshold,
+        named("Fundamentalist stop-loss threshold", "fundamentalist_stop_loss_threshold").c_str());
+    requireInHalfOpenUnitInterval(
+        fundamentalist.takeProfitThreshold,
+        named("Fundamentalist take-profit threshold", "fundamentalist_take_profit_threshold")
+            .c_str());
+    requirePositiveSize(
+        fundamentalist.volatilityWindow,
+        named("Fundamentalist volatility window", "fundamentalist_volatility_window").c_str());
+    validateAllocationConfig(fundamentalist.allocation, "Fundamentalist", "fundamentalist");
 }
 
 void validateChartistConfig(const ChartistConfig& chartist) {
-    requirePositiveSize(chartist.shortWindow, "Chartist short window");
-    requirePositiveSize(chartist.longWindow, "Chartist long window");
-    requireInHalfOpenUnitInterval(chartist.momentumSignalThreshold,
-                                  "Chartist momentum signal threshold");
-    requirePositiveSize(chartist.breakoutWindow, "Chartist breakout window");
-    requirePositiveSize(chartist.volatilityWindow, "Chartist volatility window");
+    requirePositiveSize(chartist.shortWindow,
+                        named("Chartist short window", "chartist_short_window").c_str());
+    requirePositiveSize(chartist.longWindow,
+                        named("Chartist long window", "chartist_long_window").c_str());
+    requireInHalfOpenUnitInterval(
+        chartist.momentumSignalThreshold,
+        named("Chartist momentum signal threshold", "chartist_momentum_signal_threshold").c_str());
+    requirePositiveSize(chartist.breakoutWindow,
+                        named("Chartist breakout window", "chartist_breakout_window").c_str());
+    requirePositiveSize(chartist.volatilityWindow,
+                        named("Chartist volatility window", "chartist_volatility_window").c_str());
     if (chartist.shortWindow > chartist.longWindow) {
-        throw std::invalid_argument("Chartist short window cannot exceed long window.");
+        throw std::invalid_argument("Chartist short window (chartist_short_window) = " +
+                                    std::to_string(chartist.shortWindow) +
+                                    " cannot exceed long window (chartist_long_window) = " +
+                                    std::to_string(chartist.longWindow) + '.');
     }
-    requireInClosedUnitInterval(chartist.maxShortWeight, "Chartist max short weight");
-    validateAllocationConfig(chartist.allocation, "Chartist");
+    requireInClosedUnitInterval(
+        chartist.maxShortWeight,
+        named("Chartist max short weight", "chartist_max_short_weight").c_str());
+    validateAllocationConfig(chartist.allocation, "Chartist", "chartist");
 }
 
 void validateNoiseTraderConfig(const NoiseTraderConfig& noiseTrader) {
-    requireStrictlyPositive(noiseTrader.beliefShockStdDev, "Noise-trader belief shock stddev");
-    requireInClosedUnitInterval(noiseTrader.orderSizeFraction, "Noise-trader order size fraction");
+    requireStrictlyPositive(
+        noiseTrader.beliefShockStdDev,
+        named("Noise-trader belief shock stddev", "noise_trader_belief_shock_std_dev").c_str());
+    requireInClosedUnitInterval(
+        noiseTrader.orderSizeFraction,
+        named("Noise-trader order size fraction", "noise_trader_order_size_fraction").c_str());
     if (noiseTrader.orderSizeFraction <= 0.0) {
-        throw std::invalid_argument("Noise-trader order size fraction must be greater than 0.");
+        throw std::invalid_argument(
+            "Noise-trader order size fraction (noise_trader_order_size_fraction) = " +
+            describeValue(noiseTrader.orderSizeFraction) + " must be greater than 0.");
     }
-    requireInClosedUnitInterval(noiseTrader.maxShortWeight, "Noise-trader max short weight");
+    requireInClosedUnitInterval(
+        noiseTrader.maxShortWeight,
+        named("Noise-trader max short weight", "noise_trader_max_short_weight").c_str());
 }
 
 void validateBuyAndHoldConfig(const BuyAndHoldConfig& buyAndHold) {
-    requireInClosedUnitInterval(buyAndHold.targetRiskyWeight, "Buy-and-hold target risky weight");
+    requireInClosedUnitInterval(
+        buyAndHold.targetRiskyWeight,
+        named("Buy-and-hold target risky weight", "buy_hold_target_risky_weight").c_str());
     if (buyAndHold.targetRiskyWeight <= 0.0) {
-        throw std::invalid_argument("Buy-and-hold target risky weight must be greater than 0.");
+        throw std::invalid_argument(
+            "Buy-and-hold target risky weight (buy_hold_target_risky_weight) = " +
+            describeValue(buyAndHold.targetRiskyWeight) + " must be greater than 0.");
     }
 }
 
 void validateSocialConfig(const SocialInfluenceConfig& social) {
-    requireStrictlyPositive(social.spaceWidth, "Social space width");
-    requireStrictlyPositive(social.spaceHeight, "Social space height");
-    requireNonNegative(social.interactionRadius, "Social interaction radius");
-    requireNonNegative(social.opinionKappa, "Social opinion kappa");
-    requireNonNegative(social.holdTolerance, "Social hold tolerance");
-    requireInClosedUnitInterval(social.gammaMin, "Social gamma min");
-    requireInClosedUnitInterval(social.gammaMax, "Social gamma max");
-    requireNonNegative(social.privateSignalStdMin, "Social private signal stddev min");
-    requireNonNegative(social.privateSignalStdMax, "Social private signal stddev max");
+    requireStrictlyPositive(social.spaceWidth,
+                            named("Social space width", "social_space_width").c_str());
+    requireStrictlyPositive(social.spaceHeight,
+                            named("Social space height", "social_space_height").c_str());
+    requireNonNegative(social.interactionRadius,
+                       named("Social interaction radius", "social_interaction_radius").c_str());
+    requireNonNegative(social.opinionKappa,
+                       named("Social opinion kappa", "social_opinion_kappa").c_str());
+    requireNonNegative(social.holdTolerance,
+                       named("Social hold tolerance", "social_hold_tolerance").c_str());
+    requireInClosedUnitInterval(social.gammaMin,
+                                named("Social gamma min", "social_gamma_min").c_str());
+    requireInClosedUnitInterval(social.gammaMax,
+                                named("Social gamma max", "social_gamma_max").c_str());
+    requireNonNegative(
+        social.privateSignalStdMin,
+        named("Social private signal stddev min", "social_private_signal_std_min").c_str());
+    requireNonNegative(
+        social.privateSignalStdMax,
+        named("Social private signal stddev max", "social_private_signal_std_max").c_str());
 
     if (social.gammaMin > social.gammaMax) {
-        throw std::invalid_argument("Social gamma bounds must satisfy 0 <= min <= max <= 1.");
+        throw std::invalid_argument(
+            "Social gamma bounds must satisfy 0 <= min <= max <= 1, but "
+            "(social_gamma_min) = " +
+            describeValue(social.gammaMin) +
+            " exceeds (social_gamma_max) = " + describeValue(social.gammaMax) + '.');
     }
     if (social.privateSignalStdMax < social.privateSignalStdMin) {
-        throw std::invalid_argument("Private signal stddev bounds must satisfy 0 <= min <= max.");
+        throw std::invalid_argument(
+            "Private signal stddev bounds must satisfy 0 <= min <= max, but "
+            "(social_private_signal_std_min) = " +
+            describeValue(social.privateSignalStdMin) +
+            " exceeds (social_private_signal_std_max) = " +
+            describeValue(social.privateSignalStdMax) + '.');
     }
 }
 
@@ -261,15 +413,26 @@ void validateAssetDefinitions(const SimulationConfig& config) {
         }
 
         const std::string prefix = "Asset '" + asset.name + "' ";
-        requireStrictlyPositive(asset.initialPrice, (prefix + "initial price").c_str());
-        requireNonNegative(asset.initialStock, (prefix + "initial stock").c_str());
-        requireNonNegative(asset.priceTickSize, (prefix + "price tick size").c_str());
-        requireNonNegative(asset.fundamentalShockStdDev,
-                           (prefix + "fundamental shock stddev").c_str());
-        requireFinite(asset.fundamentalDriftPerStep,
-                      (prefix + "fundamental drift per step").c_str());
-        requireStrictlyPositive(asset.minimumFundamentalValue,
-                                (prefix + "minimum fundamental value").c_str());
+        const std::string keyPrefix = "asset." + asset.name + '.';
+        requireStrictlyPositive(
+            asset.initialPrice,
+            named(prefix + "initial price", keyPrefix + "initial_price").c_str());
+        requireNonNegative(asset.initialStock,
+                           named(prefix + "initial stock", keyPrefix + "initial_stock").c_str());
+        requireNonNegative(
+            asset.priceTickSize,
+            named(prefix + "price tick size", keyPrefix + "price_tick_size").c_str());
+        requireNonNegative(
+            asset.fundamentalShockStdDev,
+            named(prefix + "fundamental shock stddev", keyPrefix + "fundamental_shock_std_dev")
+                .c_str());
+        requireFinite(asset.fundamentalDriftPerStep, named(prefix + "fundamental drift per step",
+                                                           keyPrefix + "fundamental_drift_per_step")
+                                                         .c_str());
+        requireStrictlyPositive(
+            asset.minimumFundamentalValue,
+            named(prefix + "minimum fundamental value", keyPrefix + "minimum_fundamental_value")
+                .c_str());
 
         /*
          * Under GBM the drift and shock are per-step log returns, not price
@@ -283,10 +446,10 @@ void validateAssetDefinitions(const SimulationConfig& config) {
         if (asset.fundamentalProcess == FundamentalProcessType::GeometricBrownianMotion &&
             asset.fundamentalShockStdDev > kMaximumGeometricProcessLogStdDev) {
             throw std::invalid_argument(
-                prefix +
-                "uses fundamental_process = gbm, where fundamental_shock_std_dev is a "
-                "per-step log-return standard deviation rather than a price increment. "
-                "The configured value exceeds " +
+                prefix + "uses fundamental_process = gbm, where (" + keyPrefix +
+                "fundamental_shock_std_dev) is a per-step log-return standard deviation rather "
+                "than a price increment. The configured value " +
+                describeValue(asset.fundamentalShockStdDev) + " exceeds " +
                 std::to_string(kMaximumGeometricProcessLogStdDev) +
                 ", which implies an implausible per-step volatility; check the units.");
         }
@@ -299,7 +462,7 @@ void validateAssetDefinitions(const SimulationConfig& config) {
                 if (!asset.enabled) {
                     throw std::invalid_argument(
                         "Primary asset '" + config.primaryAssetName +
-                        "' is disabled. Enable it or nominate a different primary_asset.");
+                        "' is disabled. Enable it or nominate a different (primary_asset).");
                 }
                 found = true;
                 break;
@@ -307,7 +470,7 @@ void validateAssetDefinitions(const SimulationConfig& config) {
         }
         if (!found) {
             throw std::invalid_argument("Primary asset '" + config.primaryAssetName +
-                                        "' is not among the configured assets.");
+                                        "' is not among the configured assets (primary_asset).");
         }
     }
 
@@ -329,9 +492,13 @@ void validateAssetDefinitions(const SimulationConfig& config) {
  * innovations are drawn.
  */
 void validateAssetCorrelation(const SimulationConfig& config) {
-    requireFinite(config.assetFundamentalCorrelation, "Asset fundamental correlation");
+    requireFinite(config.assetFundamentalCorrelation,
+                  named("Asset fundamental correlation", "asset_fundamental_correlation").c_str());
     if (config.assetFundamentalCorrelation < -1.0 || config.assetFundamentalCorrelation > 1.0) {
-        throw std::invalid_argument("Asset fundamental correlation must lie in [-1, 1].");
+        throw std::invalid_argument("Asset fundamental correlation (asset_fundamental_correlation) "
+                                    "= " +
+                                    describeValue(config.assetFundamentalCorrelation) +
+                                    " must lie in [-1, 1].");
     }
 }
 
@@ -346,24 +513,94 @@ void validateWarmupRequirements(const SimulationConfig& config) {
     }
 }
 
+/*
+ * The validation groups, in the order they are reported.
+ *
+ * Running each group independently is what lets one pass surface several
+ * unrelated configuration mistakes. Within a group the first failure still
+ * stops that group, because later checks there often depend on the earlier ones
+ * holding.
+ */
+using ValidationGroup = void (*)(const SimulationConfig&);
+
+void runPopulationGroup(const SimulationConfig& config) {
+    validatePopulationConfig(config);
+}
+void runControlFiniteGroup(const SimulationConfig& config) {
+    validateControlFiniteValues(config.control);
+}
+void runMarketStateGroup(const SimulationConfig& config) {
+    validateMarketStateConfig(config);
+}
+void runAssetDefinitionGroup(const SimulationConfig& config) {
+    validateAssetDefinitions(config);
+}
+void runAssetCorrelationGroup(const SimulationConfig& config) {
+    validateAssetCorrelation(config);
+}
+void runMicrostructureGroup(const SimulationConfig& config) {
+    validateMicrostructureConfig(config.microstructure);
+}
+void runShortSaleGroup(const SimulationConfig& config) {
+    validateShortSaleConfig(config.shortSale);
+}
+void runTransactionCostGroup(const SimulationConfig& config) {
+    validateTransactionCostConfig(config.transactionCosts);
+}
+void runFundamentalistGroup(const SimulationConfig& config) {
+    validateFundamentalistConfig(config.fundamentalist);
+}
+void runChartistGroup(const SimulationConfig& config) {
+    validateChartistConfig(config.chartist);
+}
+void runNoiseTraderGroup(const SimulationConfig& config) {
+    validateNoiseTraderConfig(config.noiseTrader);
+}
+void runBuyAndHoldGroup(const SimulationConfig& config) {
+    validateBuyAndHoldConfig(config.buyAndHold);
+}
+void runSocialGroup(const SimulationConfig& config) {
+    validateSocialConfig(config.social);
+}
+void runProspectTheoryGroup(const SimulationConfig& config) {
+    validateEnabledProspectTheoryConfig(config.control);
+}
+void runWarmupGroup(const SimulationConfig& config) {
+    validateWarmupRequirements(config);
+}
+
+[[nodiscard]] const std::vector<ValidationGroup>& validationGroups() {
+    static const std::vector<ValidationGroup> groups{
+        runPopulationGroup,      runControlFiniteGroup,    runMarketStateGroup,
+        runAssetDefinitionGroup, runAssetCorrelationGroup, runMicrostructureGroup,
+        runShortSaleGroup,       runTransactionCostGroup,  runFundamentalistGroup,
+        runChartistGroup,        runNoiseTraderGroup,      runBuyAndHoldGroup,
+        runSocialGroup,          runProspectTheoryGroup,   runWarmupGroup,
+    };
+    return groups;
+}
+
 } // namespace
 
 void validateSimulationConfig(const SimulationConfig& config) {
-    validatePopulationConfig(config);
-    validateControlFiniteValues(config.control);
-    validateMarketStateConfig(config);
-    validateAssetDefinitions(config);
-    validateAssetCorrelation(config);
-    validateMicrostructureConfig(config.microstructure);
-    validateShortSaleConfig(config.shortSale);
-    validateTransactionCostConfig(config.transactionCosts);
-    validateFundamentalistConfig(config.fundamentalist);
-    validateChartistConfig(config.chartist);
-    validateNoiseTraderConfig(config.noiseTrader);
-    validateBuyAndHoldConfig(config.buyAndHold);
-    validateSocialConfig(config.social);
-    validateEnabledProspectTheoryConfig(config.control);
-    validateWarmupRequirements(config);
+    for (const ValidationGroup group : validationGroups()) {
+        group(config);
+    }
+}
+
+void collectSimulationConfigDiagnostics(const SimulationConfig& config,
+                                        const ConfigProvenance& provenance,
+                                        std::vector<ConfigDiagnostic>& diagnostics) {
+    for (const ValidationGroup group : validationGroups()) {
+        try {
+            group(config);
+        } catch (const std::exception& error) {
+            std::string message = error.what();
+            ConfigSourceLocation location = locateMessageKey(message, provenance);
+            diagnostics.push_back(ConfigDiagnostic{ConfigDiagnosticSeverity::Error,
+                                                   std::move(message), std::move(location)});
+        }
+    }
 }
 
 void normaliseSimulationConfig(SimulationConfig& config) {

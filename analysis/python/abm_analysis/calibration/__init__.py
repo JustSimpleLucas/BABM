@@ -17,6 +17,7 @@ from .config import (
     patch_config_text,
     resolve_simulator_path,
     suggest_trial_parameters,
+    verify_search_space_keys,
     warn_if_simulator_stale,
 )
 from .constants import CONFIG_KEY_PATTERN, FAILED_TRIAL_SCORE, RUN_CSV_ARTIFACT_FILENAMES
@@ -61,6 +62,7 @@ __all__ = [
     "format_config_value",
     "load_calibration_settings",
     "load_search_space",
+    "verify_search_space_keys",
     "options_to_json",
     "parse_seed_list",
     "patch_config_text",

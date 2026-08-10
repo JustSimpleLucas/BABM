@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <string>
 
+#include "ControlParameters/ConfigDiagnostics.h"
 #include "ControlParameters/ModelConfig.h"
 
 namespace abm {
@@ -103,6 +104,12 @@ struct RuntimeConfig {
     SimulationConfig simulation{};
     OutputConfig output{};
     std::string sourcePath;
+
+    /**
+     * Line each key was assigned on, so constraint failures can name the line to
+     * edit and so absent keys can be reported as having taken their defaults.
+     */
+    ConfigProvenance provenance{};
 };
 
 } // namespace abm

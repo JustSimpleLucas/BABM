@@ -552,8 +552,10 @@ def _run_simulator_subprocess(
     """Run the simulator, optionally forwarding only its progress bar live."""
 
     if not show_progress:
+        # Tell the simulator not to render frames nobody is reading, rather than
+        # rendering them into a pipe and discarding the bytes here.
         return subprocess.run(
-            command,
+            [*command, "--quiet-progress"],
             cwd=cwd,
             capture_output=True,
             text=True,
@@ -600,15 +602,15 @@ def _run_simulator_subprocess(
                     continue
                 if key.data == "stdout":
                     stdout_parts.append(chunk)
-                    progress_segment = _render_progress_chunk(progress_segment, chunk)
                 else:
                     stderr_parts.append(chunk)
+                    progress_segment = _render_progress_chunk(progress_segment, chunk)
     finally:
         selector.close()
 
     return_code = process.wait()
     stdout_text = "".join(stdout_parts)
-    stderr_text = "".join(stderr_parts)
+    stderr_text = _without_progress_frames("".join(stderr_parts))
     _flush_progress_segment(progress_segment)
     if return_code != 0 and stderr_text:
         print(stderr_text, file=sys.stderr, end="", flush=True)
@@ -619,14 +621,30 @@ def _run_simulator_subprocess(
         stderr_text,
     )
 
-def _render_progress_chunk(progress_segment: str, chunk: str) -> str:
-    """Buffer simulator stdout and render complete progress-bar frames.
+def _without_progress_frames(stderr_text: str) -> str:
+    """Drop progress-bar redraws so only real diagnostics remain.
 
-    The C++ simulator redraws its progress bar with carriage returns. Reading
-    stdout byte-by-byte is necessary for live feedback, but printing each byte
-    would flood captured logs. This function therefore emits only complete
-    ``Simulation progress`` frames while still preserving in-place terminal
-    updates for an interactive calibration run.
+    The bar shares the diagnostic stream with warnings and error messages. A
+    failing run would otherwise report hundreds of redraw frames ahead of the
+    one line that explains the failure.
+    """
+
+    kept = [
+        segment
+        for segment in stderr_text.replace("\r", "\n").split("\n")
+        if segment and not segment.startswith("Simulation progress")
+    ]
+    return "\n".join(kept) + "\n" if kept else ""
+
+def _render_progress_chunk(progress_segment: str, chunk: str) -> str:
+    """Buffer simulator stderr and render complete progress-bar frames.
+
+    The C++ simulator redraws its progress bar with carriage returns on its
+    diagnostic stream, keeping stdout clean for the run summary and artefact
+    paths. Reading byte-by-byte is necessary for live feedback, but printing
+    each byte would flood captured logs, so only complete
+    ``Simulation progress`` frames are emitted. Other stderr output stays
+    buffered and is reported if the run fails.
     """
 
     for character in chunk:

@@ -411,12 +411,54 @@ void testCommandLineAcceptsOnlyConfigForms(int& failures) {
             legacyChartists.data(),   legacySeed.data(),
         };
 
+        // Both streams are captured: the usage block goes to stdout and the
+        // reason for the rejection goes to stderr.
         std::ostringstream capturedUsage;
+        std::ostringstream capturedReason;
         std::streambuf* originalCoutBuffer = std::cout.rdbuf(capturedUsage.rdbuf());
+        std::streambuf* originalCerrBuffer = std::cerr.rdbuf(capturedReason.rdbuf());
         const abm::CliParseResult legacyResult = abm::parseSimulationCommandLine(5, legacyArgv);
         std::cout.rdbuf(originalCoutBuffer);
+        std::cerr.rdbuf(originalCerrBuffer);
         abm::test::expect(legacyResult.shouldExit && legacyResult.exitCode == 1,
                           "CLI should reject the removed positional override form", failures);
+
+        std::string validateProgramName = "simulate";
+        std::string validateFlag = "--validate";
+        std::string quietFlag = "--quiet-progress";
+        std::string validateConfigFlag = "--config";
+        std::string validateConfigPathText = configPath.string();
+        char* validateArgv[] = {
+            validateProgramName.data(), validateFlag.data(),           quietFlag.data(),
+            validateConfigFlag.data(),  validateConfigPathText.data(),
+        };
+
+        const abm::CliParseResult validateResult = abm::parseSimulationCommandLine(5, validateArgv);
+        abm::test::expect(!validateResult.shouldExit &&
+                              validateResult.mode == abm::SimulationRunMode::Validate,
+                          "CLI should accept --validate alongside a config file", failures);
+        abm::test::expect(validateResult.quietProgress,
+                          "CLI should accept --quiet-progress as a presentation flag", failures);
+        abm::test::expect(validateResult.runtimeConfig.simulation.timeSteps == 17,
+                          "--validate should still load the requested config file", failures);
+        abm::test::expect(validateResult.diagnostics.empty(),
+                          "a valid config should validate without diagnostics", failures);
+
+        std::string unknownProgramName = "simulate";
+        std::string unknownFlag = "--not-a-real-option";
+        char* unknownArgv[] = {unknownProgramName.data(), unknownFlag.data()};
+
+        std::ostringstream discardedUsage;
+        std::ostringstream discardedReason;
+        originalCoutBuffer = std::cout.rdbuf(discardedUsage.rdbuf());
+        originalCerrBuffer = std::cerr.rdbuf(discardedReason.rdbuf());
+        const abm::CliParseResult unknownResult = abm::parseSimulationCommandLine(2, unknownArgv);
+        std::cout.rdbuf(originalCoutBuffer);
+        std::cerr.rdbuf(originalCerrBuffer);
+        abm::test::expect(unknownResult.shouldExit && unknownResult.exitCode == 1,
+                          "CLI should reject an unknown option", failures);
+        abm::test::expect(discardedReason.str().find("--not-a-real-option") != std::string::npos,
+                          "CLI should name the unknown option it rejected", failures);
     } catch (const std::exception& error) {
         std::cerr << "FAIL: CLI config forms should parse cleanly: " << error.what() << '\n';
         ++failures;

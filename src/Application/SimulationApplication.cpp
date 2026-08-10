@@ -3,8 +3,11 @@
 #include "Application/SimulationApplication.h"
 
 #include "Application/CliOptions.h"
+#include "Application/ConfigInspection.h"
 #include "Application/ConsoleReporter.h"
 #include "Application/PythonAnalysisRunner.h"
+#include "ControlParameters/ConfigDiagnostics.h"
+#include "ControlParameters/ConfigKeyRegistry.h"
 #include "DataManagement/ExperimentDataWorkflow.h"
 #include "Metrics/StylisedFactMetrics.h"
 #include "Simulation/SimulationEngine.h"
@@ -56,19 +59,48 @@ int runSimulationApplication(int argc, char** argv) {
     const std::vector<std::string> arguments(argv, argv + argc);
     const std::string programName = arguments.empty() ? "simulate" : arguments.front();
 
+    CliParseResult parseResult;
     try {
-        const CliParseResult parseResult = parseSimulationCommandLine(argc, argv);
+        parseResult = parseSimulationCommandLine(argc, argv);
         if (parseResult.shouldExit) {
             return parseResult.exitCode;
         }
-        runtimeConfig = parseResult.runtimeConfig;
     } catch (const std::exception& ex) {
         std::cerr << "Configuration error: " << ex.what() << '\n';
         printSimulationApplicationUsage(programName);
         return 1;
     }
 
+    if (parseResult.mode == SimulationRunMode::ConfigReference) {
+        printConfigKeyReference(std::cout);
+        return 0;
+    }
+
+    runtimeConfig = parseResult.runtimeConfig;
+    const std::vector<std::string> defaultedKeys = findDefaultedConfigKeys(runtimeConfig);
+
+    /*
+     * Configuration problems are reported before anything is created on disk.
+     * Validation used to happen inside the simulation engine, which runs after
+     * the archive directory has already been prepared, so an invalid config left
+     * an empty run folder behind every time it was rejected.
+     */
+    if (countConfigErrors(parseResult.diagnostics) != 0) {
+        std::cerr << renderConfigDiagnostics(parseResult.diagnostics) << '\n'
+                  << "No simulation was run and no output directory was created.\n";
+        return 1;
+    }
+
+    if (parseResult.mode == SimulationRunMode::Validate) {
+        printResolvedConfiguration(std::cout, runtimeConfig);
+        printDefaultedConfigKeys(std::cout, defaultedKeys);
+        std::cout << "\nConfiguration is valid.\n";
+        return 0;
+    }
+
     try {
+        printRunPlan(runtimeConfig, defaultedKeys);
+
         std::string error;
         if (!ExperimentDataWorkflow::prepareRunArchive(runtimeConfig, error)) {
             std::cerr << "Output setup failed: " << error << '\n';
@@ -77,7 +109,10 @@ int runSimulationApplication(int argc, char** argv) {
 
         const SimulationConfig& config = runtimeConfig.simulation;
         SimulationEngine simulationEngine(config);
-        ConsoleProgressBar progressBar(std::cout, config.timeSteps);
+        // The bar goes to the diagnostic stream so redirected stdout holds only
+        // the summary and the artefact paths.
+        ConsoleProgressBar progressBar(std::cerr, config.timeSteps, "Simulation progress", 40,
+                                       !parseResult.quietProgress);
         const SimulationRunResult simulationResult = simulationEngine.run(
             [&progressBar](std::size_t completedSteps, std::size_t /* totalSteps */) {
                 progressBar.update(completedSteps);

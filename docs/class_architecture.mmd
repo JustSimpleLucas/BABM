@@ -10,13 +10,33 @@ class SimulationApplication {
 class CliParseResult {
   +bool shouldExit
   +int exitCode
+  +SimulationRunMode mode
+  +bool quietProgress
   +RuntimeConfig runtimeConfig
+  +vector~ConfigDiagnostic~ diagnostics
 }
 
 class RuntimeConfig {
   +SimulationConfig simulation
   +OutputConfig output
   +string sourcePath
+  +ConfigProvenance provenance
+}
+
+class ConfigKeyDescriptor {
+  +string_view key
+  +ConfigSection section
+  +ConfigKeyStatus status
+  +string_view units
+  +string_view validRange
+  +string_view documentation
+  +apply(RuntimeConfig, ConfigSetting) bool
+}
+
+class ConfigDiagnostic {
+  +ConfigDiagnosticSeverity severity
+  +string message
+  +ConfigSourceLocation location
 }
 
 class OutputConfig {
@@ -540,6 +560,9 @@ class RunMetrics {
 
 RuntimeConfig *-- SimulationConfig
 RuntimeConfig *-- OutputConfig
+CliParseResult *-- RuntimeConfig
+CliParseResult *-- ConfigDiagnostic
+ConfigKeyDescriptor ..> RuntimeConfig
 SimulationConfigFacade ..> BehaviouralConfig
 SimulationConfigFacade ..> StrategyConfig
 SimulationConfigFacade ..> MarketConfig

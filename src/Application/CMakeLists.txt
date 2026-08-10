@@ -2,6 +2,7 @@
 target_sources(abm_application
     PRIVATE
         CliOptions.cpp
+        ConfigInspection.cpp
         ConsoleReporter.cpp
         PythonAnalysisRunner.cpp
         SimulationApplication.cpp

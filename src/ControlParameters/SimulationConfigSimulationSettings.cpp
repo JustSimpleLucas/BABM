@@ -2,6 +2,8 @@
 
 #include "ControlParameters/SimulationConfigSettingAppliers.h"
 
+#include "ControlParameters/ConfigKeyRegistry.h"
+
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -125,9 +127,10 @@ void applyPerAssetSetting(SimulationConfig& simulation, const ConfigSetting& set
         return;
     }
 
-    throw std::invalid_argument(
-        "Unknown per-asset parameter '" + parameter + "' in key '" + setting.key + "' at " +
-        config_parsing::describeLocation(setting.path, setting.lineNumber) + '.');
+    throw std::invalid_argument("Unknown per-asset parameter '" + parameter + "' in key '" +
+                                setting.key + "' at " +
+                                config_parsing::describeLocation(setting.path, setting.lineNumber) +
+                                '.' + describeSuggestions(nearestPerAssetFields(parameter)));
 }
 
 } // namespace

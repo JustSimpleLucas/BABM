@@ -17,6 +17,7 @@ from .config import (
     load_search_space,
     resolve_simulator_path,
     suggest_trial_parameters,
+    verify_search_space_keys,
     warn_if_simulator_stale,
 )
 from .execution import _run_and_score_candidate_with_optional_worker
@@ -77,6 +78,13 @@ def run_calibration(
         raise ValueError("top_candidates must be greater than zero.")
     if options.search_seed_aggregate not in {"mean", "median"}:
         raise ValueError("search_seed_aggregate must be 'mean' or 'median'.")
+
+    # Catch a misspelled search-space key now rather than hundreds of
+    # simulations into the study. Skipped when the caller supplies its own
+    # runner, because the simulator path is then a stand-in rather than a
+    # binary this process can execute.
+    if runner is None:
+        verify_search_space_keys(search_space, base_config_path, simulator_path)
 
     settings = _resolve_settings(options)
     validation_seeds = options.validation_seeds or options.seeds

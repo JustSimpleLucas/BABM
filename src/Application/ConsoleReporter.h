@@ -6,10 +6,27 @@
 #include "ControlParameters/SimulationConfig.h"
 #include "Utility/ProcessMemoryUsage.h"
 
+#include <cstddef>
+#include <string>
+#include <vector>
+
 namespace abm {
 
 class SimulationRunResult;
 struct RunMetrics;
+
+/**
+ * Prints what is about to run, before the simulation starts.
+ *
+ * A long run that turns out to have had a behavioural switch off is wasted
+ * time, so the settings that define the experiment are stated up front rather
+ * than only in the completion summary.
+ *
+ * @param runtimeConfig Configuration the run will use.
+ * @param defaultedKeys Keys absent from the file, reported as a single count.
+ */
+void printRunPlan(const RuntimeConfig& runtimeConfig,
+                  const std::vector<std::string>& defaultedKeys);
 
 /**
  * Prints a compact terminal summary for a completed simulation run.

@@ -16,6 +16,22 @@
 
 namespace {
 
+/** Collapses runs of spaces so column-aligned report rows can be matched. */
+[[nodiscard]] std::string collapseWhitespace(const std::string& text) {
+    std::string collapsed;
+    collapsed.reserve(text.size());
+    bool previousWasSpace = false;
+    for (const char character : text) {
+        const bool isSpace = character == ' ' || character == '\t';
+        if (isSpace && previousWasSpace) {
+            continue;
+        }
+        collapsed += isSpace ? ' ' : character;
+        previousWasSpace = isSpace;
+    }
+    return collapsed;
+}
+
 void testRunArtifactWriterProducesRequiredFiles(int& failures) {
     namespace fs = std::filesystem;
 
@@ -381,19 +397,28 @@ void testRunArtifactWriterSkipsDisabledTradeLedger(int& failures) {
     memoryUsage.peakResidentSetBytes = 96U * 1024U * 1024U;
     abm::printCompletedSimulationSummary(runtimeConfig, simulationResult, metrics, memoryUsage);
     std::cout.rdbuf(originalBuffer);
-    abm::test::expect(consoleOutput.str().find("Trade ledger CSV: disabled") != std::string::npos,
-                      "console reporter should state when trade-ledger CSV output is disabled",
-                      failures);
-    abm::test::expect(consoleOutput.str().find("Resident memory after simulation: 64.00 MiB") !=
-                          std::string::npos,
+    /*
+     * The summary aligns its values into a column, so assertions compare the
+     * whitespace-collapsed text. That keeps them checking what the reader sees
+     * without pinning the report to a particular column width.
+     */
+    const std::string console = collapseWhitespace(consoleOutput.str());
+    abm::test::expect(
+        console.find("Trade ledger CSV: disabled (trade_ledger_enabled = 0)") != std::string::npos,
+        "console reporter should state when trade-ledger CSV output is disabled", failures);
+    abm::test::expect(console.find("Resident memory: 64.00 MiB") != std::string::npos,
                       "console reporter should include resident memory after simulation", failures);
-    abm::test::expect(consoleOutput.str().find("Mean allocative efficiency: ") != std::string::npos,
+    abm::test::expect(console.find("Mean allocative efficiency: ") != std::string::npos,
                       "console reporter should include allocative-efficiency diagnostics",
                       failures);
-    abm::test::expect(consoleOutput.str().find("Peak resident memory during process: 96.00 MiB") !=
-                          std::string::npos,
+    abm::test::expect(console.find("Peak resident memory: 96.00 MiB") != std::string::npos,
                       "console reporter should include peak resident memory during process",
                       failures);
+    abm::test::expect(console.find("Configuration") != std::string::npos &&
+                          console.find("Market outcome") != std::string::npos &&
+                          console.find("Diagnostics") != std::string::npos &&
+                          console.find("Artefacts") != std::string::npos,
+                      "console reporter should group the summary into labelled sections", failures);
 
     fs::remove_all(outputRoot, cleanupError);
 }

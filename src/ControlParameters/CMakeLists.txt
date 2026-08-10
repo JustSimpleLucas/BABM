@@ -2,6 +2,8 @@
 target_sources(abm_config
     PRIVATE
         AssetUniverse.cpp
+        ConfigDiagnostics.cpp
+        ConfigKeyRegistry.cpp
         SimulationConfigBehaviouralSettings.cpp
         SimulationConfigIO.cpp
         SimulationConfigOutputSettings.cpp

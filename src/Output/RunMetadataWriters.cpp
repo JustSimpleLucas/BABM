@@ -2,13 +2,16 @@
 
 #include "Output/RunMetadataWriters.h"
 
+#include "ControlParameters/ConfigKeyRegistry.h"
 #include "Output/OutputSerialization.h"
 #include "Results/SimulationRunResult.h"
 
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <string>
 #include <system_error>
+#include <vector>
 
 #ifndef ABM_MODEL_VERSION
 #define ABM_MODEL_VERSION "unknown"
@@ -329,6 +332,19 @@ bool exportRunLog(const std::string& outputPath, const RuntimeConfig& runtimeCon
     out << "Autocorrelation: " << metrics.autocorrelationConclusion << '\n';
     out << "Fat tails: " << metrics.fatTailsConclusion << '\n';
     out << "Volatility clustering: " << metrics.volatilityClusteringConclusion << '\n';
+
+    /*
+     * Settings the config file did not mention took their built-in defaults.
+     * Recording them here keeps the run auditable: a reader of the archive can
+     * tell which values were chosen deliberately and which were inherited,
+     * which the copied config_used.cfg alone cannot show.
+     */
+    const std::vector<std::string> defaultedKeys = findDefaultedConfigKeys(runtimeConfig);
+    out << "\nSettings absent from the config file (built-in defaults used): "
+        << defaultedKeys.size() << '\n';
+    for (const std::string& key : defaultedKeys) {
+        out << "  " << key << '\n';
+    }
 
     out.flush();
     if (!out.good()) {

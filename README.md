@@ -92,11 +92,16 @@ The first build takes a few minutes. When it finishes without errors, the execut
 build/debug/simulate --config config/simulation.cfg
 ```
 
-The simulator prints a progress bar and a summary, then — because `python_analysis_enabled = 1` in
-the config — builds an HTML report and opens it in your browser.
+The simulator states what it is about to run, prints a progress bar with an estimated finish time,
+then a grouped summary — and because `python_analysis_enabled = 1` in the config, builds an HTML
+report and opens it in your browser.
 
 The executable also accepts a bare path (`build/debug/simulate config/simulation.cfg`) and can run
-with no argument at all when it finds `config/simulation.cfg` on its own.
+with no argument at all when it finds `config/simulation.cfg` on its own. Other options:
+`--validate` to check a config without running it (see [§4](#4-changing-the-model)),
+`--config-reference` to print the key reference, and `--quiet-progress` to suppress the progress bar.
+The progress bar is written to standard error, so redirecting standard output captures only the
+summary and the artefact paths.
 
 ### What you get
 
@@ -137,9 +142,41 @@ into the folder name, because the Python layer parses it.
 
 Every parameter a user can change lives in one plain-text file: **`config/simulation.cfg`**. Open it
 in any text editor, change the numbers, save, and run again. Unknown keys are rejected loudly, so a
-typo fails the run rather than silently doing nothing.
+typo fails the run rather than silently doing nothing — and the parser suggests the key you probably
+meant.
 
-The main groups of settings:
+Check a file before committing to a long run:
+
+```bash
+build/debug/simulate --validate --config config/simulation.cfg
+```
+
+This parses and validates without running the simulation or creating anything under `data/`. It
+reports **every** problem in one pass — malformed lines, unknown keys, out-of-range values, and
+constraints that span two keys — each with the offending value and the line to edit:
+
+```text
+config/simulation.cfg:158: error: Chartist short window (chartist_short_window) = 40 cannot exceed
+                           long window (chartist_long_window) = 20.
+config/simulation.cfg:201: error: Unknown config key 'social_hold_tolerence'.
+                           Did you mean 'social_hold_tolerance'?
+2 errors found.
+```
+
+When the file is valid it prints the resolved settings grouped by section, plus any keys the file did
+not mention (those take their built-in defaults, and are also recorded in the run's `logs/run.log`).
+
+**[docs/config_reference.md](docs/config_reference.md)** lists every key with its units, valid range,
+and meaning. It is generated from the code, so it cannot drift:
+
+```bash
+build/debug/simulate --config-reference > docs/config_reference.md
+```
+
+One ordering rule: `assets = ...` must appear before any `asset.<name>.*` key, because per-asset
+settings are resolved against an already-declared universe.
+
+The main groups of settings, in the order they appear in the file:
 
 | Group | Example keys | What it controls |
 | --- | --- | --- |
@@ -153,6 +190,10 @@ The main groups of settings:
 | Risk and costs | `short_selling_enabled`, `short_sale_*`, `transaction_cost_rate`, `risk_free_rate` | Short-sale margin and borrow limits, proportional trading costs. |
 | Output | `experiment_output_enabled`, `experiment_name`, `run_label`, `trade_ledger_enabled` | Archiving behaviour and which artefacts get written. |
 | Post-processing | `python_analysis_enabled`, `python_analysis_python`, `database_output_enabled` | Whether the HTML report and the database import run automatically after a simulation. |
+
+Everything below the `Pipeline settings (not model parameters)` banner in the file — artefact paths,
+archiving, post-processing, database — controls where output goes rather than what the model does,
+so it can be left alone while experimenting.
 
 Setting `asset.beta.enabled = 0` collapses the configuration onto the single-asset model; every
 report view then renders exactly as it did before multi-asset support.
@@ -392,7 +433,7 @@ cmake --preset sanitizers && cmake --build --preset sanitizers && ctest --preset
 | Coming back to the project later | Reactivate the environment first: `source .venv/bin/activate` |
 | "command not found" | Make sure you are in the repository root (`cd path/to/BABM`). |
 | Changed C++ code, results unchanged | Rebuild: `cmake --build --preset debug` |
-| Config error mentioning a key | The parser rejects unknown keys — check the spelling against `config/simulation.cfg`. |
+| Config error mentioning a key | Run `build/debug/simulate --validate --config <file>` — it lists every problem at once with the line to edit, and suggests corrections for misspelled keys. |
 | Figure export fails | Chrome is missing; see [§8](#8-publication-ready-figures) or pass `--no-export-images`. |
 | Disk filling up | Compress finished experiments: `.venv/bin/python -m abm_analysis compress data/experiments/<name>` |
 
@@ -402,6 +443,7 @@ cmake --preset sanitizers && cmake --build --preset sanitizers && ctest --preset
 
 | Document | Contents |
 | --- | --- |
+| [docs/config_reference.md](docs/config_reference.md) | Every configuration key with its units, valid range, and meaning. Generated from the code. |
 | [docs/code_map.md](docs/code_map.md) | File-by-file guide: what every source file does and how they connect. |
 | [docs/baselines.md](docs/baselines.md) | Recorded baseline results, used to detect unintended behavioural drift. |
 | `docs/*.mmd` | Mermaid diagrams: class architecture, build structure, data management, simulation flow, agent decision flow, sequence diagram. |

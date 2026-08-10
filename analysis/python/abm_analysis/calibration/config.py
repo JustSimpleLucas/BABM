@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import fields as dataclass_fields
 import json
 from pathlib import Path
+import subprocess
+import tempfile
 from typing import Any
 
 from abm_analysis.statistics.robustness_verdicts import VerdictThresholds
@@ -130,6 +132,67 @@ def load_search_space(path: Path | str) -> dict[str, dict[str, object]]:
             raise ValueError("Search-space parameter names must be non-empty strings.")
         parameters[name] = _normalise_parameter_spec(name, raw_spec)
     return parameters
+
+def verify_search_space_keys(
+    search_space: dict[str, dict[str, object]],
+    base_config: Path | str,
+    simulator: Path | str,
+) -> None:
+    """Check every search-space key against the simulator before a study starts.
+
+    ``patch_config_text`` appends keys it does not find in the base config, and
+    the simulator rejects unknown keys, so a misspelled search-space parameter
+    only surfaces when the first trial's subprocess fails. A calibration study
+    is hundreds of simulations long, so the mistake is worth catching before any
+    of them run. The check writes one config holding a representative value for
+    every searched key and asks the simulator to validate it.
+
+    Raises:
+        ValueError: if the simulator rejects the patched configuration.
+    """
+
+    base_config_path = Path(base_config).expanduser().resolve()
+    probe_values = {
+        name: _representative_value(spec) for name, spec in search_space.items()
+    }
+    patched_text = patch_config_text(
+        base_config_path.read_text(encoding="utf-8"), probe_values
+    )
+
+    with tempfile.TemporaryDirectory() as scratch:
+        probe_path = Path(scratch) / "search_space_probe.cfg"
+        probe_path.write_text(patched_text, encoding="utf-8")
+        try:
+            completed = subprocess.run(
+                [str(Path(simulator).expanduser()), "--validate", "--config", str(probe_path)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            # The simulator is missing or not executable. That is a real
+            # problem, but it is not a search-space problem, and the study is
+            # about to report it far more precisely when it tries to run.
+            return
+
+    if completed.returncode != 0:
+        details = (completed.stderr or completed.stdout or "").strip()
+        raise ValueError(
+            "The search space does not match the simulator's configuration keys.\n"
+            f"{details}"
+        )
+
+def _representative_value(spec: dict[str, object]) -> object:
+    """One in-range value for a parameter spec, used only to probe the parser."""
+
+    parameter_type = str(spec.get("type", "float")).lower()
+    if parameter_type == "categorical":
+        return list(spec["choices"])[0]
+    if parameter_type == "fixed":
+        return spec["value"]
+    if parameter_type == "int":
+        return int(spec["low"])
+    return float(spec["low"])
 
 _SETTINGS_SECTIONS = {
     "score_weights": ScoreWeights,
