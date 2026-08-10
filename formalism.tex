@@ -1,0 +1,2196 @@
+% !TeX program = xelatex
+\documentclass[12pt, a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{parskip}
+% The simulation-algorithm box spans more than one page, so it uses the
+% page-breakable framed environment rather than a fixed-height minipage.
+\usepackage{framed}
+\usepackage{setspace}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\onehalfspacing
+
+% Overleaf can retain output.aux from an earlier BibLaTeX build. These no-op
+% definitions allow one successful run to ignore obsolete BibLaTeX bookkeeping
+% commands and overwrite the auxiliary file for this non-bibliographic document.
+\makeatletter
+\providecommand{\abx@aux@refcontext}[1]{}
+\providecommand{\abx@aux@cite}[2]{}
+\providecommand{\abx@aux@segm}[3]{}
+\providecommand{\abx@aux@page}[2]{}
+\providecommand{\abx@aux@fnpage}[2]{}
+\providecommand{\abx@aux@count}[2]{}
+\providecommand{\abx@aux@fncount}[2]{}
+\providecommand{\abx@aux@backref}[5]{}
+\providecommand{\abx@aux@refsection}[2]{}
+\providecommand{\abx@aux@biblist}[1]{}
+\providecommand{\abx@aux@nociteall}{}
+\providecommand{\abx@aux@category}[2]{}
+\providecommand{\abx@aux@defaultrefcontext}[3]{}
+\providecommand{\abx@aux@defaultlabelprefix}[3]{}
+\providecommand{\abx@aux@read@bblrerun}{}
+\providecommand{\abx@aux@read@bbl@mdfivesum}[1]{}
+\providecommand{\abx@aux@number}[5]{}
+\makeatother
+
+% --- Define operators for consistent spacing/typography ---
+\DeclareMathOperator{\clip}{clip}
+\DeclareMathOperator{\Corr}{Corr}
+\DeclareMathOperator{\Std}{Std}
+\DeclareMathOperator{\MA}{MA}
+\DeclareMathOperator{\RSI}{RSI}
+\newcommand{\pospart}[1]{\left(#1\right)^{+}}
+\newcommand{\indicator}{\mathbf{1}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\title{Formalism of the Behavioural Agent-Based Market Model}
+\author{}
+\date{}
+\begin{document}
+    \maketitle
+
+    \begin{abstract}
+        This document formalises the current C++ implementation of the behavioural
+        agent-based market model used in the PhD project.
+    \end{abstract}
+
+    \tableofcontents
+    \clearpage
+
+    \section{Purpose and Implementation Scope}\label{sec:purpose_scope}
+
+    The model is designed to study whether heterogeneous behavioural agents can
+    generate empirical market regularities such as fat-tailed returns, weak
+    linear-return autocorrelation, and volatility clustering during crisis-like
+    market conditions. The formalism therefore records both the economic mechanism
+    and the implementation convention required for reproducible experiments.
+
+    The analysed trading phase uses a persistent continuous double-auction limit
+    order book. Fundamental-value shocks, technical trading rules, Prospect Theory
+    preferences, social opinions, and noise-trader beliefs affect prices only
+    through submitted orders and executions. The official market price changes when
+    an endogenous transaction occurs; otherwise it is carried forward. Warm-up
+    observations are used only to initialise price history for technical indicators
+    and realised-volatility estimates before the analysed simulation phase begins.
+
+    The market contains \(n\ge 1\) tradable risky assets. Every asset follows the
+    same theory: a geometric fundamental-value process, one persistent order book
+    of its own, the same behavioural rules, and the same stylised-fact screening.
+    Assets differ only in their \emph{parameters} --- volatility, drift, price
+    level, tick size, and share supply --- never in functional form, so no asset
+    is analytically privileged and cross-asset comparisons of returns are
+    like-for-like. Fundamental innovations are correlated across assets, which is
+    what limits the diversification genuinely available to agents, and agents
+    allocate across all assets jointly through a full Markowitz rule using a
+    rolling log-return covariance matrix. Setting \(n=1\), or disabling all but
+    one declared asset, collapses the model exactly onto the single-asset
+    specification. One asset may be nominated \emph{primary}; this nomination
+    governs only the legacy single-asset projection of the outputs and carries no
+    analytical privilege.
+
+    \section*{Nomenclature}
+    \addcontentsline{toc}{section}{Nomenclature}
+
+    \subsubsection*{Sets and Indices}
+
+    \begin{longtable}{@{}L{0.22\textwidth}L{0.50\textwidth}L{0.20\textwidth}@{}}
+        \toprule
+        \textbf{Symbol} & \textbf{Meaning} & \textbf{Unit/Domain} \\
+        \midrule
+        \endfirsthead
+        \toprule
+        \textbf{Symbol} & \textbf{Meaning} & \textbf{Unit/Domain} \\
+        \midrule
+        \endhead
+        \(\mathcal{A}\) & Set of all agents. & Finite set \\
+        \(N=|\mathcal{A}|\) & Total number of agents. & Positive integer \\
+        \(\mathcal{A}^F\subset\mathcal{A}\) & Set of fundamentalist agents. & Subset of agents \\
+        \(\mathcal{A}^C\subset\mathcal{A}\) & Set of chartist agents. & Subset of agents \\
+        \(\mathcal{A}^N\subset\mathcal{A}\) & Set of noise-trader agents. & Subset of agents \\
+        \(\mathcal{A}^H\subset\mathcal{A}\) & Set of passive buy-and-hold agents. & Subset of agents \\
+        \(i,l\in\mathcal{A}\) & Agent indices. & Agent identifiers \\
+        \(t\) & Discrete simulation time index. & Non-negative integer \\
+        \(\mathcal{J}\) & Set of enabled tradable risky assets, in declared index order. & Finite ordered set \\
+        \(n=|\mathcal{J}|\) & Number of enabled assets. & Positive integer \\
+        \(j,k\in\mathcal{J}\) & Asset indices. & Asset identifiers \\
+        \(j^{\ast}\) & Primary asset index; selects the legacy single-asset projection of the outputs only. & Asset identifier \\
+        \(\mathcal{J}^{0}\) & Assets declared but disabled; retained for provenance and given no book, weight, or output row. & Finite set \\
+        \bottomrule
+    \end{longtable}
+
+    Agent indices use \(i\) and \(l\); the symbol \(j\) is reserved throughout for
+    assets. Where a quantity exists once per asset it carries the asset subscript
+    \(j\); the single-asset model is recovered by fixing \(n=1\) and dropping that
+    subscript.
+
+    \subsubsection*{Prices and State Variables}
+
+    \begin{longtable}{@{}L{0.22\textwidth}L{0.50\textwidth}L{0.20\textwidth}@{}}
+        \toprule
+        \textbf{Symbol} & \textbf{Meaning} & \textbf{Unit/Domain} \\
+        \midrule
+        \endfirsthead
+        \toprule
+        \textbf{Symbol} & \textbf{Meaning} & \textbf{Unit/Domain} \\
+        \midrule
+        \endhead
+        \(F_{j,t}\) & Latent fundamental value of asset \(j\) at time \(t\). & Price units \\
+        \(P_{j,t}\) & Observed market price of asset \(j\) at time \(t\). & Price units, \(P_{j,t}>0\) \\
+        \(m_{j,t}=\log(F_{j,t}/P_{j,t})\) & Log mispricing of asset \(j\); positive values indicate undervaluation. & Log-price gap \\
+        \(c_{i,t}\) & Cash holdings of agent \(i\) at time \(t\); one shared cash account across assets. & Currency units \\
+        \(c_0\) & Configured initial cash endowment per agent. & Currency units \\
+        \(x_{i,j,t}\) & Holdings of asset \(j\) by agent \(i\) at time \(t\). & Shares or units \\
+        \(x_{j,0}\) & Configured initial endowment of asset \(j\) per agent. & Shares or units \\
+        \(W_{i,t}=c_{i,t}+\sum_{j}x_{i,j,t}P_{j,t}\) & Mark-to-market wealth of agent \(i\) across all assets. & Currency units \\
+        \(\Gamma_{i,t}\) & Cumulative transaction costs paid by agent \(i\). & Currency units \\
+        \(\Theta_t\) & Total transaction costs paid by all agents in period \(t\). & Currency units \\
+        \(s_{i,j,t}^{-}=\pospart{-x_{i,j,t}}\) & Absolute short position of agent \(i\) in asset \(j\). & Shares or units \\
+        \(\mathrm{SI}_{j,t}=\sum_i s_{i,j,t}^{-}\) & Aggregate short interest in asset \(j\) before new orders. & Shares or units \\
+        \(\bar X_{j,0}\) & Initial share supply of asset \(j\), used as its securities-lending base. & Shares or units \\
+        \(\bar w_{j,t}\) & Cross-sectional mean portfolio weight held in asset \(j\) after the step. & Dimensionless weight \\
+        \bottomrule
+    \end{longtable}
+
+    \subsubsection*{Trading and Strategy Variables}
+
+    \begin{longtable}{@{}L{0.22\textwidth}L{0.50\textwidth}L{0.20\textwidth}@{}}
+        \toprule
+        \textbf{Symbol} & \textbf{Meaning} & \textbf{Unit/Domain} \\
+        \midrule
+        \endfirsthead
+        \toprule
+        \textbf{Symbol} & \textbf{Meaning} & \textbf{Unit/Domain} \\
+        \midrule
+        \endhead
+        \(a_{i,t}\) & Activity indicator for agent \(i\) at time \(t\). & \(\{0,1\}\) \\
+        \(\alpha\) & Probability that an agent is active in a period. & \([0,1]\) \\
+        \(\mu_{i,j,t}\) & Expected return on asset \(j\) used in portfolio choice. & Per-period log return \\
+        \(\hat r_{i,j,t}^{C},\hat r_{i,j,t}^{F}\) & Baseline expected excess return of chartist and fundamentalist agents on asset \(j\). & Per-period excess log return \\
+        \(\breve r_{i,j,t}^{C},\breve r_{i,j,t}^{F}\) & Prospect-adjusted excess return used in allocation when CPT is enabled. & Per-period excess log return \\
+        \(\breve{\mathbf r}_{i,t}\) & Vector of prospect-adjusted excess returns across assets. & \(\mathbb{R}^{n}\) \\
+        \(\Sigma_t\) & Rolling sample covariance matrix of one-period log returns, shared by all agents. & \(\mathbb{R}^{n\times n}\), symmetric \\
+        \(\sigma_{j,t}=\sqrt{\Sigma_{t,jj}}\) & Rolling volatility of asset \(j\) taken from the covariance diagonal. & Return standard deviation \\
+        \(w_{i,j,t}\) & Target portfolio weight of agent \(i\) in asset \(j\). & Dimensionless weight \\
+        \(\underline w_{i,j},\overline w_{i,j}\) & Effective lower and upper portfolio-weight bounds applied to every asset. & Dimensionless bounds \\
+        \(\underline w_i^{\text{cfg}},\overline w_i^{\text{cfg}}\) & Configured allocation floor and ceiling of agent \(i\)'s strategy class. & Dimensionless bounds \\
+        \(\bar w_i^{\text{short}}\) & Chartist short-exposure cap; binds jointly with the configured floor. & \([0,1]\) \\
+        \(G_i\) & Cap on gross exposure \(\sum_j|w_{i,j,t}|\); non-positive values disable the cap. & Positive real number \\
+        \(x_{i,j,t}^{\ast}\) & Target position in asset \(j\). & Shares or units \\
+        \(x_{i,j,t}^{\ast,F}\) & Fundamentalist target position in asset \(j\). & Shares or units \\
+        \(\mathrm{side}_{i,j,t}\) & Submitted order side of agent \(i\) in asset \(j\). & \(\{\mathrm{Buy},\mathrm{Sell}\}\) \\
+        \(q_{i,j,t}\) & Submitted order quantity of agent \(i\) in asset \(j\). & Shares or units, \(q_{i,j,t}\ge0\) \\
+        \(\bar q_{i,j,t}\) & Feasible order quantity after cash, inventory, margin, and borrow-availability checks. & Shares or units \\
+        \(q_{i,j,t}^{C},q_{i,j,t}^{F},q_{i,j,t}^{N},q_{i,j,t}^{H}\) & Submitted order quantity of chartist, fundamentalist, noise-trader, and buy-and-hold agents. & Shares or units \\
+        \(\tilde c_{i,t}\) & Running order-generation cash budget, decremented as buy orders are queued across assets. & Currency units \\
+        \(R_{i,t}^{B}\) & Reserved new short-sale shares exposed by the risk-control helper; the current LOB execution path passes zero because borrow capacity is revalidated and short interest is updated at execution time. & Shares or units \\
+        \(b_{i,j,t}^{\text{cover}}\) & Forced buy-in quantity used to reduce an under-margined short position in asset \(j\). & Shares or units \\
+        \(AS_{j,t}\) & Realised gross allocative surplus from asset \(j\)'s endogenous continuous-double-auction executions in period \(t\). & Currency units \\
+        \(MS_{j,t}\) & Maximum feasible gross allocative surplus available from asset \(j\)'s surviving book liquidity and new submitted orders. & Currency units \\
+        \(AE_{j,t}=AS_{j,t}/MS_{j,t}\) & Allocative efficiency of asset \(j\)'s continuous double auction when \(MS_{j,t}>0\); reported as zero and excluded from the run mean when no positive-surplus opportunity exists. & Dimensionless ratio \\
+        \(k_i\) & Trading rule assigned to chartist \(i\); the same rule is applied to every asset. & Technical rule set \\
+        \(L_{j,t}^{\mathrm{BO}},H_{j,t}^{\mathrm{BO}}\) & Previous-window low and high of asset \(j\) used by breakout chartists. & Price units \\
+        \(s_{i,j,t}^{C},s_{i,j,t}^{F}\) & Trading signals of chartist and fundamentalist agents. & Buy, sell, or hold states \\
+        \(\bar P_{i,j,t}^{\text{entry}}\) & Average execution price of agent \(i\)'s current long or short position in asset \(j\). & Price units \\
+        \(\pi_{i,j,t}\) & Unrealised profit-and-loss ratio on asset \(j\). & Dimensionless ratio \\
+        \bottomrule
+    \end{longtable}
+
+    \subsubsection*{Model Parameters}
+
+    \begin{longtable}{@{}L{0.22\textwidth}L{0.50\textwidth}L{0.20\textwidth}@{}}
+        \toprule
+        \textbf{Symbol} & \textbf{Meaning} & \textbf{Unit/Domain} \\
+        \midrule
+        \endfirsthead
+        \toprule
+        \textbf{Symbol} & \textbf{Meaning} & \textbf{Unit/Domain} \\
+        \midrule
+        \endhead
+        \(r_f\) & Risk-free interest rate per period. & Per-period return \\
+        \(\rho_i\) & Risk-aversion coefficient of agent \(i\). & Positive real number \\
+        \(v_{\Sigma}\) & Trailing log-return window used to estimate the shared covariance matrix \(\Sigma_t\). & Positive integer \\
+        \(v\) & Lookback window for the legacy single-asset rolling volatility estimate; the implementation allows separate fundamentalist and chartist windows. & Positive integer \\
+        \(h_S,h_L\) & Short and long moving-average windows, with \(h_S\le h_L\). & Positive integers \\
+        \(h_{\mathrm{RSI}}\) & Lookback window of the RSI indicator; the current implementation uses \(h_{\mathrm{RSI}}=14\). & Positive integer \\
+        \(h_{\mathrm{BO}}\) & Lookback window for Donchian-style breakout chartists. & Positive integer \\
+        \(\theta^M\) & Fundamentalist mispricing threshold, applied to the log mispricing. & Log-price gap \\
+        \(\theta_M\) & Chartist momentum deadband applied to the log moving-average gap. & Log gap, half-open unit interval \\
+        \(\theta^{SL}\) & Stop-loss threshold. & Dimensionless loss ratio \\
+        \(\theta^{TP}\) & Take-profit threshold. & Dimensionless gain ratio \\
+        \(M_0^{S}\) & Initial margin requirement for opening or increasing short exposure. & Positive ratio \\
+        \(M_{\min}^{S}\) & Maintenance margin threshold below which a short position is forced to cover. & Positive ratio, \(M_{\min}^{S}\le M_0^{S}\) \\
+        \(\varphi^{B}\) & Fraction of an asset's initial share supply that can be borrowed for short selling. & \([0,1]\) \\
+        \(f_{\mathrm{tc}}\) & One-way proportional transaction-cost rate paid by each executed trade side. & \([0,1)\) \\
+        \(\iota_{\mathrm{tc}}^D\) & Indicator that transaction costs affect discretionary no-trade bands. & \(\{0,1\}\) \\
+        \(\iota_{\mathrm{tc}}^B\) & Indicator that transaction costs apply to forced buy-ins. & \(\{0,1\}\) \\
+        \(\delta_j\) & Tick size of asset \(j\), used to quantise its limit prices; very small or zero values leave raw quotes unrounded. & Price units, \(\delta_j\ge0\) \\
+        \(\tau\) & Hold-tolerance band around the market price. & Log-price gap \\
+        \(\kappa\) & Sensitivity of quotes to social opinion. & Non-negative real number \\
+        \(\theta_{\mathrm{MO}}\) & Log-price-gap threshold above which a submitted order is converted to market style. & Non-negative log gap \\
+        \(\rho_{\mathrm{MO}}\) & Random market-order conversion probability. & \([0,1]\) \\
+        \(\theta_{\mathrm{col}}\) & Market-order price collar: maximum absolute log distance from the reference price at which a market order may execute; zero disables the collar. & Non-negative log gap \\
+        \(\rho_0,\gamma_{\mathrm{mis}}\) & Base stale-order cancellation probability and sensitivity to quote distance from the latest market price. & \([0,1]\), non-negative sensitivity \\
+        \(\varphi_{\mathrm{CPT}}\) & Seeded fraction of agents assigned to use CPT preferences when the global CPT switch is enabled. & \([0,1]\) \\
+        \(\lambda_i\) & CPT loss-aversion coefficient of agent \(i\). & Positive real number \\
+        \(\alpha_i^G,\alpha_i^L\) & CPT value-function curvature for gains and losses. & Positive real numbers \\
+        \(\psi_i^G,\psi_i^L\) & CPT probability-distortion parameters for gains and losses. & Positive real numbers \\
+        \(m_{\nu}\) & Configured CPT reference-point mode. & Configured, entry price, peak wealth, moving-average price, or initial wealth \\
+        \(\nu_{i,j,t}\) & Behavioural CPT anchor in price or wealth units, recorded for audit. & Positive price or wealth scale \\
+        \(\varrho_{i,j,t}\) & Reference log return: the anchor mapped into return space and used by the CPT transform. & \([-0.95,0.95]\) \\
+        \(\nu_i^0\) & Configured fallback CPT reference point. & Positive price or wealth scale \\
+        \(W_{i,t}^{\max}\) & Highest positive mark-to-market wealth observed by agent \(i\) up to time \(t\). & Currency units \\
+        \(h_{\nu}\) & Moving-average window used when \(m_{\nu}\) selects a moving-average price reference. & Positive integer \\
+        \(n_{\mathrm{CPT}}\) & Number of subjective return scenarios used in CPT valuation. & Odd integer, \(n_{\mathrm{CPT}}\ge3\) \\
+        \(\sigma_N\) & Standard deviation of the noise-trader log-belief shock. & Positive return scale \\
+        \(\phi_N\) & Fraction of wealth committed to one noise-trader order. & Positive unit interval \\
+        \(\bar w_N^{\text{short}}\) & Maximum absolute short risky weight available to noise traders. & \([0,1]\) \\
+        \(\omega_H\) & Total target risky-asset portfolio weight of passive buy-and-hold agents, split equally across assets. & \((0,1]\) \\
+        \(\beta_F\) & Legacy fundamental-pull coefficient retained in configuration; inactive under continuous LOB price formation. & Non-negative coefficient \\
+        \(\beta_D\) & Legacy order-imbalance impact coefficient retained in configuration; inactive under continuous LOB price formation. & Non-negative coefficient \\
+        \bottomrule
+    \end{longtable}
+
+    \subsubsection*{Stochastic and Social Variables}
+
+    \begin{longtable}{@{}L{0.22\textwidth}L{0.50\textwidth}L{0.20\textwidth}@{}}
+        \toprule
+        \textbf{Symbol} & \textbf{Meaning} & \textbf{Unit/Domain} \\
+        \midrule
+        \endfirsthead
+        \toprule
+        \textbf{Symbol} & \textbf{Meaning} & \textbf{Unit/Domain} \\
+        \midrule
+        \endhead
+        \(z_{j,t}\) & Independent standard-normal draw for asset \(j\), taken in declared index order. & \(\mathcal{N}(0,1)\) \\
+        \(\zeta_{j,t}^{F}\) & Correlated standard-normal fundamental innovation of asset \(j\). & \(\mathcal{N}(0,1)\) \\
+        \(\rho_{AB}\) & Pairwise correlation between the standardised fundamental innovations of any two distinct assets. & \([-1,1]\) \\
+        \(a,b\) & Coefficients of the one-factor square root of the equicorrelation matrix. & Real numbers \\
+        \(\mu_{F,j}\) & Deterministic drift of asset \(j\)'s fundamental process; log-return units under GBM, price units under the legacy arithmetic walk. & Per-period drift \\
+        \(\sigma_{F,j}\) & Innovation scale of asset \(j\)'s fundamental process; log-return units under GBM, price units under the legacy arithmetic walk. & Positive scale \\
+        \(\varepsilon_{j,t}=\sigma_{F,j}\zeta_{j,t}^{F}\) & Fundamental-value shock of asset \(j\). & Innovation \\
+        \(F_{\min,j}\) & Lower bound imposed on asset \(j\)'s latent fundamental value. & Positive price value \\
+        \(\beta_{\mathrm{warm}}\) & Fundamental-pull coefficient used only in the warm-up price process. & Non-negative coefficient \\
+        \(\sigma_{\mathrm{warm}}\) & Standard deviation of the warm-up market-price noise. & Per-period return \\
+        \(\xi_u^{\mathrm{warm}}\) & Warm-up price-process shock. & Return innovation \\
+        \(\xi_t\) & Legacy exogenous market-price shock; set to zero under continuous LOB price formation. & Return innovation \\
+        \(\sigma_P\) & Legacy market-price shock scale retained in configuration; inactive under continuous LOB price formation. & Per-period return \\
+        \(\zeta_{i,t}\) & Noise-trader log-belief shock, \(\zeta_{i,t}\sim\mathcal{N}(0,\sigma_N^2)\). & Log-price shock \\
+        \(\zeta_{\max}\) & Numerical bound applied to noise-trader log quote shocks before exponentiation. & Positive real number \\
+        \(U_{i,t}\) & Uniform draw selecting which asset a noise trader trades in a multi-asset market. & \(\mathcal{U}(0,1)\) \\
+        \((u_i,v_i)\) & Spatial coordinates of agent \(i\). & Synthetic social space \\
+        \(d_{il}\) & Euclidean distance between agents \(i\) and \(l\). & Distance units \\
+        \(r_{\mathrm{soc}}\) & Social-interaction radius. & Distance units \\
+        \(\mathcal{N}_i\) & Neighbourhood of agent \(i\) within radius \(r_{\mathrm{soc}}\). & Set of neighbouring agents \\
+        \(\omega_{il}\) & Distance-based social weight assigned by agent \(i\) to neighbour \(l\). & Positive weight \\
+        \(\eta_{i,t}\) & Private signal of agent \(i\), \(\eta_{i,t}\sim\mathcal{N}(0,\sigma_{i,\text{priv}}^2)\). & Return signal \\
+        \(\sigma_{i,\text{priv}}\) & Standard deviation of agent \(i\)'s private signal. & Return standard deviation \\
+        \(S_{i,t}\) & Weighted-average social signal observed by agent \(i\). & Return signal \\
+        \(o_{i,t}\) & Opinion of agent \(i\) after combining private and social signals; one opinion per agent, applied to every asset. & Return signal \\
+        \(\gamma_i\) & Social-influence weight of agent \(i\). & \([0,1]\) \\
+        \(\tilde P_{i,j,t}\) & Pre-quantisation valuation quote of agent \(i\) for asset \(j\). & Price units \\
+        \(P_{i,j,t}^{\text{lim}}\) & Effective submitted limit price after tick-size quantisation. & Price units \\
+        \bottomrule
+    \end{longtable}
+
+    \subsubsection*{Market Microstructure}
+
+    \begin{longtable}{@{}L{0.22\textwidth}L{0.50\textwidth}L{0.20\textwidth}@{}}
+        \toprule
+        \textbf{Symbol} & \textbf{Meaning} & \textbf{Unit/Domain} \\
+        \midrule
+        \endfirsthead
+        \toprule
+        \textbf{Symbol} & \textbf{Meaning} & \textbf{Unit/Domain} \\
+        \midrule
+        \endhead
+        \(P_{i,j,t}^{\text{lim}}\) & Effective limit price submitted by agent \(i\) in asset \(j\). & Price units \\
+        \(\sigma_{i,t}^{\text{ord}}\) & Order style. & \(\{\mathrm{Limit},\mathrm{Market}\}\) \\
+        \(\mathrm{asset}(\mathfrak{o})\) & Asset index carried by an order; routes it to exactly one book. & Asset identifier \\
+        \(\mathrm{owner}(\mathfrak{o})\) & Agent identifier of the order's owner, used for self-trade prevention. & Agent identifier \\
+        \(q_{i,t}^{\text{rem}}\) & Remaining unfilled order quantity. & Shares or units \\
+        \(T_{i,t}^{0},T_{i,t}^{X}\) & Order creation and expiry time steps. & Non-negative integers \\
+        \(n_{i,t}^{\text{seq}}\) & Stable sequence number used for FIFO priority. & Positive integer \\
+        \(\mathcal{L}_{j,t}^B,\mathcal{L}_{j,t}^A\) & Persistent bid and ask books of asset \(j\) before new submissions in period \(t\). & Ordered order sets \\
+        \(P_{j,t}^B,P_{j,t}^A\) & Best bid and best ask of asset \(j\) after period-\(t\) processing. & Price units or zero if absent \\
+        \(S_{j,t}^{BA}=P_{j,t}^A-P_{j,t}^B\) & Bid-ask spread when both best quotes exist. & Price units \\
+        \(M_{j,t}^{Q}=(P_{j,t}^B+P_{j,t}^A)/2\) & Midquote when both best quotes exist. & Price units \\
+        \(D_{j,t}^B(h),D_{j,t}^A(h)\) & Visible bid and ask depth across the first \(h\) price levels. & Shares or units \\
+        \(Q_{j,t}^{\text{exec}}\) & Volume executed endogenously in asset \(j\)'s limit order book. & Shares or units \\
+        \(\widetilde Q_{j,t}\) & Reported traded volume after adding maintenance-margin forced buy-ins. & Shares or units \\
+        \(G_k=m_kp_k\) & Gross notional value of execution \(k\). & Currency units \\
+        \(F_k^{\mathrm{tc}}\) & One-side transaction cost charged on execution \(k\). & Currency units \\
+        \(\chi_{j,t}\) & Indicator that at least one trade is executed in asset \(j\) in period \(t\). & \(\{0,1\}\) \\
+        \(P_{j,t}^{\text{last}}\) & Last endogenous transaction price in asset \(j\) in period \(t\). & Price units \\
+        \(e_{i,j,t}\) & Executed quantity of agent \(i\) in asset \(j\) at time \(t\). & Shares or units \\
+        \(\mathrm{ND}_t\) & Submitted net demand before execution. & Shares or units \\
+        \(\mathrm{NI}_t\) & Submitted notional imbalance before execution. & Currency units \\
+        \(\bar I_t\) & Normalised notional imbalance. & \([-1,1]\) \\
+        \(g_t^F\) & Relative fundamental-value signal recorded as a diagnostic. & Dimensionless ratio \\
+        \(r_{j,t}^{\mathrm{raw}}\) & Realised one-period simple return before storing \(P_{j,t+1}\); zero when no trade is executed. & \([-0.95,0.95]\) \\
+        \(\ell_{j,t+1}\) & Realised one-period log return of asset \(j\). & Log return \\
+        \(\epsilon_P\) & Minimum price scale used for numerical protection. & Small positive price \\
+        \(\epsilon_q\) & Minimum absolute fill quantity treated as a real execution. & Small positive quantity \\
+        \(\varphi_{\mathrm{fill}}\) & Minimum economic fill expressed as a fraction of the requested match quantity. & \([0,1)\) \\
+        \(m^{\mathrm{req}},m^{\min}\) & Requested match quantity and minimum economic fill of a candidate execution. & Shares or units \\
+        \(K_{\mathrm{match}}\) & Terminal cap on matching-loop iterations for one incoming order. & Positive integer \\
+        \bottomrule
+    \end{longtable}
+
+    \section{Simulation Algorithm}\label{sec:simulation_algorithm}
+
+    The following pseudocode summarises the simulation loop implemented by the
+    model. Its purpose is to make the execution order transparent before the
+    individual equations are introduced.
+
+    \begin{framed}
+                \raggedright
+                \textbf{Inputs:} simulation configuration, deterministic seed, the enabled
+                asset set \(\mathcal{J}\) with per-asset initial prices \(P_{j,0}\) and
+                fundamental values \(F_{j,0}=P_{j,0}\), the cross-asset correlation
+                \(\rho_{AB}\), agent population, and output paths.
+
+                \textbf{Initialisation}
+                \begin{enumerate}
+                    \item Normalise the configuration: drop disabled assets from
+                    \(\mathcal{J}\) into \(\mathcal{J}^{0}\), fix the declared index order,
+                    and resolve the primary asset index \(j^{\ast}\).
+                    \item Initialise each asset's market and fundamental histories with
+                    \(P_{j,0}\) and \(F_{j,0}\).
+                    \item Initialise fundamentalist, chartist, noise-trader, and passive
+                    buy-and-hold agents with cash, per-asset inventory, strategy parameters, CPT
+                    preferences, and personal reference-point state where applicable.
+                    \item If social interaction is enabled, assign spatial coordinates,
+                    private-signal noise scales, social-influence weights, and neighbourhoods.
+                    \item Generate warm-up observations with the configured temporary price
+                    process, advancing all fundamentals jointly so their innovations carry the
+                    configured correlation, so technical indicators and covariance estimates
+                    are well defined before the analysed continuous-LOB phase.
+                \end{enumerate}
+
+                \textbf{For each simulation step \(t=1,\ldots,T\)}
+                \begin{enumerate}
+                    \item Accrue risk-free interest on agent cash holdings.
+                    \item Advance every asset's latent fundamental value \(F_{j,t}\) in one
+                    joint draw with correlated innovations.
+                    \item Update private and social opinions \(o_{i,t}\) for all agents.
+                    \item Expire old resting orders and cancel stale resting orders from each
+                    asset's persistent bid and ask books.
+                    \item Estimate the shared log-return covariance matrix \(\Sigma_t\) over
+                    the trailing window \(v_{\Sigma}\).
+                    \item Select active agents and collect orders. Portfolio-optimising agents
+                    solve one joint Markowitz problem over all assets and emit at most one
+                    order per asset from their strategy valuation, CPT-adjusted return when
+                    applicable, and social quote overlay when enabled; noise traders draw one
+                    asset uniformly. Sufficiently aggressive valuation gaps, or a
+                    configured random event, convert an order from limit style to market style.
+                    \item Match incoming orders continuously against the persistent
+                    price-time-priority limit order book \emph{of their own asset}; books never
+                    cross assets. A resting order owned by the incoming order's own agent is
+                    cancelled rather than traded with. Market orders whose execution price
+                    breaches the collar are rejected. Candidate fills below the
+                    minimum economic fill threshold are rejected and the binding side
+                    is cancelled. Executions update cash net of
+                    proportional transaction costs, per-asset inventory, short-sale state, trade
+                    counts, per-asset average entry-price references, cumulative
+                    transaction-cost diagnostics, and the trade ledger immediately.
+                    \item For each asset independently: if at least one endogenous trade is
+                    executed, store the last transaction price as \(P_{j,t+1}\); otherwise carry
+                    forward the previous observed market price.
+                    \item Refresh agent wealth and personal peak wealth across all assets,
+                    enforce short-sale maintenance margin per asset through forced buy-ins when
+                    required, refresh wealth again when a forced buy-in has traded, and record
+                    step-level outputs: the primary asset's single-asset row plus one
+                    per-\((\text{step},\text{asset})\) row holding price, fundamental value,
+                    returns, book state, cancellation counters, allocative efficiency, mean
+                    agent portfolio weight, traded volume, and trade-ledger entries.
+                \end{enumerate}
+
+                \textbf{After the final step:} export simulation details, agent snapshots,
+                CPT/reference-point and transaction-cost diagnostics, trade-ledger records
+                when enabled, summary metrics, per-asset stylised-fact diagnostics, the
+                long-format per-asset time series, resolved configuration, metadata, and the
+                experiment manifest.
+    \end{framed}
+
+    \section{Fundamental Value Generation}\label{sec:fundamental_value}
+
+    \subsection{Per-Asset Process}
+
+    Every asset's latent fundamental value follows geometric Brownian motion in
+    Euler-Maruyama log form. This is the model's fundamental-value theory and is
+    the default for every declared asset:
+    \[
+        F_{j,t+1}
+        =
+        \max\!\left\{
+            F_{\min,j},\,
+            F_{j,t}\exp\!\left(
+                \left(\mu_{F,j}-\tfrac{1}{2}\sigma_{F,j}^{2}\right)
+                +\sigma_{F,j}\zeta_{j,t}^{F}
+            \right)
+        \right\},
+        \qquad
+        \zeta_{j,t}^{F}\sim\mathcal{N}(0,1).
+    \]
+    The It\^o correction \(-\tfrac12\sigma_{F,j}^2\) keeps \(\mu_{F,j}\)
+    interpretable as the expected arithmetic growth rate, so
+    \(\mathbb{E}[F_{j,t+1}\mid F_{j,t}]=F_{j,t}e^{\mu_{F,j}}\) while
+    \(\mathbb{E}[\log F_{j,t+1}-\log F_{j,t}]=\mu_{F,j}-\tfrac12\sigma_{F,j}^2\).
+    This follows the standard Black-Scholes discretisation.
+
+    Two properties matter for the multi-asset design. First, multiplicative
+    dynamics keep the value strictly positive without relying on the floor
+    \(F_{\min,j}>0\), which now guards only against extreme downward excursions
+    reaching the price grid. Second, \(\mu_{F,j}\) and \(\sigma_{F,j}\) are in
+    per-step \emph{log-return} units, so they are directly comparable across
+    assets regardless of price level: an asset trading at \(100\) and one trading
+    at \(40\) with the same \(\sigma_{F,j}\) carry the same proportional risk.
+    Under the previous additive specification the same numeric shock meant a very
+    different economic disturbance at different price levels, which would make
+    cross-asset comparison meaningless.
+
+    A legacy arithmetic random walk,
+    \[
+        F_{j,t+1}=\max\{F_{\min,j},\,F_{j,t}+\mu_{F,j}+\varepsilon_{j,t}\},
+        \qquad
+        \varepsilon_{j,t}=\sigma_{F,j}\zeta_{j,t}^{F},
+    \]
+    with drift and shock in \emph{price} units, is retained and must be requested
+    explicitly per asset. It exists only so that studies predating the geometric
+    process can be reproduced exactly.
+
+    \subsection{Cross-Asset Correlation}\label{sec:fundamental_correlation}
+
+    Fundamentals in a multi-asset market are not independent: a common
+    macroeconomic factor makes them co-move, and that co-movement is precisely
+    what limits the diversification available to agents. All assets are therefore
+    advanced in one joint draw. Let \(R\) be the equicorrelation matrix with unit
+    diagonal and off-diagonal \(\rho_{AB}\in[-1,1]\). One standard normal
+    \(z_{j,t}\) is drawn per asset in declared index order and mapped to
+    correlated standard normals by the closed-form one-factor square root of
+    \(R\):
+    \[
+        \zeta_{j,t}^{F}
+        =
+        a\,z_{j,t}+b\sum_{k\in\mathcal{J}}z_{k,t},
+        \qquad
+        a=\sqrt{1-\rho_{AB}},
+        \qquad
+        b=\frac{\sqrt{1+(n-1)\rho_{AB}}-a}{n}.
+    \]
+    Then \(\Corr(\zeta_{j,t}^{F},\zeta_{k,t}^{F})=\rho_{AB}\) for \(j\ne k\), and
+    each asset applies its own process to its own \(\zeta_{j,t}^{F}\). The
+    closed form is preferred to a generic Cholesky factorisation because it stays
+    exact on the positive-semi-definite boundary --- at \(\rho_{AB}=1\), or at the
+    lower admissible limit \(\rho_{AB}=-1/(n-1)\) --- where Cholesky would fail on
+    a singular matrix. Correlations outside \([-1,1]\), or values implying a
+    non-positive-semi-definite \(R\), are rejected at configuration time.
+
+    With \(n=1\), or with \(\rho_{AB}=0\), the map is exactly the identity and is
+    short-circuited, so the innovation \(\sigma_{F,j}z_{j,t}\) is bit-identical to
+    an independent single-asset draw and the historical random-draw sequence is
+    preserved.
+
+    In the two-asset case \(\rho_{AB}\) is exactly \(\rho_{AB}\) between assets
+    \(A\) and \(B\); as \(\rho_{AB}\to1\) the Markowitz rule of
+    Section~\ref{sec:decision_rules} can no longer reduce risk by spreading
+    across assets.
+
+    \subsection{Warm-Up Price Process}
+
+    During warm-up only, the implementation generates a temporary market-price
+    history for each asset so the first analysed order-book step has enough
+    observations for moving averages, rolling volatility, and the covariance
+    matrix. Fundamentals still advance jointly and correlated; the warm-up price
+    noise is drawn from a separate engine. Let \(r_{j,u}^{\mathrm{warm}}\) denote
+    the warm-up simple return of asset \(j\). The warm-up price process is
+    \[
+        r_{j,u}^{\mathrm{warm}}
+        =
+        \clip\!\left(
+                   \beta_{\mathrm{warm}}\frac{F_{j,u}-P_{j,u}}{\max\{P_{j,u},\epsilon_P\}}
+                   +\xi_{j,u}^{\mathrm{warm}};
+            -0.95,0.95
+        \right),
+        \qquad
+        \xi_{j,u}^{\mathrm{warm}}\sim\mathcal{N}(0,\sigma_{\mathrm{warm}}^2),
+    \]
+    \[
+        P_{j,u+1}=\max\{\epsilon_P,P_{j,u}(1+r_{j,u}^{\mathrm{warm}})\}.
+    \]
+    These warm-up observations are not interpreted as analysed LOB transactions;
+    they only initialise state variables required by the trading rules.
+
+    \section{Agent Decision Rules}\label{sec:decision_rules}
+
+    At each time step \(t\), agent \(i\) is active with probability
+    \[
+        \Pr(a_{i,t}=1)=\alpha.
+    \]
+    If inactive, the agent submits no order.
+
+    Let \(P_{j,t}\) be the latest market price of asset \(j\), \(F_{j,t}\) its
+    latest fundamental price, \(c_{i,t}\) the agent's single shared cash account,
+    \(x_{i,j,t}\) its holding of asset \(j\), and
+    \[
+        W_{i,t}=c_{i,t}+\sum_{j\in\mathcal{J}}x_{i,j,t}P_{j,t}
+    \]
+    the current wealth. Wealth is a portfolio quantity: an agent funds purchases in
+    any asset from the same cash balance and is marked to market against every
+    position it holds. Define
+    \[
+        \clip(z;\underline z,\overline z)=\min\{\overline z,\max\{\underline z,z\}\},
+        \qquad
+        \pospart{z}=\max\{z,0\}.
+    \]
+
+    Proportional transaction costs are represented by the one-way rate
+    \(f_{\mathrm{tc}}\). The cash required to fund one purchased share at price
+    \(p\) is \(p(1+f_{\mathrm{tc}})\), so the cost-aware affordable buy quantity is
+    \[
+        A_{i,t}^{B}(p)
+        =
+        \frac{c_{i,t}}{p(1+f_{\mathrm{tc}})}.
+    \]
+    When transaction costs affect decisions, the strategy-level no-trade band is
+    enlarged by the round-trip hurdle
+    \[
+        \tau_{\mathrm{tc}}^{\log}
+        =
+        \log\frac{1+f_{\mathrm{tc}}}{1-f_{\mathrm{tc}}},
+        \qquad
+        \tau_{\mathrm{tc}}^{r}
+        =
+        \frac{2f_{\mathrm{tc}}}{1-f_{\mathrm{tc}}}.
+    \]
+    The log hurdle is used for valuation-price gaps, while the simple-return
+    hurdle is used for the fundamentalist mispricing signal. If the
+    decision-cost switch is disabled, both hurdles are treated as zero in the
+    trading rules.
+
+    \subsection{Risk Estimation}\label{sec:covariance}
+
+    All agents share one estimate of market risk, computed once per step from
+    trailing one-period log returns of the stored market prices. Warm-up history
+    is included, so the estimate exists from the first trading step. Let
+    \[
+        \ell_{j,u}=\log\frac{P_{j,u}}{P_{j,u-1}}
+    \]
+    and let \(T_t=\min\{v_{\Sigma},\,\text{shortest available return history}\}\)
+    be the common trailing sample length, which keeps the matrix internally
+    consistent across assets. With \(\bar\ell_j\) the sample mean over that
+    window, the entries of the covariance matrix are
+    \[
+        \Sigma_{t,jk}
+        =
+        \frac{1}{T_t-1}
+        \sum_{u=t-T_t+1}^{t}
+        \left(\ell_{j,u}-\bar\ell_j\right)\left(\ell_{k,u}-\bar\ell_k\right),
+        \qquad
+        \sigma_{j,t}=\sqrt{\Sigma_{t,jj}}.
+    \]
+    Fewer than two common observations give the zero matrix; callers regularise
+    before factorisation in either case. Using log-return covariance keeps the
+    allocation rule consistent with the return series used in the stylised-fact
+    diagnostics, and makes the risk estimate comparable across assets trading at
+    different price levels.
+
+    \subsection{Portfolio Allocation}\label{sec:allocation}
+
+    Given the vector of prospect-adjusted excess returns
+    \(\breve{\mathbf r}_{i,t}=(\breve r_{i,1,t},\ldots,\breve r_{i,n,t})^{\top}\),
+    the agent solves the full Markowitz problem
+    \[
+        \mu_{i,j,t}=r_f+\breve r_{i,j,t},
+        \qquad
+        \mathbf w_{i,t}^{\mathrm{raw}}
+        =
+        \frac{1}{\rho_i}\Sigma_t^{-1}\breve{\mathbf r}_{i,t},
+    \]
+    where \(\rho_i>0\) is the agent's risk aversion. The residual weight
+    \(1-\sum_j w_{i,j,t}\) is held at the risk-free rate implicitly, as in the
+    single-asset model. This is an intentionally transparent mean-variance
+    allocation rule in the tradition of Markowitz; the behavioural contribution
+    enters through the forecast and preference transforms rather than through a
+    separate utility-maximisation problem. Cross-asset covariance now shapes the
+    demand for each asset: a forecast on one asset moves the position in the
+    other through \(\Sigma_t^{-1}\), and the diversification benefit shrinks as
+    \(\rho_{AB}\) rises.
+
+    The solve is implemented by Cholesky factorisation of a regularised copy of
+    \(\Sigma_t\): a variance floor is applied to the diagonal, and if
+    factorisation fails an escalating diagonal loading (starting at \(10^{-6}\)
+    and multiplied by ten, up to three retries) is added. If factorisation still
+    fails, or produces a non-finite solution, the rule degrades gracefully to the
+    diagonal solve
+    \[
+        w_{i,j,t}^{\mathrm{raw}}
+        =
+        \frac{\breve r_{i,j,t}}{\rho_i\sigma_{j,t}^{2}},
+    \]
+    which for \(n=1\) is exactly the historical scalar mean-variance rule.
+
+    Constraints are then applied as a projection. Weights are clamped to the
+    per-asset interval first; if gross exposure then exceeds the cap, all weights
+    are scaled proportionally and clamped once more:
+    \[
+        w_{i,j,t}^{(1)}=\clip\!\left(w_{i,j,t}^{\mathrm{raw}};\underline w_{i,j},\overline w_{i,j}\right),
+        \qquad
+        \Lambda_i=\sum_{j}\left|w_{i,j,t}^{(1)}\right|,
+    \]
+    \[
+        w_{i,j,t}=
+        \begin{cases}
+            w_{i,j,t}^{(1)}, & \Lambda_i\le G_i \ \text{or}\ G_i\le 0,\\[1.2ex]
+            \clip\!\left(\dfrac{G_i}{\Lambda_i}w_{i,j,t}^{(1)};\underline w_{i,j},\overline w_{i,j}\right), & \Lambda_i>G_i.
+        \end{cases}
+    \]
+    The gross-exposure cap \(G_i\) is what prevents a two-asset portfolio from
+    silently doubling an agent's market exposure relative to the single-asset
+    baseline. The target position in each asset is
+    \[
+        x_{i,j,t}^{\ast}=\frac{W_{i,t}w_{i,j,t}}{P_{j,t}}.
+    \]
+    For agents not assigned to Cumulative Prospect Theory (CPT),
+    \(\breve r_{i,j,t}=\hat r_{i,j,t}\). For agents assigned to CPT,
+    \(\breve r_{i,j,t}\) is the prospect-adjusted excess return defined in
+    Section~\ref{sec:cpt}.
+
+    Because all buys are funded from one cash account, order generation carries a
+    running budget \(\tilde c_{i,t}\), initialised at \(c_{i,t}\) and decremented
+    by \(P_{i,j,t}^{\text{lim}}q_{i,j,t}(1+f_{\mathrm{tc}})\) as each buy order is
+    queued. This stops simultaneous buys across assets from jointly
+    overcommitting the same cash at submission time; the clearing engine still
+    enforces the hard affordability constraint at execution time
+    (Section~\ref{sec:short_sale_constraints}).
+
+    \subsection{Technical Indicators}
+
+    For chartists, define the moving average of asset \(j\) with horizon
+    \(h\in\{h_S,h_L\}\) by
+    \[
+        \MA_{j,t}^{(h)}=\frac{1}{h}\sum_{u=t-h+1}^{t}P_{j,u}.
+    \]
+    Let \(\theta_M\) denote the configured non-negative momentum-signal threshold,
+    strictly below one. It is
+    implemented as a deadband around zero so very small moving-average gaps are not
+    interpreted as economically meaningful trend-following evidence. The gap is
+    measured in log space,
+    \[
+        g_{j,t}^M=\log\frac{\MA_{j,t}^{(h_S)}}{\MA_{j,t}^{(h_L)}},
+    \]
+    so that it is commensurate with the log-return volatility used by the
+    allocation rule. Both the gap and the ratios below are defined as zero
+    whenever either side falls below the minimum price scale \(\epsilon_P\); this
+    is a numerical guard, not an economic assumption.
+
+    For RSI, let \(\Delta P_{j,u}=P_{j,u}-P_{j,u-1}\), and
+    \[
+        \bar G_{j,t}=\frac{1}{h_{\mathrm{RSI}}}\sum_{u=t-h_{\mathrm{RSI}}+1}^{t}\pospart{\Delta P_{j,u}},
+        \qquad
+        \bar L_{j,t}=\frac{1}{h_{\mathrm{RSI}}}\sum_{u=t-h_{\mathrm{RSI}}+1}^{t}\pospart{-\Delta P_{j,u}},
+    \]
+    \[
+        \RSI_{j,t}=
+        \begin{cases}
+            100, & \bar L_{j,t}=0,\\
+            0, & \bar G_{j,t}=0,\\
+            100-\dfrac{100}{1+\bar G_{j,t}/\bar L_{j,t}}, & \text{otherwise}.
+        \end{cases}
+    \]
+    For Donchian-style breakout chartists, the latest price is compared with the
+    channel formed by the previous \(h_{\mathrm{BO}}\) observations, excluding the
+    current price:
+    \[
+        L_{j,t}^{\mathrm{BO}}=\min\{P_{j,t-h_{\mathrm{BO}}},\ldots,P_{j,t-1}\},
+        \qquad
+        H_{j,t}^{\mathrm{BO}}=\max\{P_{j,t-h_{\mathrm{BO}}},\ldots,P_{j,t-1}\}.
+    \]
+    Excluding \(P_{j,t}\) prevents the current observation from defining its own
+    breakout threshold.
+
+    \subsection{Chartists}
+    Each chartist \(i\) is assigned one strategy
+    \(k_i\in\{\mathrm{MOM},\mathrm{MR},\mathrm{RSI},\mathrm{BO}\}\) and applies that
+    same rule to every asset. Its technical state in asset \(j\) is
+    summarised by the discrete signal
+    \[
+        s_{i,j,t}^{C}=
+        \begin{cases}
+            \mathrm{Buy}, & k_i=\mathrm{MOM}\ \text{and}\ g_{j,t}^M>\theta_M,\\
+            \mathrm{Sell}, & k_i=\mathrm{MOM}\ \text{and}\ g_{j,t}^M<-\theta_M,\\
+            \mathrm{Buy}, & k_i=\mathrm{MR}\ \text{and}\ P_{j,t}<\MA_{j,t}^{(h_L)},\\
+            \mathrm{Sell}, & k_i=\mathrm{MR}\ \text{and}\ P_{j,t}>\MA_{j,t}^{(h_L)},\\
+            \mathrm{Buy}, & k_i=\mathrm{RSI}\ \text{and}\ \RSI_{j,t}<30,\\
+            \mathrm{Sell}, & k_i=\mathrm{RSI}\ \text{and}\ \RSI_{j,t}>70,\\
+            \mathrm{Buy}, & k_i=\mathrm{BO}\ \text{and}\ P_{j,t}>H_{j,t}^{\mathrm{BO}},\\
+            \mathrm{Sell}, & k_i=\mathrm{BO}\ \text{and}\ P_{j,t}<L_{j,t}^{\mathrm{BO}},\\
+            \mathrm{Hold}, & \text{otherwise}.
+        \end{cases}
+    \]
+
+    This signal records the direction implied by the technical rule. In the current
+    implementation, actual order side is determined by the valuation quote in
+    Section~\ref{sec:valuation_quotes}; therefore a chartist can submit no order
+    even after a non-hold technical signal if the valuation quote lies inside the
+    hold-tolerance band.
+
+    Its expected excess return on asset \(j\) is
+    \[
+        \hat r_{i,j,t}^{C}=
+        \begin{cases}
+            0, & k_i=\mathrm{MOM}\ \text{and}\ |g_{j,t}^M|\le\theta_M,\\[1ex]
+            \clip\!\left(g_{j,t}^M;-1,1\right), & k_i=\mathrm{MOM}\ \text{and}\ |g_{j,t}^M|>\theta_M,\\[1ex]
+            \clip\!\left(\log\dfrac{\MA_{j,t}^{(h_L)}}{P_{j,t}};-1,1\right), & k_i=\mathrm{MR},\\[1ex]
+            \clip\!\left(0.05\,\dfrac{50-\RSI_{j,t}}{50};-1,1\right), & k_i=\mathrm{RSI},\\[1ex]
+            \clip\!\left(\log\dfrac{P_{j,t}}{H_{j,t}^{\mathrm{BO}}};-1,1\right), & k_i=\mathrm{BO}\ \text{and}\ P_{j,t}>H_{j,t}^{\mathrm{BO}},\\[1ex]
+            \clip\!\left(\log\dfrac{P_{j,t}}{L_{j,t}^{\mathrm{BO}}};-1,1\right), & k_i=\mathrm{BO}\ \text{and}\ P_{j,t}<L_{j,t}^{\mathrm{BO}},\\[1ex]
+            0, & k_i=\mathrm{BO}\ \text{and}\ L_{j,t}^{\mathrm{BO}}\le P_{j,t}\le H_{j,t}^{\mathrm{BO}}.
+        \end{cases}
+    \]
+    Every branch except RSI is a log ratio, so the forecast is a log return and is
+    directly comparable with the entries of \(\Sigma_t\). The RSI branch is already
+    a bounded dimensionless score and is left unchanged.
+    The excess return used in allocation is
+    \begin{align*}
+        \breve r_{i,j,t}^{C}&=
+        \begin{cases}
+            \hat r_{i,j,t}^{C}, & \text{agent } i \text{ is not assigned CPT},\\
+            \mathcal{T}_i\!\left(\hat r_{i,j,t}^{C},\sigma_{j,t};\,\varrho_{i,j,t}\right), & \text{agent } i \text{ is assigned CPT},
+        \end{cases}
+        \\
+        \mu_{i,j,t}^{C}&=r_f+\breve r_{i,j,t}^{C}.
+    \end{align*}
+
+    The chartist target weight in every asset is bounded by
+    \[
+        \underline w_{i,j}=\max\left\{\underline w_i^{\text{cfg}},\,-\bar w_i^{\text{short}}\right\},
+        \qquad
+        \overline w_{i,j}=\pospart{\overline w_i^{\text{cfg}}},
+    \]
+    so the configured allocation floor and the short-exposure cap bind
+    independently, and the tighter of the two applies.
+
+    Given an order side from the valuation quote, the chartist order quantity in
+    asset \(j\) is
+    \[
+        q_{i,j,t}^{C}=
+        \begin{cases}
+            \min\left\{\pospart{x_{i,j,t}^{\ast}-x_{i,j,t}},\tilde A_{i,t}^{B}(P_{i,j,t}^{\text{lim}})\right\}, & \mathrm{side}_{i,j,t}=\mathrm{Buy},\\[1.2ex]
+            \pospart{x_{i,j,t}-x_{i,j,t}^{\ast}}, & \mathrm{side}_{i,j,t}=\mathrm{Sell},\\
+            0, & \text{quote lies inside the hold-tolerance band},
+        \end{cases}
+    \]
+    where \(\tilde A_{i,t}^{B}(p)=\tilde c_{i,t}/\bigl(p(1+f_{\mathrm{tc}})\bigr)\)
+    is the affordable buy quantity against the running cash budget of
+    Section~\ref{sec:allocation}.
+
+    \subsection{Fundamentalists}
+    Define the log mispricing of asset \(j\),
+    \[
+        m_{j,t}=\log\frac{F_{j,t}}{P_{j,t}}.
+    \]
+    Positive \(m_{j,t}\) means the latent fundamental value lies above the market
+    price, so the asset is treated as undervalued. The log form replaces the
+    former relative difference \((F_{j,t}-P_{j,t})/P_{j,t}\) and keeps the
+    forecast commensurate with the log-return covariance used for sizing.
+
+    Let \(\bar P_{i,j,t}^{\text{entry}}\) denote the average entry price of agent
+    \(i\)'s current long position in asset \(j\) when one exists. The unrealised
+    P\&L ratio used for stop-loss and take-profit rules is evaluated per asset
+    against that asset's own entry price:
+    \[
+        \pi_{i,j,t}=\frac{P_{j,t}-\bar P_{i,j,t}^{\text{entry}}}{\bar P_{i,j,t}^{\text{entry}}}.
+    \]
+
+    The fundamentalist signal in asset \(j\) is
+    \[
+        s_{i,j,t}^{F}=
+        \begin{cases}
+            (\mathrm{Sell},\mathrm{Force}), & x_{i,j,t}>0\ \text{and}\ \pi_{i,j,t}\le -\theta^{SL},\\
+        (\mathrm{Sell},\mathrm{Force}), & x_{i,j,t}>0\ \text{and}\ \pi_{i,j,t}\ge \theta^{TP},\\
+        (\mathrm{Buy},\mathrm{Rebalance}), & m_{j,t}\ge \theta^{M}+\iota_{\mathrm{tc}}^D\tau_{\mathrm{tc}}^{r},\\
+        (\mathrm{Sell},\mathrm{Rebalance}), & m_{j,t}\le -\left(\theta^{M}+\iota_{\mathrm{tc}}^D\tau_{\mathrm{tc}}^{r}\right),\\
+        (\mathrm{Hold},\mathrm{None}), & |m_{j,t}|<\theta^{M}+\iota_{\mathrm{tc}}^D\tau_{\mathrm{tc}}^{r}.
+        \end{cases}
+    \]
+    Forced liquidation is therefore asset-specific: a stop-loss in one asset does
+    not liquidate the agent's position in the other.
+
+    The forced-liquidation part of this signal is active in the current
+    valuation-quote implementation. The mispricing threshold remains part of the
+    generated strategy signal, but non-forced buy, sell, and hold decisions in the
+    active order path are governed by the valuation quote and hold-tolerance
+    condition in Section~\ref{sec:valuation_quotes}.
+
+    Its expected excess return is
+    \begin{align*}
+        \hat r_{i,j,t}^{F}&=\clip(m_{j,t};-1,1),\\
+        \breve r_{i,j,t}^{F}&=
+        \begin{cases}
+            \hat r_{i,j,t}^{F}, & \text{agent } i \text{ is not assigned CPT},\\
+            \mathcal{T}_i\!\left(\hat r_{i,j,t}^{F},\sigma_{j,t};\,\varrho_{i,j,t}\right), & \text{agent } i \text{ is assigned CPT},
+        \end{cases}
+        \\
+        \mu_{i,j,t}^{F}&=r_f+\breve r_{i,j,t}^{F}.
+    \end{align*}
+    The reference log return \(\varrho_{i,j,t}\) is resolved by the configured
+    agent-specific reference-point rule in Section~\ref{sec:cpt_reference_points}.
+
+    Fundamentalists remain long-only, so their weight bounds are floored at zero,
+    \[
+        \underline w_{i,j}=\pospart{\underline w_i^{\text{cfg}}},
+        \qquad
+        \overline w_{i,j}=\pospart{\overline w_i^{\text{cfg}}},
+    \]
+    and the desired position is
+    \[
+        x_{i,j,t}^{\ast,F}=\max\left\{0,\frac{W_{i,t}w_{i,j,t}}{P_{j,t}}\right\},
+    \]
+    with \(x_{i,j,t}^{\ast,F}=0\) under forced liquidation. Short exposure is
+    handled by chartist and noise-trader rules plus the global risk-control layer.
+
+    Given an order side from the valuation quote, the fundamentalist order quantity
+    in asset \(j\) is
+    \[
+        q_{i,j,t}^{F}=
+        \begin{cases}
+            \min\left\{\pospart{x_{i,j,t}^{\ast,F}-x_{i,j,t}},\tilde A_{i,t}^{B}(P_{i,j,t}^{\text{lim}})\right\},
+            & \mathrm{side}_{i,j,t}=\mathrm{Buy},\\[1.2ex]
+            x_{i,j,t},
+            & s_{i,j,t}^{F}=(\mathrm{Sell},\mathrm{Force}),\\[1.2ex]
+            \pospart{x_{i,j,t}-x_{i,j,t}^{\ast,F}},
+            & \mathrm{side}_{i,j,t}=\mathrm{Sell}\ \text{and not forced},\\[1.2ex]
+            0,
+            & \text{quote lies inside the hold-tolerance band}.
+        \end{cases}
+    \]
+
+    \subsection{Noise Traders}
+
+    Noise traders \(i\in\mathcal{A}^N\) represent uninformed random-liquidity
+    demand. They do not optimise a portfolio, so in a multi-asset market each
+    active noise trader first selects a single asset uniformly at random from its
+    own private random stream,
+    \[
+        j_{i,t}
+        =
+        \min\left\{\left\lfloor n\,U_{i,t}\right\rfloor,\,n-1\right\},
+        \qquad
+        U_{i,t}\sim\mathcal{U}(0,1),
+    \]
+    and trades only that asset in that step. The draw is taken only when
+    \(n>1\), so single-asset private random streams are unchanged. Below,
+    \(j\) denotes the selected asset.
+
+    At each active decision time they draw an idiosyncratic log-belief shock
+    \[
+        \zeta_{i,t}\sim\mathcal{N}(0,\sigma_N^2).
+    \]
+    The shock is interpreted as a short-run erroneous belief about the market price,
+    consistent with noise-trader-risk models in which stochastic beliefs can move
+    prices and create limits to arbitrage. For numerical protection, the
+    implementation clips the log quote shock before exponentiation:
+    \[
+        \zeta_{i,t}^{\mathrm{clip}}
+        =
+        \clip\!\left(\zeta_{i,t};-\zeta_{\max},\zeta_{\max}\right),
+        \qquad
+        \zeta_{\max}=20.
+    \]
+    The noise-trader quote is
+    \[
+        \tilde P_{i,j,t}^{N}=P_{j,t}\exp(\zeta_{i,t}^{\mathrm{clip}}).
+    \]
+    The order side follows the sign of the belief shock:
+    \[
+        \mathrm{side}_{i,j,t}^{N}=
+        \begin{cases}
+            \mathrm{Buy}, & \zeta_{i,t}>0,\\
+            \mathrm{Sell}, & \zeta_{i,t}<0,\\
+            \mathrm{Hold}, & \zeta_{i,t}=0.
+        \end{cases}
+    \]
+    Noise-trader order size is bounded by a fraction of total mark-to-market
+    wealth,
+    \[
+        B_{i,t}^{N}=\phi_N W_{i,t}.
+    \]
+    Given the quantised limit price \(P_{i,j,t}^{\text{lim}}\), submitted quantity is
+    \[
+        q_{i,j,t}^{N}=
+        \begin{cases}
+            \min\left\{\dfrac{B_{i,t}^{N}}{P_{i,j,t}^{\text{lim}}},
+                    A_{i,t}^{B}(P_{i,j,t}^{\text{lim}})\right\}, & \mathrm{side}_{i,j,t}^{N}=\mathrm{Buy},\\[1.2ex]
+            \min\left\{\dfrac{B_{i,t}^{N}}{P_{i,j,t}^{\text{lim}}},
+            x_{i,j,t}+\dfrac{\bar w_N^{\text{short}}W_{i,t}}{P_{i,j,t}^{\text{lim}}}\right\}, & \mathrm{side}_{i,j,t}^{N}=\mathrm{Sell},\\[1.2ex]
+            0, & \mathrm{side}_{i,j,t}^{N}=\mathrm{Hold}.
+        \end{cases}
+    \]
+    Because only one asset is traded per step, the noise trader needs no running
+    cash budget and uses the full balance \(A_{i,t}^{B}\).
+    The second sell bound is a strategy-level short-exposure cap; the market
+    coordinator still applies the global cash, inventory, margin, and
+    borrowable-supply constraints before execution.
+
+    \subsection{Buy-and-Hold Agents}
+
+    Passive buy-and-hold agents \(i\in\mathcal{A}^H\) represent long-horizon
+    investors who accumulate exposure toward a total target risky share
+    \(\omega_H\). They are intentionally long-only and do not sell down after the
+    target is reached. The target is split equally across assets rather than
+    optimised, which keeps this population a passive liquidity benchmark rather
+    than a second optimising agent class:
+    \[
+        x_{i,j,t}^{\ast,H}
+        =
+        \frac{W_{i,t}}{P_{j,t}}\cdot\frac{\omega_H}{n}.
+    \]
+    The submitted side is buy when current inventory is below this target and
+    hold otherwise:
+    \[
+        \mathrm{side}_{i,j,t}^{H}
+        =
+        \begin{cases}
+            \mathrm{Buy}, & x_{i,j,t}<x_{i,j,t}^{\ast,H},\\
+            \mathrm{Hold}, & x_{i,j,t}\ge x_{i,j,t}^{\ast,H}.
+        \end{cases}
+    \]
+    The quote is the latest market price, quantised to the buy side of that
+    asset's price grid:
+    \[
+        P_{i,j,t}^{\text{lim},H}
+        =
+        \begin{cases}
+            \max\{\delta_j,\delta_j\left\lfloor P_{j,t}/\delta_j\right\rfloor\}, & \delta_j>0,\\
+            P_{j,t}, & \delta_j\le 0.
+        \end{cases}
+    \]
+    The submitted quantity is therefore
+    \[
+        q_{i,j,t}^{H}
+        =
+        \begin{cases}
+            \min\left\{\pospart{x_{i,j,t}^{\ast,H}-x_{i,j,t}},
+            \tilde A_{i,t}^{B}(P_{i,j,t}^{\text{lim},H})\right\}, & \mathrm{side}_{i,j,t}^{H}=\mathrm{Buy},\\[1.2ex]
+            0, & \mathrm{side}_{i,j,t}^{H}=\mathrm{Hold},
+        \end{cases}
+    \]
+    again against the running cash budget \(\tilde c_{i,t}\).
+    This population supplies persistent passive demand without adding a new
+    behavioural forecast. It is useful for separating crisis dynamics generated by
+    active behavioural rules from liquidity support supplied by long-horizon
+    investors.
+
+    \section{Valuation Quotes, Social Influence, and Limit Price Formation}\label{sec:valuation_quotes}
+
+    The social module embeds agents in a synthetic two-dimensional information
+    space. Each agent \(i\in\mathcal{A}\) is located at
+    \((u_i,v_i)\in\mathbb{R}^2\) and, when social interaction is enabled, combines
+    a private signal with lagged opinions transmitted by neighbouring agents. When
+    social interaction is disabled, the implementation leaves opinions neutral, so
+    the same valuation equations reduce to individual strategy quotes.
+
+    \subsection{Spatial Structure and Neighbourhood}
+
+    The Euclidean distance between agents \(i\) and \(l\) is defined as
+    \begin{equation}
+        d_{il} = \sqrt{{\left(u_i-u_l\right)}^2 + {\left(v_i-v_l\right)}^2}.
+    \end{equation}
+
+    Given an interaction radius \(r_{\mathrm{soc}}>0\), the neighbourhood of agent
+    \(i\) is
+    \begin{equation}
+        \mathcal{N}_i = \{l \in \mathcal{A}\setminus\{i\} : d_{il} \le r_{\mathrm{soc}}\}.
+    \end{equation}
+
+    To capture local influence, we define a distance-based interaction weight
+    \begin{equation}
+        \omega_{il} = \frac{1}{1+d_{il}}, \qquad l \in \mathcal{N}_i.
+    \end{equation}
+
+    Hence, closer agents exert stronger influence on one another.
+
+    \subsection{Private Signal}
+
+    At each time step \(t\), agent \(i\) receives a private signal
+    \begin{equation}
+        \eta_{i,t} \sim \mathcal{N}(0,\sigma_{i,\text{priv}}^2),
+    \end{equation}
+    where \(\sigma_{i,\text{priv}}\) denotes the standard deviation of the private
+    signal of agent \(i\).
+
+    The private signal is interpreted as an idiosyncratic expected return signal or valuation shock.
+
+    \subsection{Social Signal}
+
+    Let \(o_{l,t-1}\) denote the opinion of agent \(l\) at time \(t-1\),
+    interpreted as that agent's expected return signal. Agent \(i\) forms a social
+    signal by aggregating the lagged opinions of neighbouring agents using
+    distance-based weights:
+    \begin{equation}
+        S_{i,t}=
+        \begin{cases}
+            \displaystyle
+            \frac{\sum_{l \in \mathcal{N}_i} \omega_{il} \, o_{l,t-1}}{\sum_{l \in \mathcal{N}_i} \omega_{il}}, & \text{if } |\mathcal{N}_i|>0,\\
+            0, & \text{if } |\mathcal{N}_i|=0.
+        \end{cases}
+    \end{equation}
+
+    \subsection{Opinion Formation}
+
+    The opinion of agent \(i\) at time \(t\) is a convex combination of the
+    private signal and the social signal:
+    \begin{equation}
+        o_{i,t} = \gamma_i S_{i,t} + (1-\gamma_i)\eta_{i,t},
+        \qquad \gamma_i \in [0,1].
+    \end{equation}
+
+    The parameter \(\gamma_i\) measures the strength of social influence. If
+    \(\gamma_i=0\), the agent relies entirely on private information. If
+    \(\gamma_i=1\), the agent is fully socially driven.
+
+    \subsection{Valuation Quote and Social Opinion Overlay}
+
+    The active discretionary strategies submit valuation-based limit prices, one
+    per asset they choose to trade. Social interaction, when enabled, shifts these
+    quotes through the opinion \(o_{i,t}\). An agent holds a single opinion, which
+    is applied identically to every asset it quotes: social influence is modelled
+    as sentiment about the market, not as an asset-specific view. When social
+    interaction is disabled, the code sets \(o_{i,t}=0\) for all agents, so the
+    same equations reduce to individual valuation quotes without neighbour
+    influence. Passive buy-and-hold agents use the market-anchored buy quote
+    defined in the previous subsection. For chartists,
+    \begin{equation}
+        \tilde P_{i,j,t}^{C}=P_{j,t}\exp\!\left(\breve r_{i,j,t}^{C}+\kappa o_{i,t}\right),
+    \end{equation}
+    while for fundamentalists,
+    \begin{equation}
+        \tilde P_{i,j,t}^{F}=F_{j,t}\exp\!\left(\kappa o_{i,t}\right).
+    \end{equation}
+    For noise traders, the stochastic quote
+    \(\tilde P_{i,j,t}^{N}=P_{j,t}\exp(\zeta_{i,t}^{\mathrm{clip}})\) is generated
+    directly from the random-liquidity belief shock rather than from the
+    social-opinion overlay.
+    Let \(\tilde P_{i,j,t}\) denote the applicable valuation quote, equal to
+    \(\tilde P_{i,j,t}^{C}\) for chartists, \(\tilde P_{i,j,t}^{F}\) for
+    fundamentalists, and \(\tilde P_{i,j,t}^{N}\) for noise traders.
+
+    Define the effective log no-trade band
+    \[
+        \tau^{\mathrm{eff}}
+        =
+        \tau+\iota_{\mathrm{tc}}^D\tau_{\mathrm{tc}}^{\log}.
+    \]
+    For chartists and fundamentalists, no order is submitted in asset \(j\) when
+    that asset's valuation quote remains sufficiently close to its market price:
+    \begin{equation}
+        \left|\log\frac{\tilde P_{i,j,t}}{P_{j,t}}\right|\le \tau^{\mathrm{eff}}.
+    \end{equation}
+    The test is applied asset by asset, so an agent may quote one asset and stay
+    out of the other in the same step. Otherwise, the chartist or fundamentalist
+    order side is
+    \begin{equation}
+        \mathrm{side}_{i,j,t}=
+        \begin{cases}
+            \mathrm{Buy}, & \tilde P_{i,j,t}>P_{j,t},\\
+            \mathrm{Sell}, & \tilde P_{i,j,t}<P_{j,t}.
+        \end{cases}
+    \end{equation}
+    For fundamentalists, forced liquidation in that asset overrides this rule and
+    imposes a sell order. Noise traders instead use the sign rule in the preceding
+    subsection and submit no order when the shock is exactly zero, the
+    cost-adjusted log gap does not exceed \(\tau^{\mathrm{eff}}\), or feasible
+    quantity is zero.
+
+    If the asset's tick size is active, the submitted limit price is quantised on
+    that asset's own price grid:
+    \begin{equation}
+        P_{i,j,t}^{\text{lim}}=
+        \begin{cases}
+            \max\{\delta_j,\delta_j\left\lfloor \tilde P_{i,j,t}/\delta_j\right\rfloor\}, & \mathrm{Buy},\\
+            \max\{\delta_j,\delta_j\left\lceil \tilde P_{i,j,t}/\delta_j\right\rceil\}, & \mathrm{Sell}.
+        \end{cases}
+    \end{equation}
+    For zero or numerically negligible tick sizes, the implementation leaves
+    \(\tilde P_{i,j,t}\) unrounded. Otherwise, the same quantity rules as in the
+    strategy definitions above are then used, replacing \(P_{j,t}\) by
+    \(P_{i,j,t}^{\text{lim}}\) in the affordability constraint. After tick-size
+    quantisation, discretionary chartist, fundamentalist, and noise-trader orders
+    are again discarded when
+    \[
+        \left|\log\frac{P_{i,j,t}^{\text{lim}}}{P_{j,t}}\right|
+        \le \tau^{\mathrm{eff}},
+    \]
+    because price rounding can move a marginal quote back inside the economically
+    inactive band.
+
+    \section{Continuous Limit Order Book and Price Update}\label{sec:continuous_lob}
+
+    The current implementation uses a persistent continuous double-auction limit
+    order book rather than a batch call auction. This moves price discovery from an
+    auction-plus-impact equation to the interaction of bid-ask spread, visible
+    depth, time priority, market orders, cancellations, and partial fills. The
+    modelling choice is consistent with agent-based microstructure treatments of
+    order-driven markets.
+
+    \subsection{One Book per Asset}
+
+    Each enabled asset owns one persistent order book, and books never cross
+    assets. Every order carries an asset index \(\mathrm{asset}(\mathfrak{o})\)
+    fixed at generation, which routes it to exactly one book; matching, lifecycle,
+    depth, and price formation are then computed independently per asset. There is
+    no cross-asset matching, no shared queue, and no cross-asset priority rule.
+    Agents remain coupled across assets --- through shared cash, shared wealth,
+    the joint Markowitz solve, and correlated fundamentals --- but the
+    microstructure itself is separable. This separation is what makes each asset's
+    price a genuine transaction price of its own market and lets stylised facts be
+    screened per asset on identical terms.
+
+    At the beginning of period \(t\), asset \(j\)'s book contains resting bids
+    \(\mathcal{L}_{j,t}^{B}\) and resting asks \(\mathcal{L}_{j,t}^{A}\) carried
+    over from previous periods. To avoid conflict with the social-opinion variable
+    \(o_{i,t}\), an individual order record is denoted by \(\mathfrak{o}_{i,j,t}\)
+    and represented as
+    \[
+        \mathfrak{o}_{i,j,t}=
+        \left(
+            j,\,
+            i,\,
+            \mathrm{side}_{i,j,t},\,
+            \sigma_{i,t}^{\mathrm{ord}},\,
+            P_{i,j,t}^{\text{lim}},\,
+            q_{i,j,t},\,
+            q_{i,j,t}^{\mathrm{rem}},\,
+            T_{i,t}^{0},\,
+            T_{i,t}^{X},\,
+            n_{i,t}^{\mathrm{seq}}
+        \right),
+    \]
+    where \(\sigma_{i,t}^{\mathrm{ord}}\in\{\mathrm{Limit},\mathrm{Market}\}\), the
+    first component is the routing asset and the second the owning agent. The
+    sequence number \(n_{i,t}^{\mathrm{seq}}\) is assigned by the book and is
+    stable for the life of the order.
+
+    The strategy layer still generates a side, quantity, and valuation price. The
+    simulation coordinator converts an aggressive order to market style when
+    \[
+        \left|\log\frac{P_{i,j,t}^{\text{lim}}}{P_{j,t}}\right|
+        \ge \theta_{\mathrm{MO}},
+    \]
+    or when a uniform random draw is below the configured probability
+    \(\rho_{\mathrm{MO}}\). Limit-order residuals can rest in the book until they
+    are executed, cancelled, expired, or invalidated by execution-time feasibility
+    checks. Market-order residuals do not rest.
+
+    \subsection{Order Lifecycle}
+
+    Before new period-\(t\) submissions are collected, every book removes expired
+    orders:
+    \[
+        \mathfrak{o}_{i,j,\tau}\ \text{expires at }t
+        \quad\Longleftrightarrow\quad
+        T_{i,\tau}^{X}>0\ \text{and}\ t>T_{i,\tau}^{X}.
+    \]
+    The book also applies endogenous stale-order cancellation. For a resting order
+    with finite positive limit price, the cancellation probability is measured
+    against its own asset's latest market price:
+    \[
+        \rho_{i,j,t}^{\mathrm{cancel}}
+        =
+        \clip\!\left(
+                   \rho_0+\gamma_{\mathrm{mis}}
+                   \left|\log\frac{P_{i,j,t}^{\text{lim}}}{P_{j,t}}\right|;
+            0,1
+        \right),
+    \]
+    where \(\rho_0\) is the base cancellation probability and
+    \(\gamma_{\mathrm{mis}}\) controls sensitivity to distance from the latest
+    market price. The draw is generated by the same seeded random engine as the
+    rest of the simulation, so cancellations remain reproducible for a fixed
+    configuration.
+
+    Removals are counted in five separate categories per asset, because they carry
+    different economic interpretations: stale cancellation (the rule above), order
+    expiry, infeasible-resting cancellation and infeasible-incoming cancellation
+    (Section~\ref{sec:short_sale_constraints}), self-trade prevention, and
+    collar rejection. A legacy aggregate cancellation count is retained for
+    continuity with earlier outputs.
+
+    \subsection{Price-Time Priority}
+
+    The rules below apply within one asset's book; \(j\) is fixed throughout this
+    subsection. The bid book is sorted by descending price and then ascending
+    sequence number:
+    \[
+        b\succ_B b'
+        \quad\Longleftrightarrow\quad
+        P_b^{\text{lim}}>P_{b'}^{\text{lim}}
+        \ \text{or}\
+        \left(P_b^{\text{lim}}=P_{b'}^{\text{lim}}
+            \ \text{and}\ n_b^{\mathrm{seq}}<n_{b'}^{\mathrm{seq}}\right).
+    \]
+    The ask book is sorted by ascending price and then ascending sequence number:
+    \[
+        a\succ_A a'
+        \quad\Longleftrightarrow\quad
+        P_a^{\text{lim}}<P_{a'}^{\text{lim}}
+        \ \text{or}\
+        \left(P_a^{\text{lim}}=P_{a'}^{\text{lim}}
+            \ \text{and}\ n_a^{\mathrm{seq}}<n_{a'}^{\mathrm{seq}}\right).
+    \]
+    Let \(a_1\) denote the best ask and \(b_1\) the best bid when the corresponding
+    side is non-empty. A market buy crosses whenever \(a_1\) exists; a market sell
+    crosses whenever \(b_1\) exists. Limit buys and sells cross only when
+    \[
+        P_{i,j,t}^{\text{lim}}\ge P_{a_1}^{\text{lim}},
+        \qquad
+        P_{i,j,t}^{\text{lim}}\le P_{b_1}^{\text{lim}},
+    \]
+    respectively. Non-crossing limit-order residuals are inserted into the
+    appropriate side of the persistent book.
+
+    \subsection{Self-Trade Prevention and the Market-Order Collar}\label{sec:stp_collar}
+
+    Two execution-time screens are applied before a candidate match is priced.
+
+    First, self-trade prevention. If the best opposing order belongs to the same
+    agent as the incoming order,
+    \[
+        \mathrm{owner}(\mathfrak{o}^{\mathrm{rest}})
+        =
+        \mathrm{owner}(\mathfrak{o}^{\mathrm{in}}),
+    \]
+    no trade occurs. The resting order is removed from the book
+    (cancel-resting semantics) and matching continues against the next-best
+    counterparty. An agent trading with itself would otherwise create volume,
+    transaction costs, and a printed transaction price out of a purely internal
+    inventory shuffle, corrupting both the price series and the volume
+    diagnostics. Cancelling the agent's own stale quote rather than the incoming
+    order preserves the incoming order's ability to reach genuine counterparties.
+    Removals of this kind are counted separately from stale cancellations.
+
+    Second, the market-order price collar. For a market-style incoming order with
+    candidate execution price \(p\), the trade is rejected when
+    \[
+        \left|\log\frac{p}{P_{j,t}}\right|>\theta_{\mathrm{col}},
+        \qquad \theta_{\mathrm{col}}>0,
+    \]
+    where \(P_{j,t}\) is that asset's reference price at the start of the step. The
+    incoming residual is then cancelled and the sweep stops. This is the standard
+    exchange protection against a market order walking an empty book to an
+    economically meaningless price. Setting \(\theta_{\mathrm{col}}=0\) disables
+    the collar and restores unconstrained market-order sweeps, which is the
+    baseline used in the pre-collar experiments.
+
+    \subsection{Execution-Time Feasibility, Margin, and Borrow Constraints}\label{sec:short_sale_constraints}
+
+    Cash, inventory, short-sale margin, and borrow constraints are revalidated at
+    the moment of execution because a resting order may become infeasible after
+    other trades change its owner's balance sheet. This is important in a
+    persistent book: validity at order-submission time is not sufficient for
+    validity at later execution time.
+
+    Borrow constraints are per asset: shares of asset \(j\) can only be borrowed
+    against asset \(j\)'s own lending base. Let
+    \[
+        \bar X_{j,0}=N\max\{x_{j,0},0\}
+    \]
+    denote asset \(j\)'s initial share supply used as its securities-lending base.
+    At a candidate execution price \(p>0\) in asset \(j\), the equity available to
+    the margin rule is
+    \[
+        E_{i,j,t}(p)=c_{i,t}+x_{i,j,t}p.
+    \]
+    This is the agent's shared cash plus the position in the asset being traded;
+    positions in other assets do not enter. Margin is therefore assessed asset by
+    asset with no cross-asset netting, which is a deliberate simplification
+    relative to a portfolio-margin rule and is conservative in the sense that it
+    never lets a gain in one asset finance short exposure in another.
+
+    The initial-margin rule permits a maximum short position
+    \[
+        s_{i,j,t}^{\max}(p)
+        =
+        \max\left\{0,\frac{E_{i,j,t}(p)}{M_0^{S}p}\right\}.
+    \]
+    The agent-level capacity to increase short exposure in that asset is therefore
+    \[
+        A_{i,j,t}^{S}(p)=\pospart{s_{i,j,t}^{\max}(p)-\pospart{-x_{i,j,t}}}.
+    \]
+    The borrow pool of asset \(j\) remaining at the instant of validation is
+    \[
+        B_{j,t}^{\mathrm{rem}}
+        =
+        \pospart{\varphi^{B}\bar X_{j,0}-\mathrm{SI}_{j,t}},
+        \qquad
+        \mathrm{SI}_{j,t}=\sum_{l\in\mathcal{A}}\pospart{-x_{l,j,t}}.
+    \]
+    For buyer \(b\), seller \(s\), resting order \(r\), incoming order \(u\), all in
+    asset \(j\), and execution price \(p=P_{r}^{\text{lim}}\), the executable
+    matched quantity is
+    \[
+        m
+        =
+        \min\left\{
+                q_{u}^{\mathrm{rem}},
+            q_{r}^{\mathrm{rem}},
+                A_{b,t}^{B}(p),
+                \bar q_{s,j,t}^{S}(p)
+        \right\},
+    \]
+    where the buyer-side bound \(A_{b,t}^{B}(p)=c_{b,t}/\bigl(p(1+f_{\mathrm{tc}})\bigr)\)
+    uses the buyer's \emph{actual} cash balance --- the running submission-time
+    budget of Section~\ref{sec:allocation} constrains order generation only --- and
+    the seller-side feasible quantity is
+    \[
+        \bar q_{s,j,t}^{S}(p)=
+        \begin{cases}
+            \pospart{x_{s,j,t}}, & \text{short sales disabled},\\[1ex]
+            \pospart{x_{s,j,t}}
+            +
+            \min\left\{
+                    \pospart{q_{s}^{\mathrm{rem}}-\pospart{x_{s,j,t}}},\,
+                    A_{s,j,t}^{S}(p),\,
+                    B_{j,t}^{\mathrm{rem}}
+            \right\}, & \text{short sales enabled}.
+        \end{cases}
+    \]
+    A candidate match must also clear a minimum economic fill before it is
+    executed. Let the requested match quantity be
+    \[
+        m^{\mathrm{req}}
+        =
+        \min\left\{q_{u}^{\mathrm{rem}},\,q_{r}^{\mathrm{rem}}\right\},
+    \]
+    and define the minimum economic fill
+    \[
+        m^{\min}
+        =
+        \max\left\{\epsilon_q,\ \varphi_{\mathrm{fill}}\,m^{\mathrm{req}}\right\},
+        \qquad
+        \epsilon_q=10^{-8},
+        \qquad
+        \varphi_{\mathrm{fill}}=10^{-6}.
+    \]
+    The trade is executed only when \(m>m^{\min}\). Otherwise the fill is treated
+    as economically negligible and the binding side is cancelled: the buy side
+    when \(A_{b,t}^{B}(p)\le m^{\min}\) and the sell side when
+    \(\bar q_{s,j,t}^{S}(p)\le m^{\min}\). Cancelling removes the resting order
+    from the book when the resting side is infeasible and discards the incoming
+    residual when the incoming side is infeasible. The relative component
+    \(\varphi_{\mathrm{fill}}m^{\mathrm{req}}\) addresses a degeneracy in which
+    a binding constraint permits a strictly positive but negligible fill. In
+    particular, when an asset's short interest sits exactly at its
+    borrowable-supply cap and a covering buyer meets a shorting seller, each
+    executed share releases exactly as much borrow capacity as it consumes, so
+    the permitted fill never grows and the matching loop would otherwise grind
+    a single order through economically meaningless micro-fills.
+
+    As a terminal numerical safeguard, the matching loop for one incoming order
+    is bounded by \(K_{\mathrm{match}}=10^{5}\) iterations. If the bound is
+    reached, the incoming order's residual is cancelled and a warning is logged.
+    Legitimate matching touches at most a few price levels per order, so this
+    bound is inactive except under unforeseen constraint interactions.
+
+    These
+    checks operationalise institutional short-sale frictions: pessimistic agents
+    can transmit negative beliefs only when they have sufficient equity and when
+    borrowable shares remain available.
+
+    \subsection{Matching and Accounting}
+
+    Orders are processed sequentially in the randomly shuffled activation order.
+    An incoming order repeatedly trades against the best opposite order while the
+    crossing condition holds, both sides remain feasible, and the executable
+    quantity exceeds the minimum economic fill \(m^{\min}\). The execution price is
+    the resting order's limit price:
+    \[
+        p_k=P_{r_k}^{\text{lim}}.
+    \]
+    For each execution of \(m_k>m_k^{\min}\) shares between buyer \(b\) and seller \(s\),
+    define the gross notional and one-side transaction cost
+    \[
+        G_k=m_kp_k,
+        \qquad
+        F_k^{\mathrm{tc}}=f_{\mathrm{tc}}G_k.
+    \]
+    Portfolios update immediately. Cash is shared, while inventory moves only in
+    the traded asset \(j\):
+    \[
+        c_{b,t}^{+}=c_{b,t}-G_k-F_k^{\mathrm{tc}},
+        \qquad
+        x_{b,j,t}^{+}=x_{b,j,t}+m_k,
+    \]
+    \[
+        c_{s,t}^{+}=c_{s,t}+G_k-F_k^{\mathrm{tc}},
+        \qquad
+        x_{s,j,t}^{+}=x_{s,j,t}-m_k.
+    \]
+    The implementation also updates each filled agent's trade count, traded
+    volume, per-asset current-position average entry price, per-asset short-sale
+    state, cumulative transaction costs,
+    \[
+        \Gamma_{b,t}^{+}=\Gamma_{b,t}+F_k^{\mathrm{tc}},
+        \qquad
+        \Gamma_{s,t}^{+}=\Gamma_{s,t}+F_k^{\mathrm{tc}},
+    \]
+    and trade-ledger records at the same instant. Partial fills reduce the remaining quantity of
+    both orders:
+    \[
+        q_{u}^{\mathrm{rem}}\leftarrow q_{u}^{\mathrm{rem}}-m_k,
+        \qquad
+        q_{r}^{\mathrm{rem}}\leftarrow q_{r}^{\mathrm{rem}}-m_k.
+    \]
+    The resting order is removed when \(q_{r}^{\mathrm{rem}}\) reaches zero. A
+    limit incoming order with positive non-crossing residual rests in the book
+    after being clipped to its owner's current feasibility constraint. A market
+    incoming order never rests.
+
+    The endogenous executed volume, endogenous transaction-cost total, and last
+    transaction price of asset \(j\) in period \(t\) are
+    \[
+        Q_{j,t}^{\mathrm{exec}}=\sum_{k\in\mathcal{K}_{j,t}} m_k,
+        \qquad
+        \Theta_{j,t}^{\mathrm{exec}}=2\sum_{k\in\mathcal{K}_{j,t}} F_k^{\mathrm{tc}},
+        \qquad
+        P_{j,t}^{\mathrm{last}}=
+        \begin{cases}
+            p_{K_j}, & Q_{j,t}^{\mathrm{exec}}>0,\\
+            P_{j,t}, & Q_{j,t}^{\mathrm{exec}}=0,
+        \end{cases}
+    \]
+    where \(\mathcal{K}_{j,t}\) is the set of asset-\(j\) executions in the period
+    and \(p_{K_j}\) is the final one observed.
+
+    The same endogenous continuous-double-auction executions define a gross
+    Smith-style allocative-efficiency diagnostic. For this diagnostic, the limit
+    price attached to each submitted or resting order is treated as the observable
+    reservation-value proxy. This is consistent with the current strategy layer,
+    where quotes are generated from valuation-based beliefs before an order is
+    optionally converted to market style. Let \(v_{o,t}\) be this order price and
+    let \(\mathcal{K}_{j,t}^{\mathrm{LOB}}\) be the set of endogenous LOB
+    executions in asset \(j\) in period \(t\). Forced buy-ins are excluded because
+    they are broker risk-control trades rather than voluntary double-auction
+    allocations. The diagnostic is computed independently for each asset, since
+    surplus from one book is not comparable with surplus from another. The
+    realised gross allocative surplus is
+    \[
+        AS_{j,t}
+        =
+        \sum_{k\in\mathcal{K}_{j,t}^{\mathrm{LOB}}}
+        m_k\left(v_{b_k,t}-v_{s_k,t}\right),
+    \]
+    where \(b_k\) and \(s_k\) are the buyer and seller orders matched in
+    execution \(k\). Transaction costs are deliberately not subtracted here; they
+    remain in \(\Theta_{j,t}^{\mathrm{exec}}\) as a separate institutional-friction
+    diagnostic.
+
+    The maximum feasible gross surplus is computed from asset \(j\)'s surviving
+    resting book after lifecycle expiry and cancellation plus all new submitted
+    orders for that asset before matching. Denote these buy and sell order
+    multisets by \(\mathcal{O}_{j,t}^B\) and \(\mathcal{O}_{j,t}^S\). Sort buys
+    from highest to lowest reservation value and sells from lowest to highest
+    reservation value. Greedily match marginal quantities while the buyer
+    reservation value exceeds the seller reservation value:
+    \[
+        MS_{j,t}
+        =
+        \sum_{\iota}
+        m_{j,\iota,t}^{\ast}
+        \left(v_{j,\iota,t}^{B,\ast}-v_{j,\iota,t}^{S,\ast}\right),
+        \qquad
+        v_{j,\iota,t}^{B,\ast}>v_{j,\iota,t}^{S,\ast}.
+    \]
+    The per-step allocative-efficiency ratio is therefore
+    \[
+        AE_{j,t}=
+        \begin{cases}
+            AS_{j,t}/MS_{j,t}, & MS_{j,t}>0,\\
+            0, & MS_{j,t}=0.
+        \end{cases}
+    \]
+    Steps with \(MS_{j,t}=0\) have no positive-surplus double-auction opportunity
+    and are excluded from that asset's run-level mean:
+    \[
+        \overline{AE}_j
+        =
+        \frac{1}{|\mathcal{T}_{AE,j}|}
+        \sum_{t\in\mathcal{T}_{AE,j}} AE_{j,t},
+        \qquad
+        \mathcal{T}_{AE,j}=\{t:MS_{j,t}>0\}.
+    \]
+
+    \subsection{Spread, Depth, and Price Formation}
+
+    After matching, book diagnostics are computed per asset from the remaining
+    books:
+    \[
+        P_{j,t}^B=
+        \begin{cases}
+            \max_{b\in\mathcal{L}_{j,t}^B} P_b^{\text{lim}}, & \mathcal{L}_{j,t}^B\ne\varnothing,\\
+            0, & \mathcal{L}_{j,t}^B=\varnothing,
+        \end{cases}
+        \qquad
+        P_{j,t}^A=
+        \begin{cases}
+            \min_{a\in\mathcal{L}_{j,t}^A} P_a^{\text{lim}}, & \mathcal{L}_{j,t}^A\ne\varnothing,\\
+            0, & \mathcal{L}_{j,t}^A=\varnothing.
+        \end{cases}
+    \]
+    When both quotes exist,
+    \[
+        S_{j,t}^{BA}=P_{j,t}^A-P_{j,t}^B,
+        \qquad
+        M_{j,t}^Q=\frac{P_{j,t}^A+P_{j,t}^B}{2}.
+    \]
+    Visible depth \(D_{j,t}^B(h)\) and \(D_{j,t}^A(h)\) are the sums of remaining
+    quantity across the first \(h\) distinct price levels on the bid and ask sides.
+
+    The model records submitted net demand and notional imbalance before execution.
+    These aggregates are reported for the primary asset in the legacy single-asset
+    view:
+    \[
+        \mathrm{ND}_t=
+        \sum_{i:\mathrm{Buy}} q_{i,j^{\ast},t}
+        -
+        \sum_{i:\mathrm{Sell}} q_{i,j^{\ast},t},
+    \]
+    \[
+        \mathrm{NI}_t=\mathrm{ND}_t\,P_{j^{\ast},t},
+        \qquad
+        \bar I_t=\clip\!\left(\frac{\mathrm{NI}_t}{C_0};-1,1\right),
+    \]
+    where \(C_0=N\max\{c_0,1\}\). It also records the relative fundamental signal
+    \[
+        g_t^{F}=\frac{F_{j^{\ast},t+1}-P_{j^{\ast},t}}{\max\{P_{j^{\ast},t},\epsilon_P\}}.
+    \]
+    These variables remain useful diagnostics for order-flow pressure and
+    valuation pressure, but in continuous LOB mode they do not directly move the
+    stored market price. Their economic effect enters through future agent orders.
+    The legacy parameters \(\beta_F\), \(\beta_D\), and \(\sigma_P\) are therefore
+    inactive under this microstructure.
+
+    Price formation is resolved independently for each asset. The trade-execution
+    indicator is
+    \[
+        \chi_{j,t}=\mathbf{1}\!\left(Q_{j,t}^{\mathrm{exec}}>0\right),
+    \]
+    and the official market price is the last transaction price when a trade
+    occurs in that asset and the previous market price otherwise:
+    \[
+        P_{j,t+1}=
+        \begin{cases}
+            \max\{\epsilon_P,P_{j,t}^{\mathrm{last}}\}, & \chi_{j,t}=1,\\
+            P_{j,t}, & \chi_{j,t}=0.
+        \end{cases}
+    \]
+    The realised simple and log returns are
+    \[
+        r_{j,t}^{\mathrm{raw}}=
+        \begin{cases}
+            \dfrac{P_{j,t+1}-P_{j,t}}{\max\{P_{j,t},\epsilon_P\}}, & \chi_{j,t}=1,\\[1.4ex]
+            0, & \chi_{j,t}=0,
+        \end{cases}
+        \qquad
+        \ell_{j,t+1}=\log\frac{P_{j,t+1}}{P_{j,t}}.
+    \]
+    Thus a no-trade step always carries that asset's price forward and has zero
+    realised log return, and one asset can trade in a step while the other does
+    not. Price changes are transaction-price changes, not exogenous impact
+    updates.
+
+    \subsection{Cross-Sectional Portfolio-Weight Diagnostic}
+
+    To make cross-asset allocation observable at run time, each step records the
+    cross-sectional mean weight held in each asset. For agent \(i\) with strictly
+    positive wealth,
+    \[
+        w_{i,j,t}^{\mathrm{held}}
+        =
+        \frac{x_{i,j,t}P_{j,t}}{W_{i,t}},
+        \qquad
+        \bar w_{j,t}
+        =
+        \frac{1}{|\mathcal{A}_t^{+}|}
+        \sum_{i\in\mathcal{A}_t^{+}} w_{i,j,t}^{\mathrm{held}},
+        \qquad
+        \mathcal{A}_t^{+}=\{i:W_{i,t}>0\}.
+    \]
+    Agents with non-positive wealth are excluded because their weights are not
+    economically interpretable and would dominate the mean. Weights are not
+    clipped: leverage and short positions legitimately push individual weights
+    outside \([0,1]\). Because the mean is linear, the mean cash weight is
+    recovered downstream as \(1-\sum_j\bar w_{j,t}\) and needs no column of its
+    own.
+
+    \subsection{Maintenance Margin and Forced Buy-in}
+
+    After every asset's market price \(P_{j,t+1}\) has been stored, the
+    implementation marks all short positions to market and applies the
+    maintenance-margin rule. The rule is evaluated asset by asset, in declared
+    index order, against the agent's shared cash. There is no cross-asset netting,
+    so sequential enforcement may over-cover relative to a portfolio-margin rule;
+    this is a documented modelling simplification consistent with the
+    execution-time margin treatment in Section~\ref{sec:short_sale_constraints}.
+
+    Let \((c_{i,t}^{L},x_{i,j,t}^{L})\) denote the portfolio after the endogenous
+    LOB execution of period \(t\) and before any forced buy-in, and let
+    \(c_{i,j,t}^{L}\) denote the cash balance actually available when asset \(j\)
+    is processed: it equals \(c_{i,t}^{L}\) for the first asset in index order and
+    is reduced by each earlier asset's cover. Define
+    \[
+        E_{i,j,t}^{L}=c_{i,j,t}^{L}+x_{i,j,t}^{L}P_{j,t+1},
+        \qquad
+        s_{i,j,t}^{L}=\pospart{-x_{i,j,t}^{L}}.
+    \]
+    The post-LOB short margin ratio in asset \(j\) is
+    \[
+        \mathcal{M}_{i,j,t}^{L}=
+        \begin{cases}
+            \infty, & s_{i,j,t}^{L}=0,\\[1ex]
+            \dfrac{E_{i,j,t}^{L}}{s_{i,j,t}^{L}P_{j,t+1}}, & s_{i,j,t}^{L}>0.
+        \end{cases}
+    \]
+    If \(\mathcal{M}_{i,j,t}^{L}\ge M_{\min}^{S}\), no forced buy-in occurs. If
+    \(\mathcal{M}_{i,j,t}^{L}<M_{\min}^{S}\), the broker-style risk control reduces
+    the short position enough to restore the stricter initial-margin ratio when
+    cash permits:
+    \[
+        b_{i,j,t}^{\mathrm{req}}
+        =
+        \pospart{
+            s_{i,j,t}^{L}
+            -
+            \frac{E_{i,j,t}^{L}}{M_0^{S}P_{j,t+1}}
+        }.
+    \]
+    Let the effective forced-buy-in transaction-cost rate be
+    \[
+        f_{\mathrm{tc}}^{B}=\iota_{\mathrm{tc}}^B f_{\mathrm{tc}}.
+    \]
+    The actual forced buy-in quantity is clipped by the current short position and
+    the cash still available after any earlier asset's cover in the same step,
+    net of any enabled forced-buy-in cost:
+    \[
+        b_{i,j,t}^{\text{cover}}
+        =
+        \begin{cases}
+            0, & \mathcal{M}_{i,j,t}^{L}\ge M_{\min}^{S},\\[1ex]
+            \min\left\{
+                    b_{i,j,t}^{\mathrm{req}},\,
+                    s_{i,j,t}^{L},\,
+                    \dfrac{c_{i,j,t}^{L}}{P_{j,t+1}(1+f_{\mathrm{tc}}^{B})}
+            \right\}, & \mathcal{M}_{i,j,t}^{L}<M_{\min}^{S}.
+        \end{cases}
+    \]
+    The forced cover is executed against an external liquidity account at the
+    stored market price \(P_{j,t+1}\). Its notional and fee are
+    \[
+        G_{i,j,t}^{B}=b_{i,j,t}^{\text{cover}}P_{j,t+1},
+        \qquad
+        F_{i,j,t}^{B}=f_{\mathrm{tc}}^{B}G_{i,j,t}^{B}.
+    \]
+    The post-buy-in portfolio is
+    \[
+        c_{i,t+1}=c_{i,t}^{L}-\sum_{j}\left(G_{i,j,t}^{B}+F_{i,j,t}^{B}\right),
+        \qquad
+        x_{i,j,t+1}=x_{i,j,t}^{L}+b_{i,j,t}^{\text{cover}}.
+    \]
+    Cumulative transaction costs are increased by \(\sum_j F_{i,j,t}^{B}\) for the
+    covered agent.
+    Forced buy-ins are recorded in the trade ledger with an external counterparty
+    identifier and are attributed to the asset they cover in reported traded
+    volume:
+    \[
+        \widetilde Q_{j,t}
+        =
+        Q_{j,t}^{\text{exec}}
+        +
+        \sum_{i\in\mathcal{A}} b_{i,j,t}^{\text{cover}}.
+    \]
+    The period transaction-cost diagnostic for asset \(j\) is
+    \[
+        \Theta_{j,t}=\Theta_{j,t}^{\mathrm{exec}}+\sum_{i\in\mathcal{A}}F_{i,j,t}^{B}.
+    \]
+    They do not alter the price-formation indicator \(\chi_{j,t}\), because they
+    are applied after the market price for the period has already been formed. This
+    choice separates behavioural order-flow price discovery from broker-enforced
+    risk reduction while still allowing short squeezes to appear in agent balance
+    sheets and volume diagnostics.
+
+    \section{Cumulative Prospect Theory Preference Overlay}\label{sec:cpt}
+
+    CPT is implemented as a behavioural preference transform applied to the
+    strategy-specific expected excess return. It does not create a separate trading
+    signal. Instead, it converts the baseline forecast \(\hat r_{i,j,t}\) into the
+    allocation input \(\breve r_{i,j,t}\) for the seeded fraction
+    \(\varphi_{\mathrm{CPT}}\) of agents assigned to CPT\@. Agents not assigned to
+    CPT use \(\breve r_{i,j,t}=\hat r_{i,j,t}\). This follows the
+    behavioural-finance interpretation of Prospect Theory and rank-dependent
+    Cumulative Prospect Theory: agents evaluate outcomes as gains or losses
+    relative to a reference point, penalise losses more heavily than gains, and
+    distort cumulative probabilities. The transform is applied separately to each
+    asset's forecast, and the resulting vector enters the joint Markowitz solve of
+    Section~\ref{sec:allocation}.
+
+    The entire valuation is carried out in \emph{return space}. Both the scenario
+    outcomes and the reference point are log returns, so the transform is
+    invariant to the price and wealth level of the underlying asset: two assets
+    with identical forecasts and identical volatilities receive identical
+    prospect-adjusted returns even when one trades at \(100\) and the other at
+    \(40\). Under the earlier price-space formulation the same forecast produced
+    different behavioural adjustments at different price levels, which would have
+    made a multi-asset CPT population incoherent.
+
+    \subsection{Value Function}
+
+    Let \(x\) be a gain or loss in return units, measured relative to the
+    reference log return \(\varrho_{i,j,t}\). Agent \(i\)'s value function is
+    \[
+        v_i(x)=
+        \begin{cases}
+            x^{\alpha_i^G}, & x\ge 0,\\[0.8ex]
+            -\lambda_i{\left(-x\right)}^{\alpha_i^L}, & x<0,
+        \end{cases}
+    \]
+    where \(\lambda_i>0\) controls loss aversion and
+    \(\alpha_i^G,\alpha_i^L>0\) control diminishing sensitivity in the gain and
+    loss domains. The canonical empirical calibration is
+    \(\lambda=2.25\) and \(\alpha^G=\alpha^L=0.88\). The working configuration
+    retains the curvature values \(\alpha^G=\alpha^L=0.88\) but treats the
+    population loss-aversion level and its cross-sectional dispersion as
+    calibrated parameters, so the configured \(\lambda\) is set by the
+    calibration harness rather than fixed at the canonical value.
+
+    \subsection{Probability Weighting}
+
+    For domain \(d\in\{G,L\}\), the decision-weighting function is
+    \[
+        w_i^d(p)=
+        \frac{p^{\psi_i^d}}
+        {{\left(p^{\psi_i^d}+\bar p^{\psi_i^d}\right)}^{1/\psi_i^d}},
+        \qquad
+        \bar p=1-p,
+        \qquad p\in[0,1],
+    \]
+    with \(w_i^d(0)=0\) and \(w_i^d(1)=1\). The gain and loss probability
+    distortion parameters are \(\psi_i^G\) and \(\psi_i^L\), respectively.
+
+    \subsection{Rank-Dependent Decision Weights}
+
+    Consider a finite scenario set for asset \(j\),
+    \[
+        \mathcal{X}_{i,j,t}=\{(x_{i,j,t,s},p_s):s=1,\ldots,n_{\mathrm{CPT}}\},
+        \qquad
+        \sum_s p_s=1.
+    \]
+    Partition the scenarios into gains \(x_{i,j,t,s}\ge 0\) and losses
+    \(x_{i,j,t,s}<0\). Gains are sorted from best to worst, while losses are sorted
+    from worst to best. For the sorted gain outcomes, define
+    \[
+        \pi_{i,k}^{G}
+        =
+        w_i^G\!\left(\sum_{h=1}^{k}p_h^{G}\right)
+        -
+        w_i^G\!\left(\sum_{h=1}^{k-1}p_h^{G}\right).
+    \]
+    For the sorted loss outcomes, define
+    \[
+        \pi_{i,k}^{L}
+        =
+        w_i^L\!\left(\sum_{h=1}^{k}p_h^{L}\right)
+        -
+        w_i^L\!\left(\sum_{h=1}^{k-1}p_h^{L}\right).
+    \]
+    The CPT value of the scenario set is
+    \[
+        \mathcal{V}_{i,j,t}
+        =
+        \sum_{k\in G}\pi_{i,k}^{G}v_i(x_{i,j,t,k}^{G})
+        +
+        \sum_{k\in L}\pi_{i,k}^{L}v_i(x_{i,j,t,k}^{L}).
+    \]
+    This rank-dependent construction is important for crisis experiments because it
+    allows adverse tail scenarios to receive disproportionate decision weight.
+
+    \subsection{Return Scenario Construction}
+
+    Let \(n_{\mathrm{CPT}}=2H+1\) be an odd integer greater than or equal to
+    three. For scenario index \(s=0,\ldots,2H\), define the binomial probability
+    \[
+        p_s=\binom{2H}{s}2^{-2H},
+    \]
+    and the subjective return scenario
+    \[
+        R_{i,j,t,s}^{\mathrm{sc}}
+        =
+        \clip\!\left(
+                   \clip(\hat r_{i,j,t};-0.95,0.95)
+                   +(s-H)\clip(\sigma_{j,t};0,0.95);
+            -0.95,0.95
+        \right).
+    \]
+    The corresponding gain or loss is the scenario return measured relative to the
+    reference log return, so it is itself a return:
+    \[
+        x_{i,j,t,s}=R_{i,j,t,s}^{\mathrm{sc}}-\varrho_{i,j,t}.
+    \]
+    The prospect-adjusted excess return is then the CPT value itself; no division
+    by a price or wealth scale is required, because the valuation never left
+    return space:
+    \[
+        \mathcal{T}_i(\hat r_{i,j,t},\sigma_{j,t};\varrho_{i,j,t})
+        =
+        \mathcal{V}_{i,j,t},
+        \qquad
+        \breve r_{i,j,t}
+        =
+        \clip\!\left(
+                   \mathcal{T}_i(\hat r_{i,j,t},\sigma_{j,t};\varrho_{i,j,t});
+            -1,1
+        \right).
+    \]
+    When \(n_{\mathrm{CPT}}=3\), the scenario probabilities are
+    \(\{0.25,0.50,0.25\}\). Larger odd values such as \(5\), \(7\), or \(9\)
+    preserve the symmetric central forecast while giving a richer subjective tail
+    structure.
+
+    \subsection{Agent-Specific Reference Points}\label{sec:cpt_reference_points}
+
+    The implementation resolves the CPT anchor in two stages: it first selects a
+    behavioural anchor \(\nu_{i,j,t}\) in price or wealth units, then maps that
+    anchor into the reference log return \(\varrho_{i,j,t}\) actually used by
+    \(\mathcal{T}_i\). The configured mode
+    \[
+        m_{\nu}\in\{
+        \mathrm{configured},
+        \mathrm{entry},
+        \mathrm{peakwealth},
+        \mathrm{movingaverage},
+        \mathrm{initialwealth}
+        \}
+    \]
+    selects the behavioural anchor. These compact mathematical labels correspond
+    to the configuration values \texttt{configured},
+    \texttt{average\_purchase\_price}, \texttt{recent\_peak\_wealth},
+    \texttt{moving\_average\_price}, and \texttt{initial\_wealth}. The fixed
+    configured reference point \(\nu_i^0>0\) is retained as the fallback and
+    reproduces the original fixed-reference specification when
+    \(m_{\nu}=\mathrm{configured}\).
+
+    The personal position reference is updated from executed trades, not submitted
+    orders, and is maintained separately for each asset. Let \(e_{i,j,t}^{+}\)
+    denote an executed buy quantity and \(e_{i,j,t}^{-}\) an executed sell quantity
+    in asset \(j\). The signed execution quantity is
+    \[
+        \Delta x_{i,j,t}^{\mathrm{exec}}=e_{i,j,t}^{+}-e_{i,j,t}^{-}.
+    \]
+    Before the inventory update is stored, the execution price is incorporated into
+    \(\bar P_{i,j,t}^{\text{entry}}\). If the trade increases the absolute size of an
+    existing position without changing direction, the entry price is updated as a
+    quantity-weighted average. If the trade closes the position, the entry price is
+    cleared. If the trade crosses through zero and opens the opposite direction,
+    the entry price is reset to that execution price. This convention gives both
+    long and short positions a personal gain/loss anchor while preserving the
+    realised execution history.
+
+    The recent peak-wealth state is
+    \[
+        W_{i,t}^{\max}
+        =\max\{W_{i,u}:0\le u\le t,\ W_{i,u}>0\}.
+    \]
+    It is refreshed whenever the agent's mark-to-market wealth is refreshed and is
+    a portfolio quantity, so it responds to gains and losses in every asset. The
+    moving-average price reference is asset-specific,
+    \[
+        \MA_{j,t}^{(h_{\nu})}
+        =
+        \frac{1}{h_{\nu}}\sum_{u=t-h_{\nu}+1}^{t}P_{j,u},
+    \]
+    when at least \(h_{\nu}\) market observations are available; otherwise the
+    latest market price \(P_{j,t}\) is used for that mode.
+
+    The resolved anchor is therefore
+    \[
+        \nu_{i,j,t}=
+        \begin{cases}
+            \nu_i^0,
+            & m_{\nu}=\mathrm{configured},\\[0.8ex]
+            \bar P_{i,j,t}^{\text{entry}},
+            & m_{\nu}=\mathrm{entry}\ \text{and}\ \bar P_{i,j,t}^{\text{entry}}>0,\\[0.8ex]
+            W_{i,t}^{\max},
+            & m_{\nu}=\mathrm{peakwealth}\ \text{and}\ W_{i,t}^{\max}>0,\\[0.8ex]
+            \MA_{j,t}^{(h_{\nu})},
+            & m_{\nu}=\mathrm{movingaverage}\ \text{and enough price history is available},\\[0.8ex]
+            P_{j,t},
+            & m_{\nu}=\mathrm{movingaverage}\ \text{and price history is insufficient},\\[0.8ex]
+            W_{i,0},
+            & m_{\nu}=\mathrm{initialwealth}\ \text{and}\ W_{i,0}>0,\\[0.8ex]
+            \nu_i^0,
+            & \text{otherwise}.
+        \end{cases}
+    \]
+
+    The anchor is then mapped into return space. Price-anchored modes
+    (\(\mathrm{configured}\), \(\mathrm{entry}\), \(\mathrm{movingaverage}\)) are
+    divided by the asset's current price, while wealth-anchored modes
+    (\(\mathrm{peakwealth}\), \(\mathrm{initialwealth}\)) are divided by current
+    wealth:
+    \[
+        \varrho_{i,j,t}
+        =
+        \clip\!\left(
+            \log\frac{\nu_{i,j,t}}{B_{i,j,t}};\,-0.95,0.95
+        \right),
+    \]
+    \[
+        B_{i,j,t}=
+        \begin{cases}
+            W_{i,t}, & m_{\nu}\in\{\mathrm{peakwealth},\mathrm{initialwealth}\},\\
+            P_{j,t}, & \text{otherwise},
+        \end{cases}
+    \]
+    with \(\varrho_{i,j,t}=0\) when the base is not a usable positive value. The
+    raw anchor \(\nu_{i,j,t}\) is still recorded on the agent for the final
+    snapshot, so an experiment can audit which personal anchor was active at the
+    last behavioural decision.
+
+    Working in return space is what makes behavioural risk appetite invariant to
+    price and wealth levels. An entry price of \(101\) against a price of \(100\)
+    and an entry price of \(40.4\) against a price of \(40\) now describe the same
+    behavioural state --- a one-percent unrealised loss --- and produce the same
+    adjustment, which is the property a multi-asset CPT population requires.
+
+    The default configuration uses \(m_{\nu}=\mathrm{entry}\), corresponding to the
+    implemented key value \texttt{average\_purchase\_price}. This choice makes each
+    agent evaluate prospective gains and losses relative to its own position
+    anchor in that asset, while \texttt{configured} preserves the old
+    single-reference baseline for controlled comparison experiments.
+
+    \subsection{Preference Heterogeneity}
+
+    When the global CPT switch is enabled, the implementation first selects
+    \(\mathrm{round}(\varphi_{\mathrm{CPT}}N)\) agents using a deterministic stream
+    derived from the simulation seed. This allows mixed expected-utility and CPT
+    populations while preserving reproducibility when the assignment fraction is
+    changed. If prospect-parameter heterogeneity is disabled, all CPT-assigned
+    agents share the configured baseline CPT parameters. If heterogeneity is
+    enabled, the implementation draws agent-specific preference parameters at
+    initialisation:
+    \[
+        \lambda_i\sim
+        \mathrm{TN}\!\left(\lambda,\sigma_\lambda^2;\epsilon_\lambda,10\right),
+    \]
+    \[
+        \alpha_i^G\sim
+        \mathrm{TN}\!\left(\alpha^G,\sigma_{\alpha^G}^2;\epsilon_\alpha,1.5\right),
+        \qquad
+        \alpha_i^L\sim
+        \mathrm{TN}\!\left(\alpha^L,\sigma_{\alpha^L}^2;\epsilon_\alpha,1.5\right),
+    \]
+    \[
+        \psi_i^G=\psi_i^L\sim
+        \mathcal{U}\!\left(\psi_{\min},\psi_{\max}\right).
+    \]
+    Here \(\mathrm{TN}(\mu,\sigma^2;a,b)\) denotes a normal draw truncated to
+    \([a,b]\). The draw is deterministic conditional on the simulation seed, so a
+    given configuration can be reproduced exactly.
+
+    \section{Stylised Facts Measured}\label{sec:stylised_facts}
+
+    The model output is evaluated through stylised-fact diagnostics applied to the
+    simulated market-price series. Every enabled asset is screened separately and
+    on identical terms, so an \(n\)-asset run reports \(n\) independent verdicts
+    rather than one verdict for whichever asset happens to be nominated primary.
+    Wealth inequality is a portfolio-level quantity and is therefore repeated
+    unchanged on each asset's row. Throughout this section the asset index \(j\)
+    is fixed and suppressed where no ambiguity arises, and \(T\) denotes the
+    number of analysed return observations.
+
+    The default analysis uses the simulation phase after warm-up and computes
+    one-period log returns
+    \[
+        \ell_{j,t}=\log\frac{P_{j,t}}{P_{j,t-1}},
+        \qquad t=1,\ldots,T.
+    \]
+    Let
+    \[
+        \bar\ell_j=\frac{1}{T}\sum_{t=1}^{T}\ell_{j,t}
+    \]
+    denote the sample mean return. The diagnostics focus on three core empirical
+    regularities: weak autocorrelation in raw returns, fat-tailed return
+    distributions, and volatility clustering. These targets follow the stylised
+    facts commonly evaluated in empirical market-microstructure and
+    heterogeneous-agent market models.
+
+    \subsection{Absence of Linear Return Autocorrelation}
+
+    For lag \(k\), the sample autocorrelation of raw log returns is
+    \[
+        \hat\rho_k
+        =
+        \frac{\sum_{t=k+1}^{T}\left(\ell_{j,t}-\bar\ell_j\right)\left(\ell_{j,t-k}-\bar\ell_j\right)}
+        {\sum_{t=1}^{T}{\left(\ell_{j,t}-\bar\ell_j\right)}^2}.
+    \]
+    The empirical stylised fact is not that every finite-sample autocorrelation is
+    exactly zero, but that raw returns show little predictable linear dependence.
+    This is assessed using the Ljung-Box statistic at selected horizons
+    \(h\in\{10,20,30\}\):
+    \[
+        Q_{\mathrm{LB}}(h)
+        =
+        T(T+2)\sum_{k=1}^{h}\frac{\hat\rho_k^2}{T-k}.
+    \]
+    The null hypothesis is
+    \[
+        H_0:\rho_1=\rho_2=\cdots=\rho_h=0.
+    \]
+    A simulated run is interpreted as consistent with this stylised fact when the
+    test does not reject \(H_0\) at the chosen significance level for the tested
+    lags.
+
+    \subsection{Fat-Tailed Return Distribution}
+
+    Fat tails are measured using the fourth central moment of the simulated
+    returns. The sample kurtosis is
+    \[
+        \widehat K
+        =
+        \frac{\frac{1}{T}\sum_{t=1}^{T}{\left(\ell_{j,t}-\bar\ell_j\right)}^4}
+        {{\left[\frac{1}{T}\sum_{t=1}^{T}{\left(\ell_{j,t}-\bar\ell_j\right)}^2\right]}^2},
+    \]
+    and excess kurtosis is
+    \[
+        \widehat K_{\mathrm{ex}}=\widehat K-3.
+    \]
+    The Gaussian benchmark has \(\widehat K_{\mathrm{ex}}\approx 0\). Positive
+    excess kurtosis indicates that large absolute returns occur more frequently
+    than under a normal benchmark.
+
+    The Jarque-Bera statistic is also reported:
+    \[
+        JB
+        =
+        \frac{T}{6}
+        \left(
+            \widehat S^2+\frac{\widehat K_{\mathrm{ex}}^2}{4}
+        \right),
+    \]
+    where \(\widehat S\) is sample skewness. The normality null is rejected when the
+    Jarque-Bera \(p\)-value is below the significance level. A run is interpreted as
+    supporting fat tails when excess kurtosis is positive and normality is rejected.
+
+    \subsection{Volatility Clustering}
+
+    Volatility clustering means that large price movements tend to be followed by
+    large movements, and small movements by small movements, even when the signs of
+    returns remain difficult to predict. The model therefore evaluates dependence in
+    absolute and squared returns:
+    \[
+        \hat\rho_k^{|\ell|}
+        =
+        \mathrm{Corr}(|\ell_{j,t}|,|\ell_{j,t-k}|),
+        \qquad
+        \hat\rho_k^{\ell^2}
+        =
+        \mathrm{Corr}(\ell_{j,t}^2,\ell_{j,t-k}^2).
+    \]
+    Positive persistence in these autocorrelation functions is visual evidence of
+    clustered volatility.
+
+    The formal test uses ARCH effects. For a chosen lag order \(q\), define squared
+    demeaned returns
+    \[
+        u_t^2={\left(\ell_{j,t}-\bar\ell_j\right)}^2.
+    \]
+    The auxiliary regression is
+    \[
+        u_t^2
+        =
+        a_0+\sum_{j=1}^{q}a_j u_{t-j}^2+\varepsilon_t.
+    \]
+    The ARCH LM statistic is
+    \[
+        LM_q=TR_q^2,
+    \]
+    where \(R_q^2\) is the coefficient of determination from the auxiliary
+    regression. The null hypothesis is no ARCH effect:
+    \[
+        H_0:a_1=a_2=\cdots=a_q=0.
+    \]
+    Rejection of this null supports volatility clustering.
+
+    When the required package is available, the diagnostics also estimate a
+    GARCH \((1,1)\) volatility equation
+    \[
+        \sigma_t^2
+        =
+        \omega+\alpha_G u_{t-1}^2+\beta_G\sigma_{t-1}^2.
+    \]
+    The persistence measure is
+    \[
+        \alpha_G+\beta_G.
+    \]
+    Values close to one indicate highly persistent conditional volatility, which is
+    typical of crisis-sensitive financial return series.
+
+    \section{Reproducible Experiment Identifier}\label{sec:experiment_identifier}
+
+    When experiment output archiving is enabled, the run folder records the main
+    experimental controls in numeric form:
+    \begin{center}
+        \texttt{YYYYMMDDHHMMSS\_prospect\_theory\_prospect\_heterogeneity\_}\\
+        \texttt{social\_enabled\_short\_sale\_num\_fundamentalists\_num\_chartists\_}\\
+        \texttt{num\_noise\_traders\_num\_buy\_and\_hold\_agents\_time\_steps\_seed}.
+    \end{center}
+    Boolean switches are encoded as \(1\) when enabled and \(0\) when disabled. For
+    example,
+    \begin{center}
+        \texttt{20260427143012\_1\_1\_0\_1\_100\_1500\_25\_1\_1000\_66}
+    \end{center}
+    denotes a run created at local timestamp \(2026\)-\(04\)-\(27\) \(14{:}30{:}12\),
+    with CPT enabled, heterogeneous CPT parameters enabled, social influence
+    disabled, short selling enabled, \(100\) fundamentalists, \(1500\) chartists,
+    \(25\) noise traders, \(1\) passive buy-and-hold agent, \(1000\) simulation
+    steps, and seed \(66\).
+
+    The identifier schema is deliberately unchanged by the multi-asset extension.
+    Asset composition is recorded inside the run folder --- in the resolved
+    configuration and metadata, which also list assets that were declared but
+    disabled --- rather than in the folder name, so run identifiers stay
+    comparable across single-asset and multi-asset experiments.
+
+    \section{Multi-Asset Output Convention}\label{sec:multi_asset_outputs}
+
+    Two views of the same run are exported, and they are not alternatives: the
+    long-format view is the analytical one, and the single-asset view exists for
+    continuity.
+
+    The long-format per-asset time series contains one row per
+    \((\text{phase},\text{step},\text{asset})\) with that asset's market and
+    fundamental price, simple and log return, submitted limit and market order
+    counts, traded volume, executed trades, last trade price, best bid and ask,
+    spread, midquote, bid and ask depth, resting order counts, the five
+    cancellation counters of Section~\ref{sec:continuous_lob} (stale, expired,
+    infeasible-resting, infeasible-incoming, self-trade prevention) together with
+    collar rejections, transaction costs, the allocative-efficiency triple
+    \((AS_{j,t},MS_{j,t},AE_{j,t})\), the mean agent portfolio weight
+    \(\bar w_{j,t}\), and the count of agents entering that mean. Initial and
+    warm-up rows carry prices only; the trading-phase fields are left empty for
+    them.
+
+    The single-asset step time series retains its original schema and reports the
+    primary asset \(j^{\ast}\) only. It exists so that calibration and legacy
+    tooling continue to run unchanged. Any conclusion about the market as a whole
+    should be drawn from the per-asset view and the per-asset stylised-fact
+    verdicts, since the primary asset is a reporting projection and not a
+    privileged market.
+
+\end{document}

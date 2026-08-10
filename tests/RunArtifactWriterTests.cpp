@@ -1,7 +1,7 @@
 #include "tests/TestSupport.h"
 
-#include "Analysis/StylisedFactMetrics.h"
 #include "Application/ConsoleReporter.h"
+#include "Metrics/StylisedFactMetrics.h"
 #include "Output/RunArtifactWriter.h"
 #include "Simulation/SimulationEngine.h"
 
@@ -237,12 +237,10 @@ void testRunArtifactWriterProducesRequiredFiles(int& failures) {
     abm::test::expect(metadataContent.find("\"final_wealth_gini_coefficient\"") !=
                           std::string::npos,
                       "metadata JSON should export the final wealth Gini coefficient", failures);
-    abm::test::expect(metadataContent.find("\"mean_allocative_efficiency\"") !=
-                              std::string::npos &&
-                          metadataContent.find("\"allocative_efficiency_observations\"") !=
-                              std::string::npos,
-                      "metadata JSON should export run-level allocative-efficiency diagnostics",
-                      failures);
+    abm::test::expect(
+        metadataContent.find("\"mean_allocative_efficiency\"") != std::string::npos &&
+            metadataContent.find("\"allocative_efficiency_observations\"") != std::string::npos,
+        "metadata JSON should export run-level allocative-efficiency diagnostics", failures);
     abm::test::expect(metadataContent.find("plots_directory") == std::string::npos,
                       "metadata JSON should not advertise an unused plots directory", failures);
 
@@ -297,14 +295,12 @@ void testRunArtifactWriterProducesRequiredFiles(int& failures) {
     abm::test::expect(runLogContent.find("Buy-and-hold target risky weight: 0.6500000000") !=
                           std::string::npos,
                       "run log should record the buy-and-hold target risky weight", failures);
-    abm::test::expect(runLogContent.find("Final wealth Gini coefficient: ") !=
-                          std::string::npos,
+    abm::test::expect(runLogContent.find("Final wealth Gini coefficient: ") != std::string::npos,
                       "run log should record the final wealth Gini coefficient", failures);
-    abm::test::expect(runLogContent.find("Mean allocative efficiency: ") != std::string::npos &&
-                          runLogContent.find("Allocative-efficiency observations: ") !=
-                              std::string::npos,
-                      "run log should record run-level allocative-efficiency diagnostics",
-                      failures);
+    abm::test::expect(
+        runLogContent.find("Mean allocative efficiency: ") != std::string::npos &&
+            runLogContent.find("Allocative-efficiency observations: ") != std::string::npos,
+        "run log should record run-level allocative-efficiency diagnostics", failures);
 
     fs::remove_all(outputRoot, cleanupError);
 }
@@ -390,10 +386,8 @@ void testRunArtifactWriterSkipsDisabledTradeLedger(int& failures) {
                       failures);
     abm::test::expect(consoleOutput.str().find("Resident memory after simulation: 64.00 MiB") !=
                           std::string::npos,
-                      "console reporter should include resident memory after simulation",
-                      failures);
-    abm::test::expect(consoleOutput.str().find("Mean allocative efficiency: ") !=
-                          std::string::npos,
+                      "console reporter should include resident memory after simulation", failures);
+    abm::test::expect(consoleOutput.str().find("Mean allocative efficiency: ") != std::string::npos,
                       "console reporter should include allocative-efficiency diagnostics",
                       failures);
     abm::test::expect(consoleOutput.str().find("Peak resident memory during process: 96.00 MiB") !=

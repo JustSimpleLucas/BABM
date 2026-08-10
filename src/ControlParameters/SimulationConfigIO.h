@@ -1,7 +1,7 @@
 // SimulationConfigIO.h
 
-#ifndef SIMULATION_CONFIG_IO_H
-#define SIMULATION_CONFIG_IO_H
+#ifndef ABM_CONTROL_PARAMETERS_SIMULATION_CONFIG_IO_H
+#define ABM_CONTROL_PARAMETERS_SIMULATION_CONFIG_IO_H
 
 #include <string>
 
@@ -34,4 +34,4 @@ namespace abm {
 
 } // namespace abm
 
-#endif // SIMULATION_CONFIG_IO_H
+#endif // ABM_CONTROL_PARAMETERS_SIMULATION_CONFIG_IO_H

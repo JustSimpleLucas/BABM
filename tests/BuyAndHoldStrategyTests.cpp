@@ -61,8 +61,8 @@ void testBuyAndHoldBuysWhenBelowTarget(int& failures) {
 void testBuyAndHoldBuysFullRemainingGap(int& failures) {
     const std::optional<abm::Order> order = generateBuyAndHoldOrder(1000.0, 2.0, 0.60);
 
-    abm::test::expect(order.has_value(),
-                      "buy-and-hold should continue buying while below target", failures);
+    abm::test::expect(order.has_value(), "buy-and-hold should continue buying while below target",
+                      failures);
     if (order.has_value()) {
         abm::test::expect(abm::test::nearlyEqual(order->quantity, 5.2),
                           "buy-and-hold should buy the full remaining target gap", failures);
@@ -73,8 +73,7 @@ void testBuyAndHoldRespectsCashConstraint(int& failures) {
     const std::optional<abm::Order> order = generateBuyAndHoldOrder(1000.0, 0.0, 1.0, 200.0);
 
     abm::test::expect(order.has_value(),
-                      "test setup should produce a cash-constrained buy-and-hold order",
-                      failures);
+                      "test setup should produce a cash-constrained buy-and-hold order", failures);
     if (order.has_value()) {
         abm::test::expect(abm::test::nearlyEqual(order->price, 200.0),
                           "coarse tick should quantize the buy quote to the minimum tick",
@@ -86,8 +85,7 @@ void testBuyAndHoldRespectsCashConstraint(int& failures) {
 }
 
 void testBuyAndHoldAffordabilityIncludesTransactionCost(int& failures) {
-    const std::optional<abm::Order> order =
-        generateBuyAndHoldOrder(1010.0, 0.0, 1.0, 100.0, 0.01);
+    const std::optional<abm::Order> order = generateBuyAndHoldOrder(1010.0, 0.0, 1.0, 100.0, 0.01);
 
     abm::test::expect(order.has_value(),
                       "test setup should produce a transaction-cost constrained buy order",
@@ -146,8 +144,8 @@ void testBuyAndHoldSingleAssetPathsAgree(int& failures) {
         legacyStrategy.generateOrder(legacyAgent, market, 7, context);
 
     abm::AssetUniverse assets;
-    assets.declare({abm::test::makeAssetDefinition(kAssetName, kMarketPrice, 0.0, 0.01, 0.01, 0.0,
-                                                   1e-6)});
+    assets.declare(
+        {abm::test::makeAssetDefinition(kAssetName, kMarketPrice, 0.0, 0.01, 0.01, 0.0, 1e-6)});
     const std::vector<double> prices{kMarketPrice};
     const abm::SymmetricMatrix covariance(1);
     const abm::MarketStepView marketView{prices, covariance, assets};

@@ -1,7 +1,7 @@
 // Results/SimulationRunResult.h
 
-#ifndef RESULTS_SIMULATION_RUN_RESULT_H
-#define RESULTS_SIMULATION_RUN_RESULT_H
+#ifndef ABM_RESULTS_SIMULATION_RUN_RESULT_H
+#define ABM_RESULTS_SIMULATION_RUN_RESULT_H
 
 #include <cstddef>
 #include <cstdint>
@@ -276,4 +276,4 @@ class SimulationRunResult {
 
 } // namespace abm
 
-#endif // RESULTS_SIMULATION_RUN_RESULT_H
+#endif // ABM_RESULTS_SIMULATION_RUN_RESULT_H

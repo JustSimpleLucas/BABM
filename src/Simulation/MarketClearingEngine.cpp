@@ -2,7 +2,7 @@
 
 #include "Simulation/MarketClearingEngine.h"
 
-#include "Analysis/AllocativeEfficiency.h"
+#include "Metrics/AllocativeEfficiency.h"
 #include "RiskManagement/ShortSaleRiskControls.h"
 #include "Utility/SimulationConstants.h"
 #include "Utility/TransactionCosts.h"
@@ -144,8 +144,8 @@ class OrderExecutionSession {
 
     static void appendBenchmarkOrder(std::vector<AllocativeEfficiencyOrder>& benchmarkOrders,
                                      const Order& order) {
-        benchmarkOrders.push_back(AllocativeEfficiencyOrder{
-            order.type, order.price, orderQuantityForAccounting(order)});
+        benchmarkOrders.push_back(
+            AllocativeEfficiencyOrder{order.type, order.price, orderQuantityForAccounting(order)});
     }
 
     void processSubmittedOrder(const Order& submittedOrder) {
@@ -174,8 +174,7 @@ class OrderExecutionSession {
         LimitOrderBook& orderBook = bookFor(incoming);
         MicrostructureStepResult& result = resultFor(incoming);
         std::size_t matchIterations = 0;
-        while (incoming.remainingQuantity > kMinimumOrderQuantity &&
-               orderBook.canMatch(incoming)) {
+        while (incoming.remainingQuantity > kMinimumOrderQuantity && orderBook.canMatch(incoming)) {
             if (++matchIterations > kMaximumMatchIterationsPerOrder) {
                 std::fprintf(stderr,
                              "Warning: cancelled order %d (agent %d, step %d) after %zu matching "
@@ -286,9 +285,9 @@ class OrderExecutionSession {
         FillQuantities quantities{};
         quantities.requested = std::min(matchedOrders.incoming->remainingQuantity,
                                         matchedOrders.resting->remainingQuantity);
-        quantities.affordableBuy = transaction_costs::affordableBuyQuantity(
-            matchedAgents.buyer->getCash(), executionPrice,
-            request_->config->transactionCosts.rate);
+        quantities.affordableBuy =
+            transaction_costs::affordableBuyQuantity(matchedAgents.buyer->getCash(), executionPrice,
+                                                     request_->config->transactionCosts.rate);
         quantities.feasibleSell =
             feasibleSellQuantity(quantities.requested, *matchedAgents.seller, executionPrice,
                                  matchedOrders.incoming->assetIndex);
@@ -307,8 +306,7 @@ class OrderExecutionSession {
     }
 
     [[nodiscard]] double feasibleSellQuantity(double requestedQuantity, const Agent& seller,
-                                              double executionPrice,
-                                              std::size_t assetIndex) const {
+                                              double executionPrice, std::size_t assetIndex) const {
         if (!request_->config->shortSellingEnabled) {
             return std::min(requestedQuantity, std::max(0.0, seller.getStock(assetIndex)));
         }
@@ -441,14 +439,13 @@ class OrderExecutionSession {
                                                     const Agent& owner) const {
         const std::size_t assetIndex = incoming.assetIndex;
         if (incoming.type == OrderType::BUY) {
-            return std::min(incoming.remainingQuantity,
-                            transaction_costs::affordableBuyQuantity(
-                                owner.getCash(), incoming.price,
-                                request_->config->transactionCosts.rate));
+            return std::min(
+                incoming.remainingQuantity,
+                transaction_costs::affordableBuyQuantity(owner.getCash(), incoming.price,
+                                                         request_->config->transactionCosts.rate));
         }
         if (!request_->config->shortSellingEnabled) {
-            return std::min(incoming.remainingQuantity,
-                            std::max(0.0, owner.getStock(assetIndex)));
+            return std::min(incoming.remainingQuantity, std::max(0.0, owner.getStock(assetIndex)));
         }
 
         return constrainSellQuantityByShortSaleRules(ShortSaleSellConstraintRequest{

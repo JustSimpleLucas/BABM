@@ -74,8 +74,7 @@ void applyAssetListSetting(SimulationConfig& simulation, const ConfigSetting& se
 void applyPerAssetSetting(SimulationConfig& simulation, const ConfigSetting& setting) {
     const std::string remainder = setting.key.substr(sizeof(kAssetKeyPrefix) - 1);
     const std::size_t separator = remainder.find('.');
-    if (separator == std::string::npos || separator == 0 ||
-        separator + 1 >= remainder.size()) {
+    if (separator == std::string::npos || separator == 0 || separator + 1 >= remainder.size()) {
         throw std::invalid_argument(
             "Malformed per-asset key '" + setting.key + "' at " +
             config_parsing::describeLocation(setting.path, setting.lineNumber) +

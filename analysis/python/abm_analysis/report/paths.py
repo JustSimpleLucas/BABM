@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from abm_analysis.benchmarks import BenchmarkSeries, load_benchmark_timeseries_map, parse_benchmark_series
+from abm_analysis.archive.benchmarks import BenchmarkSeries, load_benchmark_timeseries_map, parse_benchmark_series
 
 def _default_database_comparison_output_dir(experiment_name: str) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")

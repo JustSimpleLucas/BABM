@@ -1,11 +1,11 @@
 // MomentumChartistStrategy.h
 
-#ifndef MOMENTUM_CHARTIST_STRATEGY_H
-#define MOMENTUM_CHARTIST_STRATEGY_H
+#ifndef ABM_AGENT_STRATEGY_MOMENTUM_CHARTIST_STRATEGY_H
+#define ABM_AGENT_STRATEGY_MOMENTUM_CHARTIST_STRATEGY_H
 
+#include "AgentStrategy/ChartistStrategy.h"
 #include <cstddef>
 #include <string>
-#include "AgentStrategy/ChartistStrategy.h"
 
 namespace abm {
 
@@ -63,7 +63,7 @@ class MomentumChartistStrategy final : public ChartistStrategy {
   protected:
     [[nodiscard]] AgentAction generateSignal(const Market& market) const override;
     [[nodiscard]] double forecastExcessReturn(const Market& market,
-                                               std::size_t forecastAssetIndex) const override;
+                                              std::size_t forecastAssetIndex) const override;
 
   private:
     [[nodiscard]] double movingAverageGap(const Market& market,
@@ -76,4 +76,4 @@ class MomentumChartistStrategy final : public ChartistStrategy {
 
 } // namespace abm
 
-#endif // MOMENTUM_CHARTIST_STRATEGY_H
+#endif // ABM_AGENT_STRATEGY_MOMENTUM_CHARTIST_STRATEGY_H

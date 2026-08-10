@@ -1,7 +1,7 @@
 // CovarianceEstimator.h
 
-#ifndef MARKET_COVARIANCE_ESTIMATOR_H
-#define MARKET_COVARIANCE_ESTIMATOR_H
+#ifndef ABM_MARKET_COVARIANCE_ESTIMATOR_H
+#define ABM_MARKET_COVARIANCE_ESTIMATOR_H
 
 #include <cstddef>
 
@@ -20,9 +20,8 @@ class Market;
  * fewer than two common observations the matrix is all zeros; callers must
  * regularize before factorization either way.
  */
-[[nodiscard]] SymmetricMatrix estimateLogReturnCovariance(const Market& market,
-                                                          std::size_t window);
+[[nodiscard]] SymmetricMatrix estimateLogReturnCovariance(const Market& market, std::size_t window);
 
 } // namespace abm
 
-#endif // MARKET_COVARIANCE_ESTIMATOR_H
+#endif // ABM_MARKET_COVARIANCE_ESTIMATOR_H

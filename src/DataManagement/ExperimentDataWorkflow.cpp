@@ -7,8 +7,7 @@
 
 namespace abm {
 
-bool ExperimentDataWorkflow::prepareRunArchive(RuntimeConfig& runtimeConfig,
-                                               std::string& error) {
+bool ExperimentDataWorkflow::prepareRunArchive(RuntimeConfig& runtimeConfig, std::string& error) {
     if (!ExperimentRunManager::prepareOutputLayout(runtimeConfig, error)) {
         return false;
     }
@@ -21,8 +20,7 @@ bool ExperimentDataWorkflow::prepareRunArchive(RuntimeConfig& runtimeConfig,
 bool ExperimentDataWorkflow::writeCompletedRun(const RuntimeConfig& runtimeConfig,
                                                const SimulationRunResult& simulationResult,
                                                const RunMetrics& metrics,
-                                               RunArtifactWriteResult& result,
-                                               std::string& error) {
+                                               RunArtifactWriteResult& result, std::string& error) {
     if (!validatePreparedRunArchive(runtimeConfig, error)) {
         return false;
     }

@@ -24,19 +24,17 @@ void expect(bool condition, const std::string& message, int& failures) {
 
 void expectInvalidConfigContaining(const SimulationConfig& config,
                                    const std::string& expectedMessageFragment,
-                                   const std::string& message,
-                                   int& failures) {
+                                   const std::string& message, int& failures) {
     try {
         const SimulationEngine simulation(config);
         static_cast<void>(simulation);
         expect(false, message, failures);
     } catch (const std::invalid_argument& error) {
         expect(std::string(error.what()).find(expectedMessageFragment) != std::string::npos,
-               message,
-               failures);
+               message, failures);
     } catch (const std::exception& error) {
-        std::cerr << "FAIL: " << message << " Expected std::invalid_argument, got: "
-                  << error.what() << '\n';
+        std::cerr << "FAIL: " << message << " Expected std::invalid_argument, got: " << error.what()
+                  << '\n';
         ++failures;
     }
 }

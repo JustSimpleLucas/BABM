@@ -26,7 +26,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from abm_analysis.multi_asset import (
+from abm_analysis.statistics.multi_asset import (
     DEFAULT_ROLLING_WINDOW,
     compute_portfolio_composition,
     compute_price_ratio,

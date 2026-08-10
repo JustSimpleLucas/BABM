@@ -28,8 +28,7 @@ SymmetricMatrix estimateLogReturnCovariance(const Market& market, std::size_t wi
         return covariance;
     }
 
-    std::vector<std::vector<double>> logReturns(assetCount,
-                                                std::vector<double>(sampleLength, 0.0));
+    std::vector<std::vector<double>> logReturns(assetCount, std::vector<double>(sampleLength, 0.0));
     std::vector<double> means(assetCount, 0.0);
     for (std::size_t assetIndex = 0; assetIndex < assetCount; ++assetIndex) {
         const std::vector<double>& prices = market.getMarketValues(assetIndex);

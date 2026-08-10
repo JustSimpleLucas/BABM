@@ -87,8 +87,7 @@ void addNeighbourIfInsideRadius(const SimulationPopulation& population,
 }
 
 void assignSocialProfiles(const SimulationPopulation& population,
-                          const SocialInfluenceConfig& config,
-                          RandomEngine& random) {
+                          const SocialInfluenceConfig& config, RandomEngine& random) {
     for (std::size_t agentId = 1; agentId < population.agentsById.size(); ++agentId) {
         Agent* agent = agentById(population.agentsById, agentId);
         if (agent == nullptr) {
@@ -120,8 +119,7 @@ SocialGrid buildSocialGrid(const SimulationPopulation& population, double intera
     return grid;
 }
 
-void connectSocialNeighbours(const SimulationPopulation& population,
-                             const SocialGrid& grid,
+void connectSocialNeighbours(const SimulationPopulation& population, const SocialGrid& grid,
                              double interactionRadius,
                              std::vector<std::vector<SocialNeighbor>>& socialNeighbors) {
     for (const auto& cellEntry : grid) {

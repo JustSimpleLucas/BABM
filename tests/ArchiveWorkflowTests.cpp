@@ -1,9 +1,9 @@
 #include "tests/TestSupport.h"
 
-#include "Analysis/StylisedFactMetrics.h"
 #include "DataManagement/ExperimentDataWorkflow.h"
 #include "DataManagement/RunArchiveSchema.h"
 #include "Experiment/ExperimentRunManager.h"
+#include "Metrics/StylisedFactMetrics.h"
 #include "Simulation/SimulationEngine.h"
 
 #include <exception>

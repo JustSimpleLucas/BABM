@@ -28,8 +28,9 @@ AgentAction RelativeStrengthIndexChartistStrategy::generateSignal(const Market& 
     return AgentAction::Hold;
 }
 
-double RelativeStrengthIndexChartistStrategy::forecastExcessReturn(
-    const Market& market, std::size_t forecastAssetIndex) const {
+double
+RelativeStrengthIndexChartistStrategy::forecastExcessReturn(const Market& market,
+                                                            std::size_t forecastAssetIndex) const {
     const double rsi = market.calculateRSI(forecastAssetIndex, kRelativeStrengthIndexPeriod);
 
     /*

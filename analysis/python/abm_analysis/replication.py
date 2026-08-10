@@ -19,7 +19,7 @@ from abm_analysis.calibration import (
 from abm_analysis.calibration.execution import _run_simulator_subprocess
 from abm_analysis.parallel import map_in_order, resolve_job_count
 from abm_analysis.report import build_comparison_report, build_seed_robustness_report
-from abm_analysis.run_discovery import discover_new_run_directory, run_directory_names
+from abm_analysis.archive.run_discovery import discover_new_run_directory, run_directory_names
 
 
 DEFAULT_SEED_SPEC = "1:30"

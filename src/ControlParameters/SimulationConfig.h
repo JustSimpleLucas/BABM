@@ -1,7 +1,7 @@
 // SimulationConfig.h
 
-#ifndef SIMULATION_CONFIG_H
-#define SIMULATION_CONFIG_H
+#ifndef ABM_CONTROL_PARAMETERS_SIMULATION_CONFIG_H
+#define ABM_CONTROL_PARAMETERS_SIMULATION_CONFIG_H
 
 /*
  * Stable configuration facade.
@@ -17,4 +17,4 @@
 #include "ControlParameters/OutputConfig.h"
 #include "ControlParameters/StrategyConfig.h"
 
-#endif // SIMULATION_CONFIG_H
+#endif // ABM_CONTROL_PARAMETERS_SIMULATION_CONFIG_H

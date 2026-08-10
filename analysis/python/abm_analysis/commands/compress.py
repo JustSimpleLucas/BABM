@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from abm_analysis.compression import compress_experiment_archives, compress_run_archive
-from abm_analysis.data import resolve_artifact_path
+from abm_analysis.archive.compression import compress_experiment_archives, compress_run_archive
+from abm_analysis.archive.data import resolve_artifact_path
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:

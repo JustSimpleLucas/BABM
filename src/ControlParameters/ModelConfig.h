@@ -1,7 +1,7 @@
 // ModelConfig.h
 
-#ifndef CONTROL_PARAMETERS_MODEL_CONFIG_H
-#define CONTROL_PARAMETERS_MODEL_CONFIG_H
+#ifndef ABM_CONTROL_PARAMETERS_MODEL_CONFIG_H
+#define ABM_CONTROL_PARAMETERS_MODEL_CONFIG_H
 
 #include <cstddef>
 #include <cstdint>
@@ -167,4 +167,4 @@ struct SimulationConfig {
 
 } // namespace abm
 
-#endif // CONTROL_PARAMETERS_MODEL_CONFIG_H
+#endif // ABM_CONTROL_PARAMETERS_MODEL_CONFIG_H

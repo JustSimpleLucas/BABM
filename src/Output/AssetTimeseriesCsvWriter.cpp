@@ -242,7 +242,7 @@ bool exportAssetTimeseriesCsv(const std::string& outputPath, const SimulationRun
     for (std::size_t row = 0; row < totalRows; ++row) {
         const bool isSimulationRow = row > config.warmupSteps;
         const std::size_t simulationStep = isSimulationRow ? (row - config.warmupSteps) : 0;
-        const char* phase = row == 0             ? "initial"
+        const char* phase = row == 0                    ? "initial"
                             : row <= config.warmupSteps ? "warmup"
                                                         : "simulation";
 

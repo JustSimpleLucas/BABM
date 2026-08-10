@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from abm_analysis.comparisons import compare_return_series
-from abm_analysis.diagnostics import diagnose_return_series
+from abm_analysis.statistics.comparisons import compare_return_series
+from abm_analysis.statistics.diagnostics import diagnose_return_series
 
 from .constants import FAILED_TRIAL_SCORE
 from .models import CalibrationScore, ScoreWeights

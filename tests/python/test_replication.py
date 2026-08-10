@@ -13,7 +13,7 @@ from abm_analysis.replication import (
     parse_seed_spec,
     run_seed_replication,
 )
-from abm_analysis.robustness import build_seed_robustness_summary
+from abm_analysis.statistics.robustness import build_seed_robustness_summary
 
 from abm_test_helpers import make_synthetic_benchmark_dir, write_synthetic_run
 
@@ -51,7 +51,7 @@ def test_replicate_cli_builds_options_without_running_simulator(
             records=(),
         )
 
-    monkeypatch.setattr("abm_analysis.cli.run_seed_replication", fake_run_seed_replication)
+    monkeypatch.setattr("abm_analysis.commands.replicate.run_seed_replication", fake_run_seed_replication)
     benchmark_dir = make_synthetic_benchmark_dir(tmp_path)
 
     exit_code = cli_main(
@@ -109,7 +109,7 @@ def test_replicate_cli_defaults_to_release_simulator_and_auto_jobs(
             records=(),
         )
 
-    monkeypatch.setattr("abm_analysis.cli.run_seed_replication", fake_run_seed_replication)
+    monkeypatch.setattr("abm_analysis.commands.replicate.run_seed_replication", fake_run_seed_replication)
 
     exit_code = cli_main(["replicate", "--seeds", "55,66"])
 

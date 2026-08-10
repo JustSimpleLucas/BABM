@@ -1,13 +1,13 @@
 // Agent.h
 
-#ifndef AGENT_H
-#define AGENT_H
+#ifndef ABM_AGENT_AGENT_H
+#define ABM_AGENT_AGENT_H
 
+#include "BehaviouralFinance/ProspectTheory.h"
+#include "OrderBook/Order.h"
 #include <cstddef>
 #include <limits>
 #include <vector>
-#include "BehaviouralFinance/ProspectTheory.h"
-#include "OrderBook/Order.h"
 
 namespace abm {
 
@@ -240,4 +240,4 @@ class Agent {
 
 } // namespace abm
 
-#endif // AGENT_H
+#endif // ABM_AGENT_AGENT_H

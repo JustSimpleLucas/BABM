@@ -24,9 +24,8 @@ double quantizeLimitPrice(double rawPrice, double tickSize, OrderType side) {
      * Rounding buys down and sells up avoids submitting a tick-quantised quote
      * that is more aggressive than the strategy's raw valuation.
      */
-    const double quantized = side == OrderType::BUY
-                                 ? std::floor(scaled + kMinTickSize) * tickSize
-                                 : std::ceil(scaled - kMinTickSize) * tickSize;
+    const double quantized = side == OrderType::BUY ? std::floor(scaled + kMinTickSize) * tickSize
+                                                    : std::ceil(scaled - kMinTickSize) * tickSize;
     return std::max(tickSize, quantized);
 }
 

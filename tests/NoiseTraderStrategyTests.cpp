@@ -175,8 +175,8 @@ void testNoiseTraderSingleAssetPathsAgree(int& failures) {
     abm::NoiseTraderStrategy legacyStrategy(0, 0.05, 0.05, 0.30, kSeed);
 
     abm::AssetUniverse assets;
-    assets.declare({abm::test::makeAssetDefinition(kAssetName, kMarketPrice, 5.0, 0.01, 0.01, 0.0,
-                                                   1e-6)});
+    assets.declare(
+        {abm::test::makeAssetDefinition(kAssetName, kMarketPrice, 5.0, 0.01, 0.01, 0.0, 1e-6)});
     const std::vector<double> prices{kMarketPrice};
     const abm::SymmetricMatrix covariance(1);
     const abm::MarketStepView marketView{prices, covariance, assets};

@@ -1,7 +1,7 @@
 // ConsoleReporter.h
 
-#ifndef APPLICATION_CONSOLE_REPORTER_H
-#define APPLICATION_CONSOLE_REPORTER_H
+#ifndef ABM_APPLICATION_CONSOLE_REPORTER_H
+#define ABM_APPLICATION_CONSOLE_REPORTER_H
 
 #include "ControlParameters/SimulationConfig.h"
 #include "Utility/ProcessMemoryUsage.h"
@@ -19,10 +19,9 @@ struct RunMetrics;
  * research record.
  */
 void printCompletedSimulationSummary(const RuntimeConfig& runtimeConfig,
-                                     const SimulationRunResult& result,
-                                     const RunMetrics& metrics,
+                                     const SimulationRunResult& result, const RunMetrics& metrics,
                                      const ProcessMemoryUsage& memoryUsage);
 
 } // namespace abm
 
-#endif // APPLICATION_CONSOLE_REPORTER_H
+#endif // ABM_APPLICATION_CONSOLE_REPORTER_H

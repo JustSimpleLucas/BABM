@@ -16,11 +16,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from abm_analysis.benchmarks import build_benchmark_return_series, load_benchmark_timeseries_map
-from abm_analysis.data import prepare_return_series
-from abm_analysis.diagnostics import diagnose_return_series
-from abm_analysis.multi_asset import asset_series_id, build_asset_return_series
-from abm_analysis.run_discovery import discover_new_run_directory, run_directory_names
+from abm_analysis.archive.benchmarks import build_benchmark_return_series, load_benchmark_timeseries_map
+from abm_analysis.archive.data import prepare_return_series
+from abm_analysis.statistics.diagnostics import diagnose_return_series
+from abm_analysis.statistics.multi_asset import asset_series_id, build_asset_return_series
+from abm_analysis.archive.run_discovery import discover_new_run_directory, run_directory_names
 
 from .config import load_calibration_settings, patch_config_text
 from .constants import FAILED_TRIAL_SCORE, RUN_CSV_ARTIFACT_FILENAMES

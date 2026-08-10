@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from abm_analysis.robustness_verdicts import verdict_rows_for_report
+from abm_analysis.statistics.robustness_verdicts import verdict_rows_for_report
 
 from .rendering import _render_report, _table_preview
 from .sections import _appendices, _section

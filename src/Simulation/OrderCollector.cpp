@@ -15,13 +15,10 @@ void OrderCollector::resetForRun() {
     nextOrderId_ = 1;
 }
 
-std::vector<Order> OrderCollector::collectOrders(std::size_t timeStep,
-                                                 const std::vector<std::size_t>& activeAgentIndices,
-                                                 SimulationPopulation& population,
-                                                 const Market& market,
-                                                 const SimulationConfig& config,
-                                                 RandomEngine& random,
-                                                 const SymmetricMatrix& covariance) {
+std::vector<Order> OrderCollector::collectOrders(
+    std::size_t timeStep, const std::vector<std::size_t>& activeAgentIndices,
+    SimulationPopulation& population, const Market& market, const SimulationConfig& config,
+    RandomEngine& random, const SymmetricMatrix& covariance) {
     std::vector<Order> orders;
     orders.reserve(activeAgentIndices.size());
 
@@ -57,9 +54,11 @@ std::vector<Order> OrderCollector::collectOrders(std::size_t timeStep,
 
         Agent& agent = record.agent;
         const bool useValuationLimitPrices = true;
-        TradingOrderContext orderContext{useValuationLimitPrices, agent.getCurrentOpinion(),
+        TradingOrderContext orderContext{useValuationLimitPrices,
+                                         agent.getCurrentOpinion(),
                                          config.social.opinionKappa,
-                                         config.social.holdTolerance, config.priceTickSize(),
+                                         config.social.holdTolerance,
+                                         config.priceTickSize(),
                                          config.transactionCosts.rate,
                                          config.transactionCosts.affectsDecisions};
         std::vector<Order> generatedOrders = record.currentStrategy->generateOrders(

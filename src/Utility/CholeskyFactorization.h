@@ -1,7 +1,7 @@
 // CholeskyFactorization.h
 
-#ifndef UTILITY_CHOLESKY_FACTORIZATION_H
-#define UTILITY_CHOLESKY_FACTORIZATION_H
+#ifndef ABM_UTILITY_CHOLESKY_FACTORIZATION_H
+#define ABM_UTILITY_CHOLESKY_FACTORIZATION_H
 
 #include <cstddef>
 #include <vector>
@@ -63,4 +63,4 @@ void regularizeCovariance(SymmetricMatrix& covariance, double varianceFloor,
 
 } // namespace abm
 
-#endif // UTILITY_CHOLESKY_FACTORIZATION_H
+#endif // ABM_UTILITY_CHOLESKY_FACTORIZATION_H

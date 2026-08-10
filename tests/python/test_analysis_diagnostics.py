@@ -6,14 +6,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from abm_analysis.data import discover_run_directories
-from abm_analysis.diagnostics import (
+from abm_analysis.archive.data import discover_run_directories
+from abm_analysis.statistics.diagnostics import (
     build_pairwise_ks_table,
     build_return_series_by_run,
     run_stylised_fact_diagnostics,
 )
-from abm_analysis.robustness import build_seed_robustness_summary
-from abm_analysis.stress import annotate_stress_regimes
+from abm_analysis.statistics.robustness import build_seed_robustness_summary
+from abm_analysis.statistics.stress import annotate_stress_regimes
 
 from abm_test_helpers import make_synthetic_experiment
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from abm_analysis.diagnostics import SIGNIFICANCE_LEVEL
+from abm_analysis.statistics.diagnostics import SIGNIFICANCE_LEVEL
 
 
 def build_run_evidence_assessment(

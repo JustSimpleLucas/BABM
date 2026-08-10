@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from abm_analysis.data import load_step_timeseries, read_csv_if_exists, resolve_artifact_path
+from abm_analysis.archive.data import load_step_timeseries, read_csv_if_exists, resolve_artifact_path
 
 from .common import (
     COLOUR_SEQUENCE,

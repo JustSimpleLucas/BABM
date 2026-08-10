@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from abm_analysis.benchmarks import (
+from abm_analysis.archive.benchmarks import (
     build_benchmark_diagnostics,
     build_benchmark_return_series,
     load_benchmark_timeseries,

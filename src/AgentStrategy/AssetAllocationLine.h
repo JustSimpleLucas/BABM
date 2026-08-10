@@ -1,6 +1,6 @@
 // AssetAllocationLine.h
-#ifndef ASSET_ALLOCATION_LINE_H
-#define ASSET_ALLOCATION_LINE_H
+#ifndef ABM_AGENT_STRATEGY_ASSET_ALLOCATION_LINE_H
+#define ABM_AGENT_STRATEGY_ASSET_ALLOCATION_LINE_H
 
 namespace abm {
 
@@ -13,7 +13,7 @@ namespace abm {
  * which part is portfolio sizing.
  */
 class AssetAllocationLine {
-public:
+  public:
     /** Constructs the default allocation rule used by config defaults. */
     AssetAllocationLine();
 
@@ -44,7 +44,7 @@ public:
     /** Returns the bounded risky-asset weight implied by mean-variance demand. */
     [[nodiscard]] double optimalRiskyWeight(double mu, double rf, double sigma) const;
 
-private:
+  private:
     double riskAversion_;
     double minRiskyWeight_;
     double maxRiskyWeight_;
@@ -52,4 +52,4 @@ private:
 
 } // namespace abm
 
-#endif // ASSET_ALLOCATION_LINE_H
+#endif // ABM_AGENT_STRATEGY_ASSET_ALLOCATION_LINE_H

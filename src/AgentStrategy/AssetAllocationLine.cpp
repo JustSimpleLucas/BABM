@@ -13,15 +13,12 @@ constexpr double kDefaultMaxRiskyWeight = 1.0;
 } // namespace
 
 AssetAllocationLine::AssetAllocationLine()
-    : riskAversion_(kDefaultRiskAversion),
-      minRiskyWeight_(kDefaultMinRiskyWeight),
+    : riskAversion_(kDefaultRiskAversion), minRiskyWeight_(kDefaultMinRiskyWeight),
       maxRiskyWeight_(kDefaultMaxRiskyWeight) {}
 
-AssetAllocationLine::AssetAllocationLine(double riskAversion,
-                                         double minRiskyWeight,
+AssetAllocationLine::AssetAllocationLine(double riskAversion, double minRiskyWeight,
                                          double maxRiskyWeight)
-    : riskAversion_(kDefaultRiskAversion),
-      minRiskyWeight_(kDefaultMinRiskyWeight),
+    : riskAversion_(kDefaultRiskAversion), minRiskyWeight_(kDefaultMinRiskyWeight),
       maxRiskyWeight_(kDefaultMaxRiskyWeight) {
     setRiskyAversion(riskAversion);
     setRiskyWeightBounds(minRiskyWeight, maxRiskyWeight);
@@ -55,11 +52,8 @@ double AssetAllocationLine::maxRiskyWeight() const {
 }
 
 double AssetAllocationLine::optimalRiskyWeight(double mu, double rf, double sigma) const {
-    return abm::optimalRiskyWeight(
-        MeanVarianceInputs{mu, rf, sigma, riskAversion_},
-        minRiskyWeight_,
-        maxRiskyWeight_);
+    return abm::optimalRiskyWeight(MeanVarianceInputs{mu, rf, sigma, riskAversion_},
+                                   minRiskyWeight_, maxRiskyWeight_);
 }
-
 
 } // namespace abm

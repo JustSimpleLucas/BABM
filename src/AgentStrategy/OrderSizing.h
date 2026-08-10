@@ -1,7 +1,7 @@
 // OrderSizing.h
 
-#ifndef AGENT_STRATEGY_ORDER_SIZING_H
-#define AGENT_STRATEGY_ORDER_SIZING_H
+#ifndef ABM_AGENT_STRATEGY_ORDER_SIZING_H
+#define ABM_AGENT_STRATEGY_ORDER_SIZING_H
 
 #include <optional>
 
@@ -73,4 +73,4 @@ buildValuationQuote(const ValuationQuoteRequest& request, const TradingOrderCont
 
 } // namespace abm::strategy_detail
 
-#endif // AGENT_STRATEGY_ORDER_SIZING_H
+#endif // ABM_AGENT_STRATEGY_ORDER_SIZING_H

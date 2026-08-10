@@ -46,8 +46,8 @@ AgentAction BreakoutChartistStrategy::generateSignal(const Market& market) const
     return AgentAction::Hold;
 }
 
-double BreakoutChartistStrategy::forecastExcessReturn(
-    const Market& market, std::size_t forecastAssetIndex) const {
+double BreakoutChartistStrategy::forecastExcessReturn(const Market& market,
+                                                      std::size_t forecastAssetIndex) const {
     const double latest = strategy_detail::latestPositiveMarketPrice(market, forecastAssetIndex);
     const auto [channelLow, channelHigh] = previousPriceChannel(market, forecastAssetIndex);
 
@@ -71,8 +71,9 @@ double BreakoutChartistStrategy::forecastExcessReturn(
     return 0.0;
 }
 
-std::pair<double, double> BreakoutChartistStrategy::previousPriceChannel(
-    const Market& market, std::size_t forecastAssetIndex) const {
+std::pair<double, double>
+BreakoutChartistStrategy::previousPriceChannel(const Market& market,
+                                               std::size_t forecastAssetIndex) const {
     const auto& values = market.getMarketValues(forecastAssetIndex);
     if (values.size() <= breakoutWindow_) {
         throw std::invalid_argument(

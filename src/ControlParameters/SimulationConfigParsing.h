@@ -1,7 +1,7 @@
 // SimulationConfigParsing.h
 
-#ifndef CONTROL_PARAMETERS_SIMULATION_CONFIG_PARSING_H
-#define CONTROL_PARAMETERS_SIMULATION_CONFIG_PARSING_H
+#ifndef ABM_CONTROL_PARAMETERS_SIMULATION_CONFIG_PARSING_H
+#define ABM_CONTROL_PARAMETERS_SIMULATION_CONFIG_PARSING_H
 
 #include <cstddef>
 #include <filesystem>
@@ -58,9 +58,9 @@ parseMarketMicrostructureMode(const std::string& rawValue, const std::filesystem
 [[nodiscard]] std::string marketMicrostructureModeName(MarketMicrostructureMode mode);
 
 /** Parses an asset's fundamental-process selector; accepts random_walk or gbm. */
-[[nodiscard]] FundamentalProcessType
-parseFundamentalProcessType(const std::string& rawValue, const std::filesystem::path& path,
-                            std::size_t lineNumber);
+[[nodiscard]] FundamentalProcessType parseFundamentalProcessType(const std::string& rawValue,
+                                                                 const std::filesystem::path& path,
+                                                                 std::size_t lineNumber);
 
 /** Returns the canonical config token for a fundamental-process selector. */
 [[nodiscard]] std::string fundamentalProcessTypeName(FundamentalProcessType processType);
@@ -70,4 +70,4 @@ parseFundamentalProcessType(const std::string& rawValue, const std::filesystem::
 
 } // namespace abm::config_parsing
 
-#endif // CONTROL_PARAMETERS_SIMULATION_CONFIG_PARSING_H
+#endif // ABM_CONTROL_PARAMETERS_SIMULATION_CONFIG_PARSING_H

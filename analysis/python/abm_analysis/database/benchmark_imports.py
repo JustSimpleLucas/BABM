@@ -9,7 +9,7 @@ from typing import Any
 
 import pandas as pd
 
-from abm_analysis.benchmarks import (
+from abm_analysis.archive.benchmarks import (
     BenchmarkSeries,
     discover_benchmark_files,
     infer_benchmark_id,

@@ -108,7 +108,7 @@ def test_robustness_cli_builds_report_without_recomputation(
             figure_index_csv_path=report_dir / "figure_index.csv",
         )
 
-    monkeypatch.setattr("abm_analysis.cli.build_seed_robustness_report", fake_builder)
+    monkeypatch.setattr("abm_analysis.commands.robustness.build_seed_robustness_report", fake_builder)
 
     exit_code = cli_main(
         [

@@ -2,7 +2,7 @@
 
 #include "Application/ConsoleReporter.h"
 
-#include "Analysis/StylisedFactMetrics.h"
+#include "Metrics/StylisedFactMetrics.h"
 #include "Results/SimulationRunResult.h"
 
 #include <algorithm>
@@ -32,8 +32,7 @@ namespace {
 } // namespace
 
 void printCompletedSimulationSummary(const RuntimeConfig& runtimeConfig,
-                                     const SimulationRunResult& result,
-                                     const RunMetrics& metrics,
+                                     const SimulationRunResult& result, const RunMetrics& metrics,
                                      const ProcessMemoryUsage& memoryUsage) {
     const SimulationConfig& config = result.config();
     const SimulationStats& stats = result.stats();
@@ -48,8 +47,7 @@ void printCompletedSimulationSummary(const RuntimeConfig& runtimeConfig,
     std::cout << "Agents: "
               << (config.numFundamentalists + config.numChartists + config.numNoiseTraders +
                   config.numBuyAndHoldAgents)
-              << " ("
-              << config.numFundamentalists << " fundamentalists, " << config.numChartists
+              << " (" << config.numFundamentalists << " fundamentalists, " << config.numChartists
               << " chartists, " << config.numNoiseTraders << " noise traders, "
               << config.numBuyAndHoldAgents << " buy-and-hold agents)\n";
     std::cout << "Short selling: " << (config.shortSellingEnabled ? "enabled" : "disabled") << '\n';
@@ -68,9 +66,8 @@ void printCompletedSimulationSummary(const RuntimeConfig& runtimeConfig,
     std::cout << "Total traded volume: " << stats.totalTradedVolume << '\n';
     std::cout << "Total transaction costs: " << stats.totalTransactionCosts << '\n';
     std::cout << "Avg abs order imbalance: " << stats.averageAbsoluteOrderImbalance << '\n';
-    std::cout << "Mean allocative efficiency: " << metrics.meanAllocativeEfficiency
-              << " over " << metrics.allocativeEfficiencyObservations
-              << " positive-surplus steps\n";
+    std::cout << "Mean allocative efficiency: " << metrics.meanAllocativeEfficiency << " over "
+              << metrics.allocativeEfficiencyObservations << " positive-surplus steps\n";
     std::cout << "Resident memory after simulation: "
               << formatMemoryMebibytes(memoryUsage.residentSetBytes) << '\n';
     std::cout << "Peak resident memory during process: "

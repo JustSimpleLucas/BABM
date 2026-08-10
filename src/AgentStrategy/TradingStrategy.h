@@ -1,7 +1,7 @@
 // TradingStrategy.h
 
-#ifndef TRADING_STRATEGY_H
-#define TRADING_STRATEGY_H
+#ifndef ABM_AGENT_STRATEGY_TRADING_STRATEGY_H
+#define ABM_AGENT_STRATEGY_TRADING_STRATEGY_H
 
 #include <optional>
 #include <string>
@@ -128,4 +128,4 @@ class TradingStrategy {
 
 } // namespace abm
 
-#endif // TRADING_STRATEGY_H
+#endif // ABM_AGENT_STRATEGY_TRADING_STRATEGY_H

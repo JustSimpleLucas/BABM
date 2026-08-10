@@ -247,7 +247,7 @@ bool exportSimulationDetailsCsv(const std::string& outputPath, const SimulationR
         if (isSimulationRow && simulationStep - 1 < details.size()) {
             step = &details.at(simulationStep - 1);
         }
-        const char* phase = row == 0             ? "initial"
+        const char* phase = row == 0                    ? "initial"
                             : row <= config.warmupSteps ? "warmup"
                                                         : "simulation";
 

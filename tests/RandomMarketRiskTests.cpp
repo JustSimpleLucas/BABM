@@ -3,6 +3,7 @@
 #include "tests/TestSupport.h"
 
 #include "AgentStrategy/AssetAllocationLine.h"
+#include "Market/FundamentalValueProcess.h"
 #include "Market/Market.h"
 #include "RandomGenerator/RandomGenerator.h"
 #include "RiskManagement/ShortSaleRiskControls.h"
@@ -38,7 +39,7 @@ void testAllocationBounds(int& failures) {
 }
 
 void testMarketLogReturnVolatility(int& failures) {
-    abm::Market market(1234U);
+    abm::Market market;
     market.configureAssets({"test_asset"});
 
     double price = 100.0;
@@ -49,14 +50,15 @@ void testMarketLogReturnVolatility(int& failures) {
     }
 
     const double expectedPopulationStdDev = std::sqrt((0.0001 + 0.0009 + 0.0004) / 3.0);
-    abm::test::expect(
-        abm::test::nearlyEqual(market.calculateLogReturnStandardDeviation(0, 3),
-                               expectedPopulationStdDev, 1e-12),
-        "market volatility should be calculated from log returns, not price levels", failures);
+    abm::test::expect(abm::test::nearlyEqual(market.calculateLogReturnStandardDeviation(0, 3),
+                                             expectedPopulationStdDev, 1e-12),
+                      "market volatility should be calculated from log returns, not price levels",
+                      failures);
 }
 
 void testGenerateTrueValuesUsesNamedGenerationParameters(int& failures) {
-    abm::Market market(1234U);
+    abm::Market market;
+    abm::FundamentalValueProcess fundamentalProcess(1234U);
     market.configureAssets({"fundamental_asset"});
 
     abm::TrueValueGenerationParameters parameters;
@@ -64,7 +66,7 @@ void testGenerateTrueValuesUsesNamedGenerationParameters(int& failures) {
     parameters.initialValue = 125.0;
     parameters.shockStdDev = 0.0;
 
-    const auto generatedValues = market.generateTrueValues(0, parameters);
+    const auto generatedValues = fundamentalProcess.generateTrueValues(market, 0, parameters);
     const auto& storedValues = market.getTrueValues(0);
 
     abm::test::expect(generatedValues.size() == parameters.timeSteps,
@@ -77,12 +79,13 @@ void testGenerateTrueValuesUsesNamedGenerationParameters(int& failures) {
                       "zero-shock fundamental path should start from the configured initial value",
                       failures);
     abm::test::expect(abm::test::nearlyEqual(generatedValues.back(), parameters.initialValue),
-	                      "zero-shock fundamental path should remain at the configured initial value",
-	                      failures);
+                      "zero-shock fundamental path should remain at the configured initial value",
+                      failures);
 }
 
 void testFundamentalPathAppliesDeterministicDrift(int& failures) {
-    abm::Market market(1234U);
+    abm::Market market;
+    abm::FundamentalValueProcess fundamentalProcess(1234U);
     market.configureAssets({"drift_asset"});
 
     abm::TrueValueGenerationParameters parameters;
@@ -91,7 +94,7 @@ void testFundamentalPathAppliesDeterministicDrift(int& failures) {
     parameters.driftPerStep = 0.25;
     parameters.shockStdDev = 0.0;
 
-    const auto generatedValues = market.generateTrueValues(0, parameters);
+    const auto generatedValues = fundamentalProcess.generateTrueValues(market, 0, parameters);
 
     abm::test::expect(abm::test::nearlyEqual(generatedValues.at(0), 100.25),
                       "positive drift should increase the first generated fundamental value",
@@ -102,7 +105,8 @@ void testFundamentalPathAppliesDeterministicDrift(int& failures) {
 }
 
 void testFundamentalPathAppliesMinimumValueFloor(int& failures) {
-    abm::Market market(1234U);
+    abm::Market market;
+    abm::FundamentalValueProcess fundamentalProcess(1234U);
     market.configureAssets({"floored_asset"});
     market.storeTrueValue(0, 10.0);
 
@@ -111,7 +115,8 @@ void testFundamentalPathAppliesMinimumValueFloor(int& failures) {
     parameters.shockStdDev = 0.0;
     parameters.minimumValue = 2.5;
 
-    const double nextFundamental = market.generateFundamentalValue(0, parameters);
+    const double nextFundamental =
+        fundamentalProcess.generateFundamentalValue(market, 0, parameters);
 
     abm::test::expect(abm::test::nearlyEqual(nextFundamental, parameters.minimumValue),
                       "fundamental value generation should apply the configured lower bound",

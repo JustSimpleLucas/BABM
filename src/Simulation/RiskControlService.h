@@ -1,7 +1,7 @@
 // RiskControlService.h
 
-#ifndef SIMULATION_RISK_CONTROL_SERVICE_H
-#define SIMULATION_RISK_CONTROL_SERVICE_H
+#ifndef ABM_SIMULATION_RISK_CONTROL_SERVICE_H
+#define ABM_SIMULATION_RISK_CONTROL_SERVICE_H
 
 #include <cstddef>
 #include <vector>
@@ -80,4 +80,4 @@ class RiskControlService {
 
 } // namespace abm
 
-#endif // SIMULATION_RISK_CONTROL_SERVICE_H
+#endif // ABM_SIMULATION_RISK_CONTROL_SERVICE_H

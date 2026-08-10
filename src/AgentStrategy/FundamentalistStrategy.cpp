@@ -157,9 +157,10 @@ FundamentalistStrategy::generateSignal(const Agent& agent, const PriceInputs& pr
                                      transactionCostReturnHurdle);
 }
 
-FundamentalistStrategy::SignalDecision FundamentalistStrategy::generateSignalForPosition(
-    const PriceInputs& prices, double stock, double averageEntryPrice,
-    double transactionCostReturnHurdle) const {
+FundamentalistStrategy::SignalDecision
+FundamentalistStrategy::generateSignalForPosition(const PriceInputs& prices, double stock,
+                                                  double averageEntryPrice,
+                                                  double transactionCostReturnHurdle) const {
     if (stock > kMinPosition && std::isfinite(averageEntryPrice) &&
         averageEntryPrice > kMinimumPrice) {
         /*
@@ -249,10 +250,9 @@ FundamentalistStrategy::buildSignalOrderIntent(const Agent& agent, const SignalD
         decision.action == AgentAction::Buy ? OrderType::BUY : OrderType::SELL;
     const double orderPrice =
         quantizeLimitPrice(inputs.prices.marketPrice, context.priceTickSize, orderType);
-    const double quantity =
-        orderType == OrderType::BUY
-            ? buyQuantity(agent, inputs, orderPrice, context.transactionCostRate)
-            : sellQuantity(agent, decision, inputs);
+    const double quantity = orderType == OrderType::BUY ? buyQuantity(agent, inputs, orderPrice,
+                                                                      context.transactionCostRate)
+                                                        : sellQuantity(agent, decision, inputs);
     return {{orderType, orderPrice, quantity}};
 }
 
@@ -282,16 +282,16 @@ FundamentalistStrategy::buildValuationOrderIntent(const Agent& agent,
         return std::nullopt;
     }
 
-    const double quantity =
-        quote->type == OrderType::BUY
-            ? buyQuantity(agent, inputs, quote->price, context.transactionCostRate)
-            : sellQuantity(agent, decision, inputs);
+    const double quantity = quote->type == OrderType::BUY ? buyQuantity(agent, inputs, quote->price,
+                                                                        context.transactionCostRate)
+                                                          : sellQuantity(agent, decision, inputs);
     return {{quote->type, quote->price, quantity}};
 }
 
-double FundamentalistStrategy::prospectAdjustedExcessReturn(
-    Agent& agent, const Market& market, std::size_t assetIndex,
-    const ProspectAdjustmentInputs& inputs) const {
+double
+FundamentalistStrategy::prospectAdjustedExcessReturn(Agent& agent, const Market& market,
+                                                     std::size_t assetIndex,
+                                                     const ProspectAdjustmentInputs& inputs) const {
     if (!agent.usesProspectTheory()) {
         return inputs.expectedExcessReturn;
     }
@@ -335,8 +335,7 @@ std::vector<Order> FundamentalistStrategy::generateOrders(Agent& agent, const Ma
     std::vector<double> excessReturns(assetCount);
     for (std::size_t assetIndex = 0; assetIndex < assetCount; ++assetIndex) {
         priceInputs[assetIndex] = PriceInputs{
-            prices[assetIndex],
-            strategy_detail::latestFiniteFundamentalPrice(market, assetIndex)};
+            prices[assetIndex], strategy_detail::latestFiniteFundamentalPrice(market, assetIndex)};
         decisions[assetIndex] = generateSignalForPosition(
             priceInputs[assetIndex], agent.getStock(assetIndex),
             agent.getAverageEntryPrice(assetIndex), transactionCostReturnHurdle);
@@ -344,8 +343,7 @@ std::vector<Order> FundamentalistStrategy::generateOrders(Agent& agent, const Ma
         const double sigma = std::sqrt(std::max(covariance.at(assetIndex, assetIndex),
                                                 kMinimumVolatility * kMinimumVolatility));
         const ProspectAdjustmentInputs prospectInputs{
-            forecastExcessReturn(mispricing(priceInputs[assetIndex])), sigma,
-            prices[assetIndex]};
+            forecastExcessReturn(mispricing(priceInputs[assetIndex])), sigma, prices[assetIndex]};
         excessReturns[assetIndex] =
             prospectAdjustedExcessReturn(agent, market, assetIndex, prospectInputs);
     }
@@ -353,27 +351,25 @@ std::vector<Order> FundamentalistStrategy::generateOrders(Agent& agent, const Ma
     const std::vector<AssetWeightBounds> bounds(
         assetCount, AssetWeightBounds{std::max(0.0, allocationLine_.minRiskyWeight()),
                                       std::max(0.0, allocationLine_.maxRiskyWeight())});
-    const std::vector<double> weights =
-        optimalRiskyWeights(PortfolioInputs{&excessReturns, &covariance,
-                                            allocationLine_.riskAversion(), &bounds,
-                                            maxGrossExposure_});
+    const std::vector<double> weights = optimalRiskyWeights(PortfolioInputs{
+        &excessReturns, &covariance, allocationLine_.riskAversion(), &bounds, maxGrossExposure_});
 
     std::vector<Order> orders;
     orders.reserve(assetCount);
     double remainingCash = agent.getCash();
     for (std::size_t assetIndex = 0; assetIndex < assetCount; ++assetIndex) {
         const SignalDecision& decision = decisions[assetIndex];
-        const double targetUnits = strategy_detail::targetRiskyUnits(
-            strategy_detail::TargetUnitsRequest{wealth, weights[assetIndex], prices[assetIndex],
-                                                true, decision.forceLiquidation});
+        const double targetUnits =
+            strategy_detail::targetRiskyUnits(strategy_detail::TargetUnitsRequest{
+                wealth, weights[assetIndex], prices[assetIndex], true, decision.forceLiquidation});
 
         TradingOrderContext assetContext = context;
         assetContext.priceTickSize = assets[assetIndex].priceTickSize;
 
-        const double rawOrderPrice = std::max(
-            kMinimumPrice,
-            priceInputs[assetIndex].fundamentalPrice *
-                std::exp(std::max(0.0, context.opinionKappa) * context.socialOpinion));
+        const double rawOrderPrice =
+            std::max(kMinimumPrice,
+                     priceInputs[assetIndex].fundamentalPrice *
+                         std::exp(std::max(0.0, context.opinionKappa) * context.socialOpinion));
         const std::optional<strategy_detail::ValuationQuote> quote =
             strategy_detail::buildValuationQuote(
                 strategy_detail::ValuationQuoteRequest{rawOrderPrice, prices[assetIndex],
@@ -405,8 +401,8 @@ std::vector<Order> FundamentalistStrategy::generateOrders(Agent& agent, const Ma
         order.assetIndex = static_cast<std::uint32_t>(assetIndex);
         order.timeStep = timeStep;
         if (quote->type == OrderType::BUY) {
-            remainingCash = std::max(0.0, remainingCash -
-                                              (quote->price * quantity *
+            remainingCash =
+                std::max(0.0, remainingCash - (quote->price * quantity *
                                                (1.0 + std::max(0.0, context.transactionCostRate))));
         }
         orders.push_back(order);

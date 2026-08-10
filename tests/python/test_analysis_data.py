@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from abm_analysis.data import (
+from abm_analysis.archive.data import (
     build_run_archive,
     build_runs_index,
     compute_log_returns,

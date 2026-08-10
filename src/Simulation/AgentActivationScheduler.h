@@ -1,7 +1,7 @@
 // AgentActivationScheduler.h
 
-#ifndef SIMULATION_AGENT_ACTIVATION_SCHEDULER_H
-#define SIMULATION_AGENT_ACTIVATION_SCHEDULER_H
+#ifndef ABM_SIMULATION_AGENT_ACTIVATION_SCHEDULER_H
+#define ABM_SIMULATION_AGENT_ACTIVATION_SCHEDULER_H
 
 #include <cstddef>
 #include <vector>
@@ -41,4 +41,4 @@ class AgentActivationScheduler {
 
 } // namespace abm
 
-#endif // SIMULATION_AGENT_ACTIVATION_SCHEDULER_H
+#endif // ABM_SIMULATION_AGENT_ACTIVATION_SCHEDULER_H

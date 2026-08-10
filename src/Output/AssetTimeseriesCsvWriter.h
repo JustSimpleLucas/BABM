@@ -1,7 +1,7 @@
 // AssetTimeseriesCsvWriter.h
 
-#ifndef OUTPUT_ASSET_TIMESERIES_CSV_WRITER_H
-#define OUTPUT_ASSET_TIMESERIES_CSV_WRITER_H
+#ifndef ABM_OUTPUT_ASSET_TIMESERIES_CSV_WRITER_H
+#define ABM_OUTPUT_ASSET_TIMESERIES_CSV_WRITER_H
 
 #include <string>
 
@@ -21,4 +21,4 @@ bool exportAssetTimeseriesCsv(const std::string& outputPath, const SimulationRun
 } // namespace output_detail
 } // namespace abm
 
-#endif // OUTPUT_ASSET_TIMESERIES_CSV_WRITER_H
+#endif // ABM_OUTPUT_ASSET_TIMESERIES_CSV_WRITER_H

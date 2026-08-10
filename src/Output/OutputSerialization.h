@@ -1,7 +1,7 @@
 // OutputSerialization.h
 
-#ifndef OUTPUT_OUTPUT_SERIALIZATION_H
-#define OUTPUT_OUTPUT_SERIALIZATION_H
+#ifndef ABM_OUTPUT_OUTPUT_SERIALIZATION_H
+#define ABM_OUTPUT_OUTPUT_SERIALIZATION_H
 
 #include <string>
 
@@ -32,4 +32,4 @@ namespace abm::output_detail {
 
 } // namespace abm::output_detail
 
-#endif // OUTPUT_OUTPUT_SERIALIZATION_H
+#endif // ABM_OUTPUT_OUTPUT_SERIALIZATION_H

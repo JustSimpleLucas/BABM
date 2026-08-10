@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 import numpy as np
 import pandas as pd
-from abm_analysis.data import build_runs_index
+from abm_analysis.archive.data import build_runs_index
 from abm_analysis.parallel import map_in_order, resolve_job_count
 from .constants import FAILED_TRIAL_SCORE
 from .execution import _run_and_score_candidate_with_optional_worker

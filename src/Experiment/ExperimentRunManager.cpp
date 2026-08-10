@@ -28,12 +28,9 @@ std::string sanitizePathComponent(const std::string& value) {
         }
     }
 
-    sanitized.erase(
-        std::unique(
-            sanitized.begin(),
-            sanitized.end(),
-            [](char lhs, char rhs) { return lhs == '_' && rhs == '_'; }),
-        sanitized.end());
+    sanitized.erase(std::unique(sanitized.begin(), sanitized.end(),
+                                [](char lhs, char rhs) { return lhs == '_' && rhs == '_'; }),
+                    sanitized.end());
     while (!sanitized.empty() && sanitized.front() == '_') {
         sanitized.erase(sanitized.begin());
     }
@@ -80,34 +77,19 @@ std::string ExperimentRunManager::buildRunId(const SimulationConfig& config,
      * Numeric-only run identifiers keep large experiment batches easy to sort
      * while preserving the parameter order required by the project convention.
      */
-    runFolderName << timestamp
-                  << '_'
-                  << output_detail::boolToFlag(config.control.prospectTheoryEnabled)
-                  << '_'
-                  << output_detail::boolToFlag(
-                         config.control.prospectParameterHeterogeneityEnabled)
-                  << '_'
-                  << output_detail::boolToFlag(config.social.enabled)
-                  << '_'
-                  << output_detail::boolToFlag(config.shortSellingEnabled)
-                  << '_'
-                  << config.numFundamentalists
-                  << '_'
-                  << config.numChartists
-                  << '_'
-                  << config.numNoiseTraders
-                  << '_'
-                  << config.numBuyAndHoldAgents
-                  << '_'
-                  << config.timeSteps
-                  << '_'
-                  << config.seed;
+    runFolderName << timestamp << '_'
+                  << output_detail::boolToFlag(config.control.prospectTheoryEnabled) << '_'
+                  << output_detail::boolToFlag(config.control.prospectParameterHeterogeneityEnabled)
+                  << '_' << output_detail::boolToFlag(config.social.enabled) << '_'
+                  << output_detail::boolToFlag(config.shortSellingEnabled) << '_'
+                  << config.numFundamentalists << '_' << config.numChartists << '_'
+                  << config.numNoiseTraders << '_' << config.numBuyAndHoldAgents << '_'
+                  << config.timeSteps << '_' << config.seed;
 
     return runFolderName.str();
 }
 
-bool ExperimentRunManager::prepareOutputLayout(RuntimeConfig& runtimeConfig,
-                                               std::string& error) {
+bool ExperimentRunManager::prepareOutputLayout(RuntimeConfig& runtimeConfig, std::string& error) {
     if (!runtimeConfig.output.experimentOutputEnabled) {
         if (runtimeConfig.output.createdAtLocal.empty()) {
             runtimeConfig.output.createdAtLocal = currentLocalTimestampForMetadata();
@@ -117,8 +99,7 @@ bool ExperimentRunManager::prepareOutputLayout(RuntimeConfig& runtimeConfig,
 
     namespace fs = std::filesystem;
 
-    const std::string experimentName =
-        sanitizePathComponent(runtimeConfig.output.experimentName);
+    const std::string experimentName = sanitizePathComponent(runtimeConfig.output.experimentName);
     const std::string runLabel = sanitizePathComponent(runtimeConfig.output.runLabel);
 
     const fs::path experimentDirectory =
@@ -150,8 +131,8 @@ bool ExperimentRunManager::prepareOutputLayout(RuntimeConfig& runtimeConfig,
 
     fs::create_directories(runDirectory, ec);
     if (ec) {
-        error = "Unable to create experiment run directory: " +
-                runDirectory.string() + " (" + ec.message() + ")";
+        error = "Unable to create experiment run directory: " + runDirectory.string() + " (" +
+                ec.message() + ")";
         return false;
     }
 
@@ -167,31 +148,19 @@ bool ExperimentRunManager::prepareOutputLayout(RuntimeConfig& runtimeConfig,
     runtimeConfig.output.runDirectoryPath = runDirectory.string();
     runtimeConfig.output.experimentManifestCsvPath =
         (experimentDirectory / "experiment_manifest.csv").string();
-    runtimeConfig.output.simulationCsvPath =
-        (runDirectory / "step_timeseries.csv").string();
-    runtimeConfig.output.assetTimeseriesCsvPath =
-        (runDirectory / "asset_timeseries.csv").string();
-    runtimeConfig.output.agentCsvPath =
-        (runDirectory / "agents_final.csv").string();
-    runtimeConfig.output.tradeLedgerCsvPath =
-        (runDirectory / "trade_ledger.csv").string();
-    runtimeConfig.output.summaryMetricsCsvPath =
-        (runDirectory / "summary_metrics.csv").string();
-    runtimeConfig.output.stylisedFactsCsvPath =
-        (runDirectory / "stylised_facts.csv").string();
-    runtimeConfig.output.configJsonPath =
-        (runDirectory / "config.json").string();
-    runtimeConfig.output.metadataJsonPath =
-        (runDirectory / "metadata.json").string();
-    runtimeConfig.output.runLogPath =
-        (runDirectory / "logs" / "run.log").string();
+    runtimeConfig.output.simulationCsvPath = (runDirectory / "step_timeseries.csv").string();
+    runtimeConfig.output.assetTimeseriesCsvPath = (runDirectory / "asset_timeseries.csv").string();
+    runtimeConfig.output.agentCsvPath = (runDirectory / "agents_final.csv").string();
+    runtimeConfig.output.tradeLedgerCsvPath = (runDirectory / "trade_ledger.csv").string();
+    runtimeConfig.output.summaryMetricsCsvPath = (runDirectory / "summary_metrics.csv").string();
+    runtimeConfig.output.stylisedFactsCsvPath = (runDirectory / "stylised_facts.csv").string();
+    runtimeConfig.output.configJsonPath = (runDirectory / "config.json").string();
+    runtimeConfig.output.metadataJsonPath = (runDirectory / "metadata.json").string();
+    runtimeConfig.output.runLogPath = (runDirectory / "logs" / "run.log").string();
 
     if (!runtimeConfig.sourcePath.empty()) {
-        fs::copy_file(
-            runtimeConfig.sourcePath,
-            runDirectory / "config_used.cfg",
-            fs::copy_options::overwrite_existing,
-            ec);
+        fs::copy_file(runtimeConfig.sourcePath, runDirectory / "config_used.cfg",
+                      fs::copy_options::overwrite_existing, ec);
         if (ec) {
             error = "Unable to copy config into run directory: " + ec.message();
             return false;

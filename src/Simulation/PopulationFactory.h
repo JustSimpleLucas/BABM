@@ -1,7 +1,7 @@
 // PopulationFactory.h
 
-#ifndef SIMULATION_POPULATION_FACTORY_H
-#define SIMULATION_POPULATION_FACTORY_H
+#ifndef ABM_SIMULATION_POPULATION_FACTORY_H
+#define ABM_SIMULATION_POPULATION_FACTORY_H
 
 #include "ControlParameters/SimulationConfig.h"
 #include "RandomGenerator/RandomGenerator.h"
@@ -28,4 +28,4 @@ class PopulationFactory {
 
 } // namespace abm
 
-#endif // SIMULATION_POPULATION_FACTORY_H
+#endif // ABM_SIMULATION_POPULATION_FACTORY_H

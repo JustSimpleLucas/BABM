@@ -4,13 +4,6 @@ from __future__ import annotations
 
 import argparse
 
-
-from .cli_arguments import (
-    add_benchmark_arguments,
-    add_calibration_benchmark_arguments,
-    add_database_arguments,
-    add_source_arguments,
-)
 from .commands import COMMAND_MODULES
 
 
@@ -28,11 +21,3 @@ def build_parser() -> argparse.ArgumentParser:
     for command in COMMAND_MODULES:
         command.register(subparsers)
     return parser
-
-
-# Legacy underscore aliases kept for callers that import the private names.
-_build_parser = build_parser
-_add_benchmark_arguments = add_benchmark_arguments
-_add_calibration_benchmark_arguments = add_calibration_benchmark_arguments
-_add_database_arguments = add_database_arguments
-_add_source_arguments = add_source_arguments

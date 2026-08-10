@@ -1,7 +1,7 @@
 // Order.h
 
-#ifndef ORDER_H
-#define ORDER_H
+#ifndef ABM_ORDER_BOOK_ORDER_H
+#define ABM_ORDER_BOOK_ORDER_H
 
 #include <cstddef>
 #include <cstdint>
@@ -55,4 +55,4 @@ struct Order {
 
 } // namespace abm
 
-#endif // ORDER_H
+#endif // ABM_ORDER_BOOK_ORDER_H

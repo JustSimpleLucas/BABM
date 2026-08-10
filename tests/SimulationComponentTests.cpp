@@ -4,9 +4,10 @@
 
 #include "Agent/Agent.h"
 #include "AgentStrategy/FundamentalistStrategy.h"
-#include "Analysis/AllocativeEfficiency.h"
-#include "Analysis/StylisedFactMetrics.h"
+#include "Market/FundamentalValueProcess.h"
 #include "Market/Market.h"
+#include "Metrics/AllocativeEfficiency.h"
+#include "Metrics/StylisedFactMetrics.h"
 #include "RiskManagement/ShortSaleRiskControls.h"
 #include "Simulation/AgentActivationScheduler.h"
 #include "Simulation/DiagnosticsRecorder.h"
@@ -115,17 +116,13 @@ void testRunMetricsCalculatesFinalWealthGiniFromAgentSnapshots(int& failures) {
     snapshots[1].finalWealth = 0.0;
     snapshots[2].finalWealth = 100.0;
 
-    const abm::SimulationRunResult result{config,
-                                          abm::SimulationStats{},
-                                          {},
-                                          std::move(snapshots),
-                                          {},
-                                          singleAssetRunData(config)};
+    const abm::SimulationRunResult result{
+        config, abm::SimulationStats{}, {}, std::move(snapshots), {}, singleAssetRunData(config)};
     const abm::RunMetrics metrics = abm::calculateRunMetrics(result);
 
-    abm::test::expect(
-        abm::test::nearlyEqual(metrics.finalWealthGiniCoefficient, 2.0 / 3.0, 1e-12),
-        "run metrics should calculate final wealth Gini from final agent snapshots", failures);
+    abm::test::expect(abm::test::nearlyEqual(metrics.finalWealthGiniCoefficient, 2.0 / 3.0, 1e-12),
+                      "run metrics should calculate final wealth Gini from final agent snapshots",
+                      failures);
 }
 
 void testRunMetricsAveragesOnlyPositiveOpportunityEfficiencySteps(int& failures) {
@@ -138,12 +135,8 @@ void testRunMetricsAveragesOnlyPositiveOpportunityEfficiencySteps(int& failures)
     steps[2].asset.maximumAllocativeSurplus = 5.0;
     steps[2].asset.allocativeEfficiency = 1.0;
 
-    const abm::SimulationRunResult result{config,
-                                          abm::SimulationStats{},
-                                          std::move(steps),
-                                          {},
-                                          {},
-                                          singleAssetRunData(config)};
+    const abm::SimulationRunResult result{config, abm::SimulationStats{},    std::move(steps), {},
+                                          {},     singleAssetRunData(config)};
     const abm::RunMetrics metrics = abm::calculateRunMetrics(result);
 
     abm::test::expect(metrics.allocativeEfficiencyObservations == 2 &&
@@ -190,8 +183,8 @@ void testAssetRunMetricsScreenEachAssetIndependently(int& failures) {
         multiAsset.assetStepDetails.push_back(beta);
     }
 
-    const abm::SimulationRunResult result{config,   abm::SimulationStats{}, {}, {}, {},
-                                          std::move(multiAsset)};
+    const abm::SimulationRunResult result{config, abm::SimulationStats{}, {}, {},
+                                          {},     std::move(multiAsset)};
     const std::vector<abm::AssetRunMetrics> assetMetrics = abm::calculateAssetRunMetrics(result);
 
     abm::test::expect(assetMetrics.size() == 2 && assetMetrics[0].assetName == "alpha" &&
@@ -238,8 +231,7 @@ void testAllocativeEfficiencyZeroWhenNoPositiveSurplusExists(int& failures) {
         {abm::OrderType::SELL, 100.0, 4.0},
     };
 
-    const abm::AllocativeEfficiencyResult result =
-        abm::calculateAllocativeEfficiency(orders, {});
+    const abm::AllocativeEfficiencyResult result = abm::calculateAllocativeEfficiency(orders, {});
 
     abm::test::expect(abm::test::nearlyEqual(result.maximumSurplus, 0.0) &&
                           abm::test::nearlyEqual(result.efficiency, 0.0),
@@ -478,15 +470,15 @@ void testRiskControlServicePerAssetShortInterestAndBuyIn(int& failures) {
                           abm::test::nearlyEqual(riskControls.aggregateShortInterest(1), 20.0),
                       "risk controls should track short interest per asset", failures);
 
-    const abm::ForcedBuyInResult forcedBuyIns = riskControls.enforceMaintenanceMargin(
-        std::vector<double>{100.0, 140.0}, 4, config, population.agentsById, ledger, nextTradeId,
-        true);
+    const abm::ForcedBuyInResult forcedBuyIns =
+        riskControls.enforceMaintenanceMargin(std::vector<double>{100.0, 140.0}, 4, config,
+                                              population.agentsById, ledger, nextTradeId, true);
 
-    abm::test::expect(abm::test::nearlyEqual(forcedBuyIns.volume, 17.142857142857142, 1e-9) &&
-                          abm::test::nearlyEqual(forcedBuyIns.volumeByAsset[0], 0.0) &&
-                          abm::test::nearlyEqual(forcedBuyIns.volumeByAsset[1],
-                                                 17.142857142857142, 1e-9),
-                      "forced buy-in should cover only the shorted asset", failures);
+    abm::test::expect(
+        abm::test::nearlyEqual(forcedBuyIns.volume, 17.142857142857142, 1e-9) &&
+            abm::test::nearlyEqual(forcedBuyIns.volumeByAsset[0], 0.0) &&
+            abm::test::nearlyEqual(forcedBuyIns.volumeByAsset[1], 17.142857142857142, 1e-9),
+        "forced buy-in should cover only the shorted asset", failures);
     abm::test::expect(
         abm::test::nearlyEqual(riskControls.aggregateShortInterest(1), 2.857142857142858, 1e-9) &&
             abm::test::nearlyEqual(riskControls.aggregateShortInterest(0), 0.0),
@@ -519,22 +511,27 @@ void testMarketClearingEngineIsolatesAssetBooks(int& failures) {
      * A resting ask on asset 0 must not match a crossing buy on asset 1, even
      * at prices that would cross inside one book.
      */
-    abm::Order restingAsk = makeOrder(1, 2, abm::OrderType::SELL, abm::OrderStyle::LIMIT, 40.0,
-                                      2.0);
+    abm::Order restingAsk =
+        makeOrder(1, 2, abm::OrderType::SELL, abm::OrderStyle::LIMIT, 40.0, 2.0);
     restingAsk.assetIndex = 0;
-    abm::Order crossAssetBuy = makeOrder(2, 1, abm::OrderType::BUY, abm::OrderStyle::LIMIT, 60.0,
-                                         2.0);
+    abm::Order crossAssetBuy =
+        makeOrder(2, 1, abm::OrderType::BUY, abm::OrderStyle::LIMIT, 60.0, 2.0);
     crossAssetBuy.assetIndex = 1;
     const std::vector<abm::Order> orders{restingAsk, crossAssetBuy};
 
     const std::vector<double> referencePrices{100.0, 50.0};
     const std::vector<abm::MicrostructureStepResult> results =
-        clearingEngine.executeOrders(abm::OrderExecutionRequest{
-            &orders, &referencePrices, {}, &config, &population.agentsById, &riskControls,
-            &ledger, &nextTradeId, true});
+        clearingEngine.executeOrders(abm::OrderExecutionRequest{&orders,
+                                                                &referencePrices,
+                                                                {},
+                                                                &config,
+                                                                &population.agentsById,
+                                                                &riskControls,
+                                                                &ledger,
+                                                                &nextTradeId,
+                                                                true});
 
-    abm::test::expect(results.size() == 2, "clearing should report one result per asset",
-                      failures);
+    abm::test::expect(results.size() == 2, "clearing should report one result per asset", failures);
     abm::test::expect(results[0].executedTrades == 0 && results[1].executedTrades == 0,
                       "orders on different assets must never match each other", failures);
     abm::test::expect(results[0].bookMetrics.restingAskOrders == 1 &&
@@ -545,14 +542,20 @@ void testMarketClearingEngineIsolatesAssetBooks(int& failures) {
      * A same-asset buy must still match the resting ask, updating only that
      * asset's inventory.
      */
-    abm::Order sameAssetBuy = makeOrder(3, 1, abm::OrderType::BUY, abm::OrderStyle::MARKET, 0.0,
-                                        2.0);
+    abm::Order sameAssetBuy =
+        makeOrder(3, 1, abm::OrderType::BUY, abm::OrderStyle::MARKET, 0.0, 2.0);
     sameAssetBuy.assetIndex = 0;
     const std::vector<abm::Order> followUpOrders{sameAssetBuy};
     const std::vector<abm::MicrostructureStepResult> followUpResults =
-        clearingEngine.executeOrders(abm::OrderExecutionRequest{
-            &followUpOrders, &referencePrices, {}, &config, &population.agentsById,
-            &riskControls, &ledger, &nextTradeId, true});
+        clearingEngine.executeOrders(abm::OrderExecutionRequest{&followUpOrders,
+                                                                &referencePrices,
+                                                                {},
+                                                                &config,
+                                                                &population.agentsById,
+                                                                &riskControls,
+                                                                &ledger,
+                                                                &nextTradeId,
+                                                                true});
 
     abm::test::expect(followUpResults[0].executedTrades == 1 &&
                           abm::test::nearlyEqual(followUpResults[0].tradedVolume, 2.0),
@@ -586,9 +589,15 @@ void testMarketClearingEngineExecutesConstrainedTrade(int& failures) {
     const std::vector<double> referencePrices{100.0};
     const abm::MicrostructureStepResult result =
         clearingEngine
-            .executeOrders(abm::OrderExecutionRequest{
-                &orders, &referencePrices, {}, &config, &population.agentsById, &riskControls,
-                &ledger, &nextTradeId, true})
+            .executeOrders(abm::OrderExecutionRequest{&orders,
+                                                      &referencePrices,
+                                                      {},
+                                                      &config,
+                                                      &population.agentsById,
+                                                      &riskControls,
+                                                      &ledger,
+                                                      &nextTradeId,
+                                                      true})
             .front();
 
     abm::test::expect(abm::test::nearlyEqual(result.tradedVolume, 2.0),
@@ -625,9 +634,15 @@ void testMarketClearingEngineAppliesTransactionCosts(int& failures) {
     const std::vector<double> referencePrices{100.0};
     const abm::MicrostructureStepResult result =
         clearingEngine
-            .executeOrders(abm::OrderExecutionRequest{
-                &orders, &referencePrices, {}, &config, &population.agentsById, &riskControls,
-                &ledger, &nextTradeId, true})
+            .executeOrders(abm::OrderExecutionRequest{&orders,
+                                                      &referencePrices,
+                                                      {},
+                                                      &config,
+                                                      &population.agentsById,
+                                                      &riskControls,
+                                                      &ledger,
+                                                      &nextTradeId,
+                                                      true})
             .front();
 
     abm::test::expect(abm::test::nearlyEqual(result.totalTransactionCosts, 4.0),
@@ -668,9 +683,15 @@ void testMarketClearingEngineCostAwareAffordability(int& failures) {
     const std::vector<double> referencePrices{100.0};
     const abm::MicrostructureStepResult result =
         clearingEngine
-            .executeOrders(abm::OrderExecutionRequest{
-                &orders, &referencePrices, {}, &config, &population.agentsById, &riskControls,
-                &ledger, &nextTradeId, true})
+            .executeOrders(abm::OrderExecutionRequest{&orders,
+                                                      &referencePrices,
+                                                      {},
+                                                      &config,
+                                                      &population.agentsById,
+                                                      &riskControls,
+                                                      &ledger,
+                                                      &nextTradeId,
+                                                      true})
             .front();
 
     abm::test::expect(abm::test::nearlyEqual(result.tradedVolume, 1.0),
@@ -699,9 +720,15 @@ void testMarketClearingEngineReportsAllocativeEfficiency(int& failures) {
     const std::vector<double> referencePrices{100.0};
     const abm::MicrostructureStepResult result =
         clearingEngine
-            .executeOrders(abm::OrderExecutionRequest{
-                &orders, &referencePrices, {}, &config, &population.agentsById, &riskControls,
-                &ledger, &nextTradeId, true})
+            .executeOrders(abm::OrderExecutionRequest{&orders,
+                                                      &referencePrices,
+                                                      {},
+                                                      &config,
+                                                      &population.agentsById,
+                                                      &riskControls,
+                                                      &ledger,
+                                                      &nextTradeId,
+                                                      true})
             .front();
 
     abm::test::expect(abm::test::nearlyEqual(result.realizedAllocativeSurplus, 14.0) &&
@@ -731,9 +758,15 @@ void testMarketClearingEnginePreventsSelfTrade(int& failures) {
     const std::vector<double> referencePrices{100.0};
     const abm::MicrostructureStepResult result =
         clearingEngine
-            .executeOrders(abm::OrderExecutionRequest{
-                &orders, &referencePrices, {}, &config, &population.agentsById, &riskControls,
-                &ledger, &nextTradeId, true})
+            .executeOrders(abm::OrderExecutionRequest{&orders,
+                                                      &referencePrices,
+                                                      {},
+                                                      &config,
+                                                      &population.agentsById,
+                                                      &riskControls,
+                                                      &ledger,
+                                                      &nextTradeId,
+                                                      true})
             .front();
 
     abm::test::expect(result.selfTradePreventions == 1,
@@ -770,9 +803,15 @@ void testMarketClearingEngineMarketOrderPriceCollar(int& failures) {
     const std::vector<double> referencePrices{100.0};
     const abm::MicrostructureStepResult result =
         clearingEngine
-            .executeOrders(abm::OrderExecutionRequest{
-                &orders, &referencePrices, {}, &config, &population.agentsById, &riskControls,
-                &ledger, &nextTradeId, true})
+            .executeOrders(abm::OrderExecutionRequest{&orders,
+                                                      &referencePrices,
+                                                      {},
+                                                      &config,
+                                                      &population.agentsById,
+                                                      &riskControls,
+                                                      &ledger,
+                                                      &nextTradeId,
+                                                      true})
             .front();
 
     abm::test::expect(result.collarRejectedOrders == 1,
@@ -810,9 +849,8 @@ void testMarketClearingEngineSplitsCancellationCounters(int& failures) {
     const abm::MicrostructureStepResult result =
         clearingEngine
             .executeOrders(abm::OrderExecutionRequest{
-                &orders, &referencePrices,
-                std::vector<abm::RestingOrderLifecycleCounts>{{2, 1}}, &config,
-                &population.agentsById, &riskControls, &ledger, &nextTradeId, true})
+                &orders, &referencePrices, std::vector<abm::RestingOrderLifecycleCounts>{{2, 1}},
+                &config, &population.agentsById, &riskControls, &ledger, &nextTradeId, true})
             .front();
 
     abm::test::expect(result.executedTrades == 1 &&
@@ -882,7 +920,7 @@ void testDiagnosticsRecorderBuildsStepAndRunOutput(int& failures) {
     config.timeSteps = 2;
     config.initialCash = 1000.0;
 
-    abm::Market market(7U);
+    abm::Market market;
     market.configureAssets({config.assetName()});
     market.storeMarketValue(0, 100.0);
     market.storeTrueValue(0, 100.0);
@@ -931,7 +969,8 @@ void testDiagnosticsRecorderBuildsStepAndRunOutput(int& failures) {
         "diagnostics recorder should export wealth Gini from population state", failures);
     abm::test::expect(
         abm::test::nearlyEqual(result.stepDetails().front().asset.realizedAllocativeSurplus, 7.0) &&
-            abm::test::nearlyEqual(result.stepDetails().front().asset.maximumAllocativeSurplus, 10.0) &&
+            abm::test::nearlyEqual(result.stepDetails().front().asset.maximumAllocativeSurplus,
+                                   10.0) &&
             abm::test::nearlyEqual(result.stepDetails().front().asset.allocativeEfficiency, 0.7),
         "diagnostics recorder should export double-auction allocative-efficiency diagnostics",
         failures);
@@ -959,19 +998,22 @@ void testCorrelatedFundamentalMatchesLegacySingleAssetDraw(int& failures) {
     parameters.shockStdDev = 0.03;
     parameters.minimumValue = 1.0;
 
-    abm::Market legacyMarket(4242U);
+    abm::Market legacyMarket;
+    abm::FundamentalValueProcess legacyProcess(4242U);
     legacyMarket.configureAssets({"alpha"});
     legacyMarket.storeTrueValue(0, 100.0);
-    abm::Market jointMarket(4242U);
+    abm::Market jointMarket;
+    abm::FundamentalValueProcess jointProcess(4242U);
     jointMarket.configureAssets({"alpha"});
     jointMarket.storeTrueValue(0, 100.0);
 
     for (int step = 0; step < 64; ++step) {
-        const double legacyValue = legacyMarket.generateFundamentalValue(0, parameters);
+        const double legacyValue =
+            legacyProcess.generateFundamentalValue(legacyMarket, 0, parameters);
         const std::vector<double> jointValues =
-            jointMarket.generateCorrelatedFundamentalValues({parameters}, 0.0);
-        abm::test::expect(jointValues.size() == 1U,
-                          "Single-asset joint draw returns one value", failures);
+            jointProcess.generateCorrelatedFundamentalValues(jointMarket, {parameters}, 0.0);
+        abm::test::expect(jointValues.size() == 1U, "Single-asset joint draw returns one value",
+                          failures);
         abm::test::expect(legacyValue == jointValues.front(),
                           "Correlated single-asset draw is bit-identical to the legacy draw",
                           failures);
@@ -988,21 +1030,22 @@ void testIndependentFundamentalsDifferAcrossAssets(int& failures) {
     parameters.shockStdDev = 0.05;
     parameters.minimumValue = 1.0;
 
-    abm::Market market(99U);
+    abm::Market market;
+    abm::FundamentalValueProcess fundamentalProcess(99U);
     market.configureAssets({"alpha", "beta"});
     market.storeTrueValue(0, 100.0);
     market.storeTrueValue(1, 100.0);
 
     bool sawDifference = false;
     for (int step = 0; step < 32; ++step) {
-        const std::vector<double> values = market.generateCorrelatedFundamentalValues(
-            {parameters, parameters}, 0.0);
+        const std::vector<double> values = fundamentalProcess.generateCorrelatedFundamentalValues(
+            market, {parameters, parameters}, 0.0);
         if (values.at(0) != values.at(1)) {
             sawDifference = true;
         }
     }
-    abm::test::expect(sawDifference,
-                      "Uncorrelated assets receive distinct fundamental innovations", failures);
+    abm::test::expect(sawDifference, "Uncorrelated assets receive distinct fundamental innovations",
+                      failures);
 }
 
 /**
@@ -1023,7 +1066,8 @@ void testCorrelatedFundamentalsReproduceRequestedCorrelation(int& failures) {
         parameters.shockStdDev = 1.0;
         parameters.minimumValue = 1e-12;
 
-        abm::Market market(20260807U);
+        abm::Market market;
+        abm::FundamentalValueProcess fundamentalProcess(20260807U);
         market.configureAssets({"alpha", "beta"});
         market.storeTrueValue(0, 0.0);
         market.storeTrueValue(1, 0.0);
@@ -1035,8 +1079,9 @@ void testCorrelatedFundamentalsReproduceRequestedCorrelation(int& failures) {
         double previousAlpha = 0.0;
         double previousBeta = 0.0;
         for (int sample = 0; sample < sampleCount; ++sample) {
-            const std::vector<double> values = market.generateCorrelatedFundamentalValues(
-                {parameters, parameters}, target);
+            const std::vector<double> values =
+                fundamentalProcess.generateCorrelatedFundamentalValues(
+                    market, {parameters, parameters}, target);
             alphaIncrements.push_back(values.at(0) - previousAlpha);
             betaIncrements.push_back(values.at(1) - previousBeta);
             previousAlpha = values.at(0);
@@ -1080,13 +1125,14 @@ void testGeometricBrownianMotionFundamentalProcess(int& failures) {
     geometric.shockStdDev = 0.02;
     geometric.minimumValue = 1e-8;
 
-    abm::Market market(7U);
+    abm::Market market;
+    abm::FundamentalValueProcess fundamentalProcess(7U);
     market.configureAssets({"beta"});
     market.storeTrueValue(0, 40.0);
 
     bool alwaysPositive = true;
     for (int step = 0; step < 500; ++step) {
-        const double value = market.generateFundamentalValue(0, geometric);
+        const double value = fundamentalProcess.generateFundamentalValue(market, 0, geometric);
         if (!(value > 0.0)) {
             alwaysPositive = false;
         }
@@ -1105,14 +1151,16 @@ void testGeometricBrownianMotionFundamentalProcess(int& failures) {
     deterministic.shockStdDev = 0.0;
     deterministic.minimumValue = 1e-8;
 
-    abm::Market deterministicMarket(11U);
+    abm::Market deterministicMarket;
+    abm::FundamentalValueProcess deterministicProcess(11U);
     deterministicMarket.configureAssets({"beta"});
     deterministicMarket.storeTrueValue(0, 50.0);
     double expected = 50.0;
     bool matchesClosedForm = true;
     for (int step = 0; step < 25; ++step) {
         expected *= std::exp(0.01);
-        const double value = deterministicMarket.generateFundamentalValue(0, deterministic);
+        const double value =
+            deterministicProcess.generateFundamentalValue(deterministicMarket, 0, deterministic);
         if (!abm::test::nearlyEqual(value, expected, 1e-9)) {
             matchesClosedForm = false;
         }
@@ -1135,13 +1183,14 @@ void testAssetsMayUseDifferentProcesses(int& failures) {
     geometric.shockStdDev = 0.0;
     geometric.minimumValue = 1e-8;
 
-    abm::Market market(5U);
+    abm::Market market;
+    abm::FundamentalValueProcess fundamentalProcess(5U);
     market.configureAssets({"alpha", "beta"});
     market.storeTrueValue(0, 100.0);
     market.storeTrueValue(1, 100.0);
 
-    const std::vector<double> values =
-        market.generateCorrelatedFundamentalValues({arithmetic, geometric}, 0.5);
+    const std::vector<double> values = fundamentalProcess.generateCorrelatedFundamentalValues(
+        market, {arithmetic, geometric}, 0.5);
 
     abm::test::expect(abm::test::nearlyEqual(values.at(0), 101.0, 1e-9),
                       "Arithmetic asset advances additively by its drift", failures);
@@ -1155,7 +1204,8 @@ void testCorrelatedFundamentalsRejectInvalidCorrelation(int& failures) {
     parameters.shockStdDev = 0.01;
     parameters.minimumValue = 1e-8;
 
-    abm::Market market(3U);
+    abm::Market market;
+    abm::FundamentalValueProcess fundamentalProcess(3U);
     market.configureAssets({"alpha", "beta", "gamma"});
     market.storeTrueValue(0, 100.0);
     market.storeTrueValue(1, 100.0);
@@ -1163,8 +1213,8 @@ void testCorrelatedFundamentalsRejectInvalidCorrelation(int& failures) {
 
     bool rejectedOutOfRange = false;
     try {
-        const std::vector<double> ignored = market.generateCorrelatedFundamentalValues(
-            {parameters, parameters, parameters}, 1.5);
+        const std::vector<double> ignored = fundamentalProcess.generateCorrelatedFundamentalValues(
+            market, {parameters, parameters, parameters}, 1.5);
         (void)ignored;
     } catch (const std::invalid_argument&) {
         rejectedOutOfRange = true;
@@ -1177,8 +1227,8 @@ void testCorrelatedFundamentalsRejectInvalidCorrelation(int& failures) {
      */
     bool rejectedNotPsd = false;
     try {
-        const std::vector<double> ignored = market.generateCorrelatedFundamentalValues(
-            {parameters, parameters, parameters}, -0.9);
+        const std::vector<double> ignored = fundamentalProcess.generateCorrelatedFundamentalValues(
+            market, {parameters, parameters, parameters}, -0.9);
         (void)ignored;
     } catch (const std::invalid_argument&) {
         rejectedNotPsd = true;

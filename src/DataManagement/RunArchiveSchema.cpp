@@ -9,9 +9,8 @@ namespace abm {
 namespace {
 
 bool isBlank(const std::string& value) {
-    return std::all_of(value.cbegin(), value.cend(), [](const unsigned char character) {
-        return std::isspace(character) != 0;
-    });
+    return std::all_of(value.cbegin(), value.cend(),
+                       [](const unsigned char character) { return std::isspace(character) != 0; });
 }
 
 bool requireText(const RunArchivePathRequirement& requirement, std::string& error) {

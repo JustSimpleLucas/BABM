@@ -1,137 +1,244 @@
-# Agent-Based Stock Market Simulation
+# BABM — Behavioural Agent-Based Market Model
 
-This project simulates a stock market populated by artificial traders. Each trader follows rules inspired by behavioural finance theory (such as prospect theory and herding), and the goal is to reproduce the well-known statistical patterns of real stock markets.
+BABM simulates a stock market populated by artificial traders. Each trader follows rules grounded in
+behavioural finance theory — Cumulative Prospect Theory valuation, social influence and herding,
+technical and fundamental trading rules — and orders meet in a continuous limit-order book. The
+research question the code serves is whether such a market reproduces the **stylised facts** of real
+financial markets (fat tails, volatility clustering, excess kurtosis, autocorrelation patterns),
+especially under stress and crisis regimes.
 
-The traders follow one of four strategies — fundamentalist, chartist, noise trader, or buy-and-hold — and talk to their neighbours through a communication network:
+The repository holds two halves of one pipeline:
 
-<p align="center">
-  <img src="/pictures/communication_topology.png" alt="Communication topology" width="500">
-</p>
+| Half | Language | Responsibility |
+| --- | --- | --- |
+| `src/`, `app/` | C++17 | **The model engine.** Reads one config file, runs the simulation, writes a reproducible folder of CSV/JSON artefacts. |
+| `analysis/python/abm_analysis/` | Python 3.11+ | **The analysis layer.** Reads those artefacts and produces econometric diagnostics, HTML reports, publication figures, calibration studies, seed-robustness verdicts, and an optional PostgreSQL store. |
 
-You do not need to know how to code to run the simulation. Just follow the steps below.
+The boundary is strict and deliberate: only the C++ side generates model data, and the Python side
+never simulates — it launches the C++ binary and consumes its files.
 
-## What you need first
+You do not need to know how to code to run a simulation. Follow the steps below.
 
-Before you start, make sure these are installed on your computer (macOS or Linux):
+---
 
-- **Python 3** — runs the analysis and reports
-- **CMake** (version 3.25 or newer) and a **C++ compiler** — build the simulator
+## 1. What you need first
 
-On a Mac, the easiest way is to open the **Terminal** app and run:
+On macOS or Linux:
 
-```bash
-xcode-select --install        # installs the C++ compiler
-brew install cmake python3    # requires Homebrew (https://brew.sh)
-```
+- **Python 3.11 or newer** — runs the analysis and reports
+- **CMake 3.25 or newer** and a **C++17 compiler** — build the simulator
 
-## One-time setup
-
-You only need to do this once. Copy each block into your terminal and press Enter.
-
-**1. Download the code and open the project folder**
-
-Download this repository (green "Code" button → "Download ZIP", then unzip), or use git. Then move into the folder in your terminal:
+On a Mac, open the **Terminal** app and run:
 
 ```bash
-cd path/to/ABMs_code
+xcode-select --install
 ```
 
-**2. Set up Python**
+```bash
+brew install cmake python@3.11
+```
 
-This creates a private Python workspace for the project so nothing else on your computer is affected:
+(Homebrew: https://brew.sh)
+
+Optional extras, needed only for specific features:
+
+- **Google Chrome** — for exporting figures as PNG/PDF/SVG (see [§8](#8-publication-ready-figures))
+- **PostgreSQL** — for the optional database store (see [§9](#9-optional-postgresql-store))
+
+---
+
+## 2. One-time setup
+
+Run each block from the repository root. You only do this once.
+
+**1. Open the project folder**
+
+```bash
+cd path/to/BABM
+```
+
+**2. Create the Python environment**
+
+This keeps the project's libraries separate from everything else on your computer:
 
 ```bash
 python3 -m venv .venv
+```
+
+```bash
 source .venv/bin/activate
 ```
 
-If it worked, your terminal prompt now starts with `(.venv)`.
-
-Then install the required libraries:
+If it worked, your terminal prompt now starts with `(.venv)`. Then install the analysis package:
 
 ```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-pip install -e .
+pip install --upgrade pip && pip install -r requirements.txt && pip install -e .
 ```
 
 **3. Build the simulator**
 
-This turns the C++ source code into a program you can run:
-
 ```bash
-cmake --preset debug
-cmake --build --preset debug
+cmake --preset debug && cmake --build --preset debug
 ```
 
-This can take a few minutes the first time. When it finishes without red error messages, you're ready.
+The first build takes a few minutes. When it finishes without errors, the executable is at
+`build/debug/simulate`.
 
-## Run a simple simulation
+---
+
+## 3. Run your first simulation
 
 ```bash
 build/debug/simulate --config config/simulation.cfg
 ```
 
-That's it! When the run finishes, a report opens automatically in your web browser showing prices, returns, and agent behaviour:
+The simulator prints a progress bar and a summary, then — because `python_analysis_enabled = 1` in
+the config — builds an HTML report and opens it in your browser.
 
-<p align="center">
-  <img src="/pictures/outPut.png" alt="Simulation output report" width="400" height="300">
-</p>
+The executable also accepts a bare path (`build/debug/simulate config/simulation.cfg`) and can run
+with no argument at all when it finds `config/simulation.cfg` on its own.
 
-All results are also saved as files in `data/experiments/`, one folder per run.
+### What you get
 
-## Change the settings
+Every run is archived in its own folder under `data/experiments/<experiment_name>/<run_id>/`:
 
-All simulation settings (number of agents, number of time steps, strategy mix, and so on) live in one plain text file: `config/simulation.cfg`. Open it with any text editor, change the numbers, save, and run the simulation again.
+| File | Contents |
+| --- | --- |
+| `step_timeseries.csv` | One row per step phase for the primary asset (single-asset view). |
+| `asset_timeseries.csv` | Long format: one row per step phase **and** asset. The authoritative multi-asset series. |
+| `trade_ledger.csv` | Counterparty-level execution audit rows (when `trade_ledger_enabled = 1`). |
+| `agents_final.csv` | End-of-run wealth, holdings, strategy, and behavioural parameters per agent. |
+| `summary_metrics.csv` | The run's headline scalars. |
+| `stylised_facts.csv` | In-simulator screening block per traded asset. |
+| `config.json`, `config_used.cfg` | The exact parameters that produced this run. |
+| `metadata.json` | Build metadata: model version, git commit, dirty flag, compiler. |
+| `logs/run.log` | The run log. |
+| `python_analysis/index.html` | The generated report, plus `figures/`. |
 
-<p align="center">
-  <img src="/pictures/simulation_pic.png" alt="Simulation configuration" width="300" height="300">
-</p>
+`experiment_manifest.csv` at the experiment level is an append-only index of every run, joinable by
+`run_id`.
 
-## Calibrate the model against real market data
+The run-id folder name records the experiment settings in numeric form:
 
-Instead of guessing parameter values by hand, calibration tries many combinations automatically and finds the ones whose simulated returns look most like real stock-market data (stored in `data/stock_data/candle_chart`).
-
-**1. Build the fast version of the simulator** (one time only — calibration runs hundreds of simulations, so it uses the optimised build):
-
-```bash
-cmake --preset release
-cmake --build --preset release
+```text
+YYYYMMDDHHMMSS_<prospect_theory>_<prospect_heterogeneity>_<social>_<short_sale>_<fundamentalists>_<chartists>_<noise_traders>_<buy_and_hold>_<time_steps>_<seed>
 ```
 
-**2. Start the calibration.** A ready-made search space (the list of parameters to vary and their allowed ranges) is included in `config/calibration/search_space.json`:
+for example `20260711161424_1_1_0_1_340_300_100_100_2900_101`. Booleans are `1` (on) / `0` (off).
+**This schema is frozen** — new parameters go into `metadata.json` and `summary_metrics.csv`, never
+into the folder name, because the Python layer parses it.
+
+> **Note on data:** `data/` is not tracked by git. Your results exist only on your computer — back up
+> `data/experiments/` if you need them for your thesis.
+
+---
+
+## 4. Changing the model
+
+Every parameter a user can change lives in one plain-text file: **`config/simulation.cfg`**. Open it
+in any text editor, change the numbers, save, and run again. Unknown keys are rejected loudly, so a
+typo fails the run rather than silently doing nothing.
+
+The main groups of settings:
+
+| Group | Example keys | What it controls |
+| --- | --- | --- |
+| Assets | `assets`, `asset.alpha.*`, `asset_fundamental_correlation` | Per-asset fundamental process (GBM or random walk), initial price, tick size, endowment, volatility, drift, and cross-asset correlation. Both assets share the same functional form; neither is analytically privileged. |
+| Population | `num_fundamentalists`, `num_chartists`, `num_noise_traders`, `num_buy_and_hold_agents` | The strategy mix. |
+| Run control | `time_steps`, `warmup_steps`, `seed`, `agent_activity_rate` | Length, warm-up, reproducibility, activation rate. |
+| Behavioural finance | `control_prospect_theory_enabled`, `control_loss_aversion`, `control_reference_point_mode`, `control_prospect_heterogeneity_enabled` | Cumulative Prospect Theory: loss aversion, value-function curvature, probability weighting, reference-point rule, and per-agent heterogeneity. |
+| Social influence | `social_enabled`, `social_interaction_radius`, `social_opinion_kappa`, `social_gamma_*` | The herding mechanism and the spatial network agents talk through. |
+| Microstructure | `market_microstructure`, `order_expiry_steps`, `cancellation_*`, `market_order_*`, `book_depth_levels` | Continuous double-auction order-book behaviour. |
+| Trading rules | `fundamentalist_*`, `chartist_*`, `noise_trader_*`, `buy_hold_*` | Per-strategy thresholds, windows, risk aversion, and weight bounds. `chartist_strategy_mode` selects momentum / mean-reversion / breakout / RSI, or `random` to sample all four. |
+| Risk and costs | `short_selling_enabled`, `short_sale_*`, `transaction_cost_rate`, `risk_free_rate` | Short-sale margin and borrow limits, proportional trading costs. |
+| Output | `experiment_output_enabled`, `experiment_name`, `run_label`, `trade_ledger_enabled` | Archiving behaviour and which artefacts get written. |
+| Post-processing | `python_analysis_enabled`, `python_analysis_python`, `database_output_enabled` | Whether the HTML report and the database import run automatically after a simulation. |
+
+Setting `asset.beta.enabled = 0` collapses the configuration onto the single-asset model; every
+report view then renders exactly as it did before multi-asset support.
+
+---
+
+## 5. The analysis commands
+
+With the virtual environment active, the analysis layer runs as `python -m abm_analysis <command>`
+(or through the installed `abm-analysis` script):
+
+| Command | What it does |
+| --- | --- |
+| `run <run_dir>` | Diagnostics and a single-run HTML report. |
+| `compare <experiment_dir>` | Cross-run comparison report for a whole experiment. |
+| `replicate` | Runs one fixed config across a list of seeds, then builds the seed-robustness report. |
+| `robustness <experiment_dir>` | Rebuilds the seed-robustness report for an already-archived experiment. |
+| `calibrate` | Searches the parameter space against empirical benchmark returns. |
+| `compress <experiment_dir>` | Gzips completed archives (the big per-row CSVs shrink ~5–10×; loaders read `.gz` transparently). |
+| `db …` | Optional PostgreSQL: `init`, `import-run`, `import-experiment`, `import-benchmarks`, `import-all`, `validate`, `inspect-run`. |
+
+Every command supports `--help`. Report-producing commands share `--phase`, `--price-column`,
+`--output-dir`, `--export-images` / `--no-export-images`, and `--figure-formats`.
+
+```bash
+.venv/bin/python -m abm_analysis run data/experiments/demo/<run_id>
+```
+
+```bash
+.venv/bin/python -m abm_analysis compare data/experiments/demo
+```
+
+---
+
+## 6. Calibrating against real market data
+
+Instead of guessing parameter values by hand, calibration tries many combinations automatically
+(Optuna TPE search) and keeps the ones whose simulated returns are closest to real market data. The
+empirical series live in `data/stock_data/candle_chart/` and are registered in
+`config/benchmarks/manifest.csv` (`SPX`, `NAQ`, `FTS100`, `VINFAST`).
+
+**1. Build the optimised simulator** — calibration runs hundreds of simulations:
+
+```bash
+cmake --preset release && cmake --build --preset release
+```
+
+**2. Start the study.** A ready-made search space is included:
 
 ```bash
 .venv/bin/python -m abm_analysis calibrate \
   --base-config config/simulation.cfg \
   --search-space config/calibration/search_space.json \
+  --simulator build/release/simulate \
+  --benchmark-series SPX \
   --trials 50 \
   --validation-seeds 55,101:109
 ```
 
-Be patient — this runs one simulation per trial and can take a while. The `--validation-seeds` list re-tests the best candidates across 10 different random seeds, so the winner is robust rather than a one-seed fluke (use at least 5 seeds; 10 or more is recommended).
+Be patient — this is one simulation per trial. `--validation-seeds` re-runs the best candidates
+across several seeds so the winner is robust rather than a one-seed fluke: use at least 5 seeds, 10
+or more recommended. Candidates are ranked by **fit × seed-robustness pass rate**, not fit alone.
+Defaults for trials, seeds, and scoring live in `config/calibration/calibration_settings.json`.
 
-**3. Look at the results** in `data/calibration/<study_name>/`:
+**3. Read the results** in `data/calibration/<study_name>/`:
 
-- `best_config.cfg` — the best parameter values found, saved as a ready-to-run config file
-- `calibration_trials.csv` — every combination tried and its score
-- `best_runs_robustness_report/` — a web report checking how stable the top candidates are across seeds
+| Output | Contents |
+| --- | --- |
+| `best_config.cfg` | The winning parameters, saved as a ready-to-run config file. |
+| `calibration_trials.csv` | Every combination tried and its score. |
+| `calibration_report/` | HTML ranking report explaining *why* the winner won. |
+| `best_runs_robustness_report/` | Seed-stability report for the top candidates. |
+| `holdout_validation/` | Out-of-sample checks. |
 
-**4. Run the simulation with the tuned settings:**
+**4. Run the tuned model:**
 
 ```bash
 build/debug/simulate --config data/calibration/<study_name>/best_config.cfg
 ```
 
-## Tips
+---
 
-- **Coming back later?** Reactivate the Python workspace first: `source .venv/bin/activate`
-- **"Command not found"?** Make sure you are inside the project folder (`cd path/to/ABMs_code`).
-- **Changed the C++ code?** Rebuild with `cmake --build --preset debug` before running again.
+## 7. Checking robustness across seeds
 
-## For researchers: checking robustness
-
-To test whether results hold across many random seeds (rather than being a fluke of one run), replicate the same configuration across 30 seeds:
+To test whether a result holds generally rather than being an artefact of one random draw, replicate
+the same configuration across many seeds:
 
 ```bash
 .venv/bin/python -m abm_analysis replicate \
@@ -140,24 +247,163 @@ To test whether results hold across many random seeds (rather than being a fluke
   --seeds 1:30
 ```
 
-Seeds run in parallel across CPU cores by default; pass `--jobs 1` for sequential execution with the live progress bar, or `--jobs N` to cap the worker count.
+Seeds run in parallel across CPU cores; pass `--jobs 1` for sequential execution with the live
+progress bar, or `--jobs N` to cap the worker count.
 
-This creates a `seed_robustness_...` folder in `data/experiments/` with one run per seed, plus a web-based robustness report (`robustness_reports/latest_seed_robustness/index.html`) containing cross-seed distribution tests, stylised-fact success rates, and a pass/fail verdict table. The report can be regenerated for any archived experiment without re-running:
+This creates a `seed_robustness_<timestamp>` folder under `data/experiments/` with one run per seed
+plus a report at `robustness_reports/latest_seed_robustness/index.html` containing cross-seed
+distribution tests, stylised-fact success rates, seed-convergence curves, and a pass / borderline /
+fail verdict table with fixed, literature-anchored thresholds.
+
+The report can be regenerated for any archived experiment without re-running the simulations:
 
 ```bash
 .venv/bin/python -m abm_analysis robustness data/experiments/<experiment_name>
 ```
 
-## Publication-ready figures
+---
 
-Every report also saves each chart as standalone image files in a `figures/` folder next to `index.html`: a 300 DPI PNG plus vector PDF and SVG, styled for print (serif fonts, white background, sized for a full LaTeX text width). In a thesis or paper, include the PDF directly:
+## 8. Publication-ready figures
+
+Every report also saves each chart as standalone files in a `figures/` folder next to `index.html`:
+a 300 DPI PNG plus vector PDF and SVG, styled for print (serif fonts, white background, sized to a
+full LaTeX text width). `figure_index.csv` lists every exported file. In a thesis or paper, include
+the PDF directly:
 
 ```latex
 \includegraphics[width=\textwidth]{.../python_analysis/figures/price_timeseries.pdf}
 ```
 
-Rendering the images needs Google Chrome. If it is missing, the report command stops with instructions — either install Chrome, download a private copy with `.venv/bin/python -c "import kaleido; kaleido.get_chrome_sync()"`, or skip image export with `--no-export-images` (the interactive HTML report is always generated either way). `figure_index.csv` in the report folder lists every exported file.
+Static export uses Kaleido, which needs Google Chrome. If Chrome is missing, the command stops with
+instructions — install Chrome, download a private copy with
+`.venv/bin/python -c "import kaleido; kaleido.get_chrome_sync()"`, or pass `--no-export-images` (the
+interactive HTML report is always produced either way). To export only what you need, pass
+`--figure-formats pdf` for LaTeX-only output or `--figure-formats png,pdf` to drop the SVG copies.
 
-To export only the formats you need (saving time and disk space), pass `--figure-formats`, for example `--figure-formats pdf` for LaTeX-only output or `--figure-formats png,pdf` to drop the editable SVG copies.
+---
 
-**Note on data:** the `data/` folder is not stored in git — your simulation results exist only on your computer. Back up `data/experiments/` regularly if you need the results for your research. Finished experiments can be compressed to save disk space with `.venv/bin/python -m abm_analysis compress data/experiments/<experiment_name>`.
+## 9. Optional: PostgreSQL store
+
+The CSV/JSON artefacts are treated as staging output; the database is the queryable research store.
+It is entirely optional and disabled by default.
+
+```bash
+export ABM_DATABASE_URL="postgresql+psycopg://user:password@localhost:5432/abm"
+```
+
+```bash
+.venv/bin/python -m abm_analysis db init
+```
+
+```bash
+.venv/bin/python -m abm_analysis db import-experiment data/experiments/demo
+```
+
+`ABM_DATABASE_URL` is a SQLAlchemy URL; every `db` subcommand also accepts an explicit
+`--database-url`. Set `database_output_enabled = 1` in `config/simulation.cfg` to import each run
+automatically as it finishes; `database_prune_after_import` then deletes the staging files once the
+import succeeds. Imports are content-hashed, so re-imports are detectable and reproducible. Check an
+import with `db validate` (compares source CSV row counts against the database) or `db inspect-run`.
+
+---
+
+## 10. Repository layout
+
+```text
+app/simulate/main.cpp   Executable entry point (forwards argc/argv only)
+src/                    The C++ model engine, one directory per domain
+  Application/            CLI parsing, run coordination, console summary, Python hand-off
+  ControlParameters/      Config schema, parsing, setting appliers, validation
+  Market/ OrderBook/      Fundamental-value process, market state, limit-order book
+  BehaviouralFinance/     Cumulative Prospect Theory and per-agent preference sampling
+  Agent/ AgentStrategy/   Agents plus fundamentalist, chartist, noise-trader, buy-and-hold rules
+  Simulation/             The engine and its collaborators (scheduling, herding, clearing, risk)
+  Metrics/ Results/       Stylised-fact screening, allocative efficiency, the run-result DTO
+  Output/ DataManagement/ Experiment/   Artefact writers, archive schema, run-folder policy
+  RandomGenerator/ Utility/ RiskManagement/   Seeded RNG, numerics, tick pricing, short-sale controls
+analysis/python/abm_analysis/
+  commands/ cli*.py        One module per subcommand plus parser wiring
+  archive/                 Reading run archives, run-ids, manifests, benchmarks, compression
+  statistics/              Stylised-fact tests, stress diagnostics, robustness verdicts, convergence
+  calibration/             Optuna study, scoring, execution, seed validation
+  plots/ report/           Figures and the HTML/PDF report builders
+  database/                Optional PostgreSQL schema, imports, exports, validation
+config/                 simulation.cfg, calibration search space, benchmark manifest
+data/                   Simulation output, calibration studies, empirical data (git-ignored)
+docs/                   Code map and Mermaid architecture/flow diagrams
+tests/                  C++ CTest suites and the Python pytest suite
+formalism.tex           LaTeX write-up of the model's mathematics
+```
+
+---
+
+## 11. Tests and CI
+
+GitHub Actions runs three jobs on every push and pull request; reproduce them locally before
+committing.
+
+**C++ build and tests** (warnings are errors in CI):
+
+```bash
+cmake --preset debug -DABM_WARNINGS_AS_ERRORS=ON && cmake --build --preset debug && ctest --preset debug
+```
+
+**Formatting** — every tracked C++ file must match `.clang-format`:
+
+```bash
+git ls-files 'src/*.h' 'src/*.cpp' 'tests/*.h' 'tests/*.cpp' 'app/*.cpp' | xargs clang-format --style=file --dry-run --Werror
+```
+
+**Python tests:**
+
+```bash
+.venv/bin/pip install -e ".[test]" && .venv/bin/pytest
+```
+
+When changing simulation logic, order-book code, or memory-sensitive output code, also run the
+sanitizer build (AddressSanitizer + UndefinedBehaviorSanitizer):
+
+```bash
+cmake --preset sanitizers && cmake --build --preset sanitizers && ctest --preset sanitizers
+```
+
+`.clang-tidy` is advisory — editors and local runs read it, CI does not enforce it.
+
+---
+
+## 12. Reproducibility
+
+- Every stochastic draw goes through a seeded RNG wrapper, so a config plus its `seed` reproduces a
+  run exactly. The fundamental-value process uses `seed` and the agent side uses `seed + 1`, so
+  changing agent behaviour cannot perturb the fundamental path.
+- Each run archives the exact config that produced it (`config_used.cfg`, `config.json`) together
+  with the model version, git commit, dirty flag, and compiler in `metadata.json`.
+- Four cross-language contracts hold the pipeline together: the config key set, the frozen run-id
+  schema, the CSV column layout, and the CMake source lists.
+  `tests/python/test_schema_sync.py` fails deliberately when a C++ CSV column changes without the
+  matching Python and database update.
+
+---
+
+## 13. Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| Coming back to the project later | Reactivate the environment first: `source .venv/bin/activate` |
+| "command not found" | Make sure you are in the repository root (`cd path/to/BABM`). |
+| Changed C++ code, results unchanged | Rebuild: `cmake --build --preset debug` |
+| Config error mentioning a key | The parser rejects unknown keys — check the spelling against `config/simulation.cfg`. |
+| Figure export fails | Chrome is missing; see [§8](#8-publication-ready-figures) or pass `--no-export-images`. |
+| Disk filling up | Compress finished experiments: `.venv/bin/python -m abm_analysis compress data/experiments/<name>` |
+
+---
+
+## 14. Further documentation
+
+| Document | Contents |
+| --- | --- |
+| [docs/code_map.md](docs/code_map.md) | File-by-file guide: what every source file does and how they connect. |
+| [docs/baselines.md](docs/baselines.md) | Recorded baseline results, used to detect unintended behavioural drift. |
+| `docs/*.mmd` | Mermaid diagrams: class architecture, build structure, data management, simulation flow, agent decision flow, sequence diagram. |
+| [AGENTS.md](AGENTS.md) | Research context and the working rules for contributors (naming, reproducibility, required commands). |
+| `formalism.tex` | The model's mathematics — the paper-side counterpart of the code. |

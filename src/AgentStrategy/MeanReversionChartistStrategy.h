@@ -1,7 +1,7 @@
 // MeanReversionChartistStrategy.h
 
-#ifndef MEAN_REVERSION_CHARTIST_STRATEGY_H
-#define MEAN_REVERSION_CHARTIST_STRATEGY_H
+#ifndef ABM_AGENT_STRATEGY_MEAN_REVERSION_CHARTIST_STRATEGY_H
+#define ABM_AGENT_STRATEGY_MEAN_REVERSION_CHARTIST_STRATEGY_H
 
 #include <cstddef>
 #include <string>
@@ -40,9 +40,8 @@ class MeanReversionChartistStrategy final : public ChartistStrategy {
      *
      * @param parameters Named reversal, portfolio, and CPT controls.
      */
-    explicit MeanReversionChartistStrategy(
-        MeanReversionChartistStrategyParameters parameters =
-            MeanReversionChartistStrategyParameters{});
+    explicit MeanReversionChartistStrategy(MeanReversionChartistStrategyParameters parameters =
+                                               MeanReversionChartistStrategyParameters{});
 
     /** Returns the export label for mean-reversion chartists. */
     [[nodiscard]] std::string strategyType() const override;
@@ -53,7 +52,7 @@ class MeanReversionChartistStrategy final : public ChartistStrategy {
   protected:
     [[nodiscard]] AgentAction generateSignal(const Market& market) const override;
     [[nodiscard]] double forecastExcessReturn(const Market& market,
-                                               std::size_t forecastAssetIndex) const override;
+                                              std::size_t forecastAssetIndex) const override;
 
   private:
     std::size_t longWindow_;
@@ -61,4 +60,4 @@ class MeanReversionChartistStrategy final : public ChartistStrategy {
 
 } // namespace abm
 
-#endif // MEAN_REVERSION_CHARTIST_STRATEGY_H
+#endif // ABM_AGENT_STRATEGY_MEAN_REVERSION_CHARTIST_STRATEGY_H

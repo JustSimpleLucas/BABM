@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from abm_analysis.data import build_runs_index, discover_run_directories
-from abm_analysis.diagnostics import (
+from abm_analysis.archive.data import build_runs_index, discover_run_directories
+from abm_analysis.statistics.diagnostics import (
     build_pairwise_ks_table,
     build_return_series_by_run,
     build_stylised_fact_diagnostics,
@@ -30,22 +30,22 @@ from abm_analysis.plots import (
     make_seed_robustness_figure,
     make_stylised_fact_success_figure,
 )
-from abm_analysis.robustness import (
+from abm_analysis.statistics.robustness import (
     build_seed_robustness_summary,
     merge_run_and_diagnostic_metrics,
 )
-from abm_analysis.robustness_tests import (
+from abm_analysis.statistics.robustness_tests import (
     build_adf_stationarity_table,
     build_cross_seed_distribution_tests,
     summarise_adf_rejections,
     summarise_pairwise_ks,
 )
-from abm_analysis.robustness_verdicts import (
+from abm_analysis.statistics.robustness_verdicts import (
     SUCCESS_RATE_PASS_THRESHOLD,
     build_robustness_verdicts,
     verdict_rows_for_report,
 )
-from abm_analysis.seed_convergence import build_seed_convergence_table
+from abm_analysis.statistics.seed_convergence import build_seed_convergence_table
 
 from .figures import _build_figure_index, _raise_on_export_failures
 from .static_export import STATIC_EXPORT_FORMATS, ensure_static_export_ready

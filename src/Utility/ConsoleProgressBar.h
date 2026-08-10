@@ -1,7 +1,7 @@
 // ConsoleProgressBar.h
 
-#ifndef CONSOLE_PROGRESS_BAR_H
-#define CONSOLE_PROGRESS_BAR_H
+#ifndef ABM_UTILITY_CONSOLE_PROGRESS_BAR_H
+#define ABM_UTILITY_CONSOLE_PROGRESS_BAR_H
 
 #include <chrono>
 #include <cstddef>
@@ -19,9 +19,8 @@ namespace abm {
  * reproducible simulation results independent of console output behaviour.
  */
 class ConsoleProgressBar {
-public:
-    explicit ConsoleProgressBar(std::ostream& output,
-                                std::size_t totalSteps,
+  public:
+    explicit ConsoleProgressBar(std::ostream& output, std::size_t totalSteps,
                                 std::string label = "Simulation progress",
                                 std::size_t barWidth = 40);
 
@@ -31,7 +30,7 @@ public:
     /** Forces the bar to 100% and moves subsequent output to a fresh line. */
     void finish();
 
-private:
+  private:
     std::ostream& output_;
     std::size_t totalSteps_;
     std::string label_;
@@ -45,4 +44,4 @@ private:
 
 } // namespace abm
 
-#endif // CONSOLE_PROGRESS_BAR_H
+#endif // ABM_UTILITY_CONSOLE_PROGRESS_BAR_H

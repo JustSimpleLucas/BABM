@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 from typing import Callable
 
-from abm_analysis.robustness_verdicts import VerdictThresholds
+from abm_analysis.statistics.robustness_verdicts import VerdictThresholds
 
 @dataclass
 class CalibrationOptions:

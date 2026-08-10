@@ -1,7 +1,7 @@
 // PythonAnalysisRunner.h
 
-#ifndef PYTHON_ANALYSIS_RUNNER_H
-#define PYTHON_ANALYSIS_RUNNER_H
+#ifndef ABM_APPLICATION_PYTHON_ANALYSIS_RUNNER_H
+#define ABM_APPLICATION_PYTHON_ANALYSIS_RUNNER_H
 
 #include "ControlParameters/SimulationConfig.h"
 
@@ -49,4 +49,4 @@ class PythonAnalysisRunner {
 
 } // namespace abm
 
-#endif // PYTHON_ANALYSIS_RUNNER_H
+#endif // ABM_APPLICATION_PYTHON_ANALYSIS_RUNNER_H

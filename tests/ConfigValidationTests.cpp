@@ -261,8 +261,7 @@ void testSimulationConfigAcceptsBuyAndHoldOnlyPopulation(int& failures) {
 
         abm::test::expect(
             simulationResult.agentSnapshots().size() == config.numBuyAndHoldAgents,
-            "buy-and-hold-only simulations should initialise the configured population",
-            failures);
+            "buy-and-hold-only simulations should initialise the configured population", failures);
         for (const abm::AgentSnapshot& snapshot : simulationResult.agentSnapshots()) {
             abm::test::expect(snapshot.initialStrategyType == "buy_and_hold",
                               "buy-and-hold-only snapshots should expose the strategy label",

@@ -1,7 +1,7 @@
 // CsvSchema.h
 
-#ifndef OUTPUT_CSV_SCHEMA_H
-#define OUTPUT_CSV_SCHEMA_H
+#ifndef ABM_OUTPUT_CSV_SCHEMA_H
+#define ABM_OUTPUT_CSV_SCHEMA_H
 
 #include <cstddef>
 #include <ostream>
@@ -26,8 +26,7 @@ namespace abm::output_detail {
  * Emitting nothing is how a column reports "no value on this row"; the commas
  * come from the table, so partially populated rows need no field-count padding.
  */
-template <typename Row>
-struct CsvColumn {
+template <typename Row> struct CsvColumn {
     const char* name;
     void (*emit)(std::ostream& out, const Row& row);
 };
@@ -58,4 +57,4 @@ void writeCsvRow(std::ostream& out, const CsvColumn<Row> (&columns)[ColumnCount]
 
 } // namespace abm::output_detail
 
-#endif // OUTPUT_CSV_SCHEMA_H
+#endif // ABM_OUTPUT_CSV_SCHEMA_H

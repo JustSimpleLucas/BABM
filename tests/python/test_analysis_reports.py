@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from abm_analysis.data import discover_run_directories
+from abm_analysis.archive.data import discover_run_directories
 from abm_analysis.report import build_comparison_report, build_run_report
 from abm_analysis.report.evidence import (
     build_comparison_evidence_assessment,

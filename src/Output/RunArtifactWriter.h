@@ -1,12 +1,12 @@
 // RunArtifactWriter.h
 
-#ifndef OUTPUT_RUN_ARTIFACT_WRITER_H
-#define OUTPUT_RUN_ARTIFACT_WRITER_H
+#ifndef ABM_OUTPUT_RUN_ARTIFACT_WRITER_H
+#define ABM_OUTPUT_RUN_ARTIFACT_WRITER_H
 
 #include <string>
 
-#include "Analysis/StylisedFactMetrics.h"
 #include "ControlParameters/SimulationConfig.h"
+#include "Metrics/StylisedFactMetrics.h"
 
 namespace abm {
 
@@ -40,10 +40,9 @@ class RunArtifactWriter {
     [[nodiscard]] static bool writeCompletedRun(const RuntimeConfig& runtimeConfig,
                                                 const SimulationRunResult& simulationResult,
                                                 const RunMetrics& metrics,
-                                                RunArtifactWriteResult& result,
-                                                std::string& error);
+                                                RunArtifactWriteResult& result, std::string& error);
 };
 
 } // namespace abm
 
-#endif // OUTPUT_RUN_ARTIFACT_WRITER_H
+#endif // ABM_OUTPUT_RUN_ARTIFACT_WRITER_H

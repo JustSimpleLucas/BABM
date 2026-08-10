@@ -205,8 +205,8 @@ bool exportMetadataJson(const std::string& outputPath, const RuntimeConfig& runt
     out << R"(    "num_chartists": )" << config.numChartists << ",\n";
     out << R"(    "num_noise_traders": )" << config.numNoiseTraders << ",\n";
     out << R"(    "num_buy_and_hold_agents": )" << config.numBuyAndHoldAgents << ",\n";
-    out << R"(    "buy_hold_target_risky_weight": )"
-        << config.buyAndHold.targetRiskyWeight << ",\n";
+    out << R"(    "buy_hold_target_risky_weight": )" << config.buyAndHold.targetRiskyWeight
+        << ",\n";
     out << R"(    "fundamental_shock_std_dev": )" << config.fundamentalShockStdDev() << ",\n";
     out << R"(    "fundamental_drift_per_step": )" << config.fundamentalDriftPerStep() << ",\n";
     out << R"(    "minimum_fundamental_value": )" << config.minimumFundamentalValue() << ",\n";
@@ -242,8 +242,7 @@ bool exportMetadataJson(const std::string& outputPath, const RuntimeConfig& runt
     out << R"(    "mean_allocative_efficiency": )" << metrics.meanAllocativeEfficiency << ",\n";
     out << R"(    "allocative_efficiency_observations": )"
         << metrics.allocativeEfficiencyObservations << ",\n";
-    out << R"(    "final_wealth_gini_coefficient": )"
-        << metrics.finalWealthGiniCoefficient << '\n';
+    out << R"(    "final_wealth_gini_coefficient": )" << metrics.finalWealthGiniCoefficient << '\n';
     out << "  }\n";
     out << "}\n";
 

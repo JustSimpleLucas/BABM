@@ -1,7 +1,7 @@
 // TransactionCosts.h
 
-#ifndef UTILITY_TRANSACTION_COSTS_H
-#define UTILITY_TRANSACTION_COSTS_H
+#ifndef ABM_UTILITY_TRANSACTION_COSTS_H
+#define ABM_UTILITY_TRANSACTION_COSTS_H
 
 #include "Utility/SimulationConstants.h"
 
@@ -62,4 +62,4 @@ namespace abm::transaction_costs {
 
 } // namespace abm::transaction_costs
 
-#endif // UTILITY_TRANSACTION_COSTS_H
+#endif // ABM_UTILITY_TRANSACTION_COSTS_H

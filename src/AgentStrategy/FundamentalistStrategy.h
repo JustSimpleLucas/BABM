@@ -1,7 +1,7 @@
 // FundamentalistStrategy.h
 
-#ifndef FUNDAMENTALIST_STRATEGY_H
-#define FUNDAMENTALIST_STRATEGY_H
+#ifndef ABM_AGENT_STRATEGY_FUNDAMENTALIST_STRATEGY_H
+#define ABM_AGENT_STRATEGY_FUNDAMENTALIST_STRATEGY_H
 
 #include <cstddef>
 #include <optional>
@@ -220,4 +220,4 @@ class FundamentalistStrategy : public TradingStrategy {
 
 } // namespace abm
 
-#endif // FUNDAMENTALIST_STRATEGY_H
+#endif // ABM_AGENT_STRATEGY_FUNDAMENTALIST_STRATEGY_H

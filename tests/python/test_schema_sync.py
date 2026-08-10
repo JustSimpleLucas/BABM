@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
-from abm_analysis.archives import (
+from abm_analysis.archive.archives import (
     REQUIRED_AGENT_FINAL_COLUMNS,
     REQUIRED_ASSET_TIMESERIES_COLUMNS,
     REQUIRED_STEP_TIMESERIES_COLUMNS,

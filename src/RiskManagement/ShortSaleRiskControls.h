@@ -1,7 +1,7 @@
 // ShortSaleRiskControls.h
 
-#ifndef RISK_MANAGEMENT_SHORT_SALE_RISK_CONTROLS_H
-#define RISK_MANAGEMENT_SHORT_SALE_RISK_CONTROLS_H
+#ifndef ABM_RISK_MANAGEMENT_SHORT_SALE_RISK_CONTROLS_H
+#define ABM_RISK_MANAGEMENT_SHORT_SALE_RISK_CONTROLS_H
 
 namespace abm {
 
@@ -109,4 +109,4 @@ constrainSellQuantityByShortSaleRules(const ShortSaleSellConstraintRequest& requ
 
 } // namespace abm
 
-#endif // RISK_MANAGEMENT_SHORT_SALE_RISK_CONTROLS_H
+#endif // ABM_RISK_MANAGEMENT_SHORT_SALE_RISK_CONTROLS_H

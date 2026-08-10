@@ -5,10 +5,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from ..cli_arguments import add_calibration_benchmark_arguments
-from ..cli_handlers import _run_calibration_from_public_cli, resolve_benchmark_dir, timestamped_calibration_name
+from ..cli_handlers import resolve_benchmark_dir, timestamped_calibration_name
 from abm_analysis.calibration import CalibrationOptions
 from abm_analysis.calibration import default_calibration_output_dir
 from abm_analysis.calibration import parse_seed_list
+from abm_analysis.calibration import run_calibration
 from abm_analysis.replication import parse_seed_spec
 
 
@@ -255,6 +256,6 @@ def handle_calibrate(args: argparse.Namespace) -> int:
         require_robustness_verdicts=args.require_robustness_verdicts,
         jobs=args.jobs,
     )
-    output_path = _run_calibration_from_public_cli(options)
+    output_path = run_calibration(options)
     print(f"Calibration output: {output_path}")
     return 0

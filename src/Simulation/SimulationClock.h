@@ -1,7 +1,7 @@
 // SimulationClock.h
 
-#ifndef SIMULATION_CLOCK_H
-#define SIMULATION_CLOCK_H
+#ifndef ABM_SIMULATION_SIMULATION_CLOCK_H
+#define ABM_SIMULATION_SIMULATION_CLOCK_H
 
 #include <cstddef>
 #include <functional>
@@ -40,4 +40,4 @@ class SimulationClock {
 
 } // namespace abm
 
-#endif // SIMULATION_CLOCK_H
+#endif // ABM_SIMULATION_SIMULATION_CLOCK_H

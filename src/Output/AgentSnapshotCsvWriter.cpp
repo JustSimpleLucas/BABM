@@ -16,8 +16,10 @@ using Row = AgentSnapshot;
 
 constexpr CsvColumn<Row> kColumns[] = {
     {"agent_id", [](std::ostream& out, const Row& r) { out << r.agentId; }},
-    {"initial_strategy_type", [](std::ostream& out, const Row& r) { out << r.initialStrategyType; }},
-    {"current_strategy_type", [](std::ostream& out, const Row& r) { out << r.currentStrategyType; }},
+    {"initial_strategy_type",
+     [](std::ostream& out, const Row& r) { out << r.initialStrategyType; }},
+    {"current_strategy_type",
+     [](std::ostream& out, const Row& r) { out << r.currentStrategyType; }},
     {"initial_cash", [](std::ostream& out, const Row& r) { out << r.initialCash; }},
     {"initial_stock", [](std::ostream& out, const Row& r) { out << r.initialStock; }},
     {"initial_wealth", [](std::ostream& out, const Row& r) { out << r.initialWealth; }},

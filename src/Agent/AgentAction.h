@@ -1,7 +1,7 @@
 // AgentAction.h
 
-#ifndef AGENT_ACTION_H
-#define AGENT_ACTION_H
+#ifndef ABM_AGENT_AGENT_ACTION_H
+#define ABM_AGENT_AGENT_ACTION_H
 
 #include <cstdint>
 
@@ -19,4 +19,4 @@ enum class AgentAction : std::uint8_t { Buy, Sell, Hold };
 
 } // namespace abm
 
-#endif // AGENT_ACTION_H
+#endif // ABM_AGENT_AGENT_ACTION_H

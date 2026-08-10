@@ -330,9 +330,8 @@ void Agent::initialiseEntryReferencesFromInventory(const std::vector<double>& ma
     for (std::size_t assetIndex = 0; assetIndex < stockByAsset.size(); ++assetIndex) {
         PositionAnchor& anchor = positionAnchors[assetIndex];
         anchor.direction = positionSign(stockByAsset[assetIndex]);
-        anchor.averageEntryPrice = anchor.direction == 0
-                                       ? std::numeric_limits<double>::quiet_NaN()
-                                       : marketPrices[assetIndex];
+        anchor.averageEntryPrice = anchor.direction == 0 ? std::numeric_limits<double>::quiet_NaN()
+                                                         : marketPrices[assetIndex];
     }
 }
 

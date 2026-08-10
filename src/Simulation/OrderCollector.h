@@ -1,7 +1,7 @@
 // OrderCollector.h
 
-#ifndef SIMULATION_ORDER_COLLECTOR_H
-#define SIMULATION_ORDER_COLLECTOR_H
+#ifndef ABM_SIMULATION_ORDER_COLLECTOR_H
+#define ABM_SIMULATION_ORDER_COLLECTOR_H
 
 #include <cstddef>
 #include <vector>
@@ -46,4 +46,4 @@ class OrderCollector {
 
 } // namespace abm
 
-#endif // SIMULATION_ORDER_COLLECTOR_H
+#endif // ABM_SIMULATION_ORDER_COLLECTOR_H

@@ -20,8 +20,7 @@ namespace {
 constexpr double kDefaultTargetRiskyWeight = 0.60;
 } // namespace
 
-BuyAndHoldStrategy::BuyAndHoldStrategy()
-    : BuyAndHoldStrategy(0, kDefaultTargetRiskyWeight) {}
+BuyAndHoldStrategy::BuyAndHoldStrategy() : BuyAndHoldStrategy(0, kDefaultTargetRiskyWeight) {}
 
 BuyAndHoldStrategy::BuyAndHoldStrategy(std::size_t assetIndex, double targetRiskyWeight)
     : assetIndex_(assetIndex), targetRiskyWeight_(kDefaultTargetRiskyWeight) {
@@ -73,8 +72,8 @@ std::optional<Order> BuyAndHoldStrategy::generateOrder(Agent& agent, const Marke
         return std::nullopt;
     }
 
-    const double orderPrice = quantizeLimitPrice(marketPrice, context.priceTickSize,
-                                                 OrderType::BUY);
+    const double orderPrice =
+        quantizeLimitPrice(marketPrice, context.priceTickSize, OrderType::BUY);
     const double affordableUnits = transaction_costs::affordableBuyQuantity(
         agent.getCash(), orderPrice, context.transactionCostRate);
     const double quantity = std::min(desiredBuyUnits, affordableUnits);
@@ -112,8 +111,7 @@ std::vector<Order> BuyAndHoldStrategy::generateOrders(Agent& agent, const Market
     double remainingCash = agent.getCash();
     for (std::size_t assetIndex = 0; assetIndex < assets.size(); ++assetIndex) {
         const double targetUnits = (wealth * perAssetWeight) / prices[assetIndex];
-        const double desiredBuyUnits =
-            std::max(0.0, targetUnits - agent.getStock(assetIndex));
+        const double desiredBuyUnits = std::max(0.0, targetUnits - agent.getStock(assetIndex));
         if (desiredBuyUnits <= kMinimumOrderQuantity) {
             continue;
         }
@@ -130,9 +128,9 @@ std::vector<Order> BuyAndHoldStrategy::generateOrders(Agent& agent, const Market
         Order order = agent.generateOrder(OrderType::BUY, orderPrice, quantity);
         order.assetIndex = static_cast<std::uint32_t>(assetIndex);
         order.timeStep = timeStep;
-        remainingCash = std::max(
-            0.0, remainingCash - (orderPrice * quantity *
-                                  (1.0 + std::max(0.0, context.transactionCostRate))));
+        remainingCash =
+            std::max(0.0, remainingCash - (orderPrice * quantity *
+                                           (1.0 + std::max(0.0, context.transactionCostRate))));
         orders.push_back(order);
     }
     return orders;

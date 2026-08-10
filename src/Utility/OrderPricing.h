@@ -1,7 +1,7 @@
 // OrderPricing.h
 
-#ifndef UTILITY_ORDER_PRICING_H
-#define UTILITY_ORDER_PRICING_H
+#ifndef ABM_UTILITY_ORDER_PRICING_H
+#define ABM_UTILITY_ORDER_PRICING_H
 
 #include "OrderBook/Order.h"
 
@@ -26,4 +26,4 @@ namespace abm {
 
 } // namespace abm
 
-#endif // UTILITY_ORDER_PRICING_H
+#endif // ABM_UTILITY_ORDER_PRICING_H

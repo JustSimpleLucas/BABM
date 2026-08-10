@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 
-from abm_analysis.benchmarks import build_benchmark_return_series, load_benchmark_timeseries_map
+from abm_analysis.archive.benchmarks import build_benchmark_return_series, load_benchmark_timeseries_map
 from abm_analysis.parallel import map_in_order, resolve_job_count
 
 from .config import (

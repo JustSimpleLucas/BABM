@@ -1,7 +1,7 @@
 // ProcessMemoryUsage.h
 
-#ifndef UTILITY_PROCESS_MEMORY_USAGE_H
-#define UTILITY_PROCESS_MEMORY_USAGE_H
+#ifndef ABM_UTILITY_PROCESS_MEMORY_USAGE_H
+#define ABM_UTILITY_PROCESS_MEMORY_USAGE_H
 
 #include <cstddef>
 #include <optional>
@@ -33,4 +33,4 @@ struct ProcessMemoryUsage {
 
 } // namespace abm
 
-#endif // UTILITY_PROCESS_MEMORY_USAGE_H
+#endif // ABM_UTILITY_PROCESS_MEMORY_USAGE_H

@@ -1,7 +1,7 @@
 // TradeLedgerCsvWriter.h
 
-#ifndef OUTPUT_TRADE_LEDGER_CSV_WRITER_H
-#define OUTPUT_TRADE_LEDGER_CSV_WRITER_H
+#ifndef ABM_OUTPUT_TRADE_LEDGER_CSV_WRITER_H
+#define ABM_OUTPUT_TRADE_LEDGER_CSV_WRITER_H
 
 #include <string>
 
@@ -16,4 +16,4 @@ namespace output_detail {
 } // namespace output_detail
 } // namespace abm
 
-#endif // OUTPUT_TRADE_LEDGER_CSV_WRITER_H
+#endif // ABM_OUTPUT_TRADE_LEDGER_CSV_WRITER_H

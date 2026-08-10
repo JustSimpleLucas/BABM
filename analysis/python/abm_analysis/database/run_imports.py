@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from abm_analysis.archives import discover_run_directories
+from abm_analysis.archive.archives import discover_run_directories
 
 from .audit import _insert_import_audit
 from .constants import DEFAULT_DATABASE_URL_ENV

@@ -1,7 +1,7 @@
 // StrategyMarketHelpers.h
 
-#ifndef AGENTSTRATEGY_STRATEGY_MARKET_HELPERS_H
-#define AGENTSTRATEGY_STRATEGY_MARKET_HELPERS_H
+#ifndef ABM_AGENT_STRATEGY_STRATEGY_MARKET_HELPERS_H
+#define ABM_AGENT_STRATEGY_STRATEGY_MARKET_HELPERS_H
 
 #include "Agent/Agent.h"
 #include "ControlParameters/SimulationConfig.h"
@@ -77,8 +77,8 @@ namespace abm::strategy_detail {
                                                          std::size_t assetIndex) {
     const auto& values = market.getTrueValues(assetIndex);
     if (values.empty()) {
-        throw std::invalid_argument("No true values for asset index " +
-                                    std::to_string(assetIndex) + '.');
+        throw std::invalid_argument("No true values for asset index " + std::to_string(assetIndex) +
+                                    '.');
     }
 
     const double latest = values.back();
@@ -94,8 +94,7 @@ namespace abm::strategy_detail {
  * Mean-variance position sizing divides by volatility, so a shared lower bound
  * keeps chartist and fundamentalist strategies numerically comparable.
  */
-[[nodiscard]] inline double boundedLogReturnVolatility(const Market& market,
-                                                       std::size_t assetIndex,
+[[nodiscard]] inline double boundedLogReturnVolatility(const Market& market, std::size_t assetIndex,
                                                        std::size_t volatilityWindow) {
     const double logReturnVolatility =
         market.calculateLogReturnStandardDeviation(assetIndex, volatilityWindow);
@@ -109,7 +108,7 @@ namespace abm::strategy_detail {
 
 /** Returns the fixed CPT reference point, falling back to the latest price if needed. */
 [[nodiscard]] inline double configuredProspectReferencePoint(const Agent& agent,
-                                                            double latestMarketPrice) {
+                                                             double latestMarketPrice) {
     const double configuredReference = agent.prospectTheory().referencePoint();
     if (std::isfinite(configuredReference) && configuredReference > kMinimumPrice) {
         return configuredReference;
@@ -128,8 +127,7 @@ namespace abm::strategy_detail {
  * The function records the selected value on the agent so final outputs can
  * audit which personal anchor was active at the last behavioural decision.
  */
-[[nodiscard]] inline double resolveProspectReferencePoint(Agent& agent,
-                                                          const Market& market,
+[[nodiscard]] inline double resolveProspectReferencePoint(Agent& agent, const Market& market,
                                                           std::size_t assetIndex,
                                                           ProspectReferencePointMode mode,
                                                           std::size_t movingAverageWindow,
@@ -222,4 +220,4 @@ inline constexpr double kMaximumReferenceLogReturn = 0.95;
 
 } // namespace abm::strategy_detail
 
-#endif // AGENTSTRATEGY_STRATEGY_MARKET_HELPERS_H
+#endif // ABM_AGENT_STRATEGY_STRATEGY_MARKET_HELPERS_H

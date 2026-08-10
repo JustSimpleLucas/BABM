@@ -1,20 +1,21 @@
 // SimulationEngine.h
 
-#ifndef SIMULATION_ENGINE_H
-#define SIMULATION_ENGINE_H
+#ifndef ABM_SIMULATION_SIMULATION_ENGINE_H
+#define ABM_SIMULATION_SIMULATION_ENGINE_H
 
 #include <functional>
 
 #include "ControlParameters/SimulationConfig.h"
+#include "Market/FundamentalValueProcess.h"
 #include "Market/Market.h"
 #include "RandomGenerator/RandomGenerator.h"
+#include "Results/SimulationRunResult.h"
 #include "Simulation/AgentActivationScheduler.h"
 #include "Simulation/DiagnosticsRecorder.h"
 #include "Simulation/MarketClearingEngine.h"
 #include "Simulation/OrderCollector.h"
 #include "Simulation/RiskControlService.h"
 #include "Simulation/SimulationClock.h"
-#include "Results/SimulationRunResult.h"
 #include "Simulation/SocialInfluenceModel.h"
 
 namespace abm {
@@ -52,6 +53,14 @@ class SimulationEngine {
 
     SimulationConfig config_;
     Market market_;
+
+    /*
+     * Two independent streams, both derived from the single configured seed.
+     * Keeping the fundamental process on its own stream means a change to the
+     * number of agent-side draws cannot perturb the fundamental path, so
+     * behavioural experiments remain comparable against a fixed seed.
+     */
+    FundamentalValueProcess fundamentalProcess_;
     RandomEngine random_;
     SimulationPopulation population_{};
     SocialInfluenceModel socialInfluenceModel_{};
@@ -64,4 +73,4 @@ class SimulationEngine {
 
 } // namespace abm
 
-#endif // SIMULATION_ENGINE_H
+#endif // ABM_SIMULATION_SIMULATION_ENGINE_H

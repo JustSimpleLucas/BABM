@@ -1,7 +1,7 @@
 // MarketClearingEngine.h
 
-#ifndef SIMULATION_MARKET_CLEARING_ENGINE_H
-#define SIMULATION_MARKET_CLEARING_ENGINE_H
+#ifndef ABM_SIMULATION_MARKET_CLEARING_ENGINE_H
+#define ABM_SIMULATION_MARKET_CLEARING_ENGINE_H
 
 #include <cstddef>
 #include <vector>
@@ -10,8 +10,8 @@
 #include "OrderBook/LimitOrderBook.h"
 #include "OrderBook/Order.h"
 #include "RandomGenerator/RandomGenerator.h"
-#include "Simulation/RiskControlService.h"
 #include "Results/SimulationRunResult.h"
+#include "Simulation/RiskControlService.h"
 #include "Simulation/SimulationState.h"
 
 namespace abm {
@@ -80,4 +80,4 @@ class MarketClearingEngine {
 
 } // namespace abm
 
-#endif // SIMULATION_MARKET_CLEARING_ENGINE_H
+#endif // ABM_SIMULATION_MARKET_CLEARING_ENGINE_H

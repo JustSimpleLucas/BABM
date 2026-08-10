@@ -133,6 +133,7 @@ class WarmupPriceProcessConfig
 class SimulationEngine {
   -SimulationConfig config_
   -Market market_
+  -FundamentalValueProcess fundamentalProcess_
   -RandomEngine random_
   -SimulationPopulation population_
   -SocialInfluenceModel socialInfluenceModel_
@@ -326,10 +327,9 @@ class SocialInfluenceModel {
 note for SocialInfluenceModel "initialize assigns social profiles, then builds the radius-based neighbour graph with a transient spatial hash."
 
 class MarketProcess {
-  +initializeMarket(market_config_random)$ MarketInitializationResult
+  +initializeMarket(market_process_config_random)$ MarketInitializationResult
   +accrueRiskFreeCash(population_riskFreeRate)$
-  +generateNextFundamental(market_config)$ double
-  +generateNextFundamentals(market_config)$ Vector~double~
+  +generateNextFundamentals(market_process_config)$ Vector~double~
   +resolvePriceAfterClearing(referencePrice_result)$ PriceFormationResult
   +initializeAgentWealths(population_marketPrice)$
   +refreshAgentWealths(population_marketPrice)$
@@ -392,16 +392,25 @@ class DiagnosticsRecorder {
 }
 
 class Market {
-  -Map~string_VectorDouble~ marketValues_
-  -Map~string_VectorDouble~ trueValues_
-  -UniquePtr~RandomEngine~ randomEngine_
+  -Vector~string~ assetNames_
+  -Vector~AssetPriceSeries~ series_
+  +configureAssets(assetNames)
+  +assetCount() size_t
+  +assetLabel(asset) string
   +storeMarketValue(asset_value)
   +storeTrueValue(asset_value)
+  +getMarketValues(asset) Vector~double~
+  +getTrueValues(asset) Vector~double~
   +calculateMovingAverage(asset_window) double
   +calculateLogReturnStandardDeviation(asset_window) double
-  +generateFundamentalValue(asset_parameters) double
-  +generateCorrelatedFundamentalValues(assets_parameters_rho) Vector~double~
-  +generateTrueValues(asset_parameters) Vector~double~
+  +calculateRSI(asset_period) double
+}
+
+class FundamentalValueProcess {
+  -RandomEngine randomEngine_
+  +generateFundamentalValue(market_asset_parameters) double
+  +generateCorrelatedFundamentalValues(market_parameters_rho) Vector~double~
+  +generateTrueValues(market_asset_parameters) Vector~double~
 }
 
 class LimitOrderBook {
@@ -565,6 +574,7 @@ SimulationApplication ..> PythonAnalysisRunner
 
 SimulationEngine *-- SimulationConfig
 SimulationEngine *-- Market
+SimulationEngine *-- FundamentalValueProcess
 SimulationEngine *-- RandomEngine
 SimulationEngine *-- SimulationPopulation
 SimulationEngine ..> PopulationFactory
@@ -597,6 +607,7 @@ MeanReversionChartistStrategyParameters *-- ChartistStrategyParameters
 BreakoutChartistStrategyParameters *-- ChartistStrategyParameters
 FundamentalistStrategy *-- AssetAllocationLine
 ChartistStrategy *-- AssetAllocationLine
+FundamentalValueProcess *-- RandomEngine
 NoiseTraderStrategy *-- RandomEngine
 
 PopulationFactory ..> AgentRecord
@@ -612,6 +623,7 @@ OrderCollector ..> TradingStrategy
 OrderCollector ..> Order
 OrderCollector ..> TransactionCosts
 MarketProcess ..> Market
+MarketProcess ..> FundamentalValueProcess
 MarketProcess ..> SimulationPopulation
 
 MarketClearingEngine *-- LimitOrderBook
@@ -703,6 +715,7 @@ class ProspectTheory behavioural
 class AssetAllocationLine behavioural
 
 class Market market
+class FundamentalValueProcess market
 class MarketClearingEngine market
 class LimitOrderBook market
 class BidOrderPriority market

@@ -1,70 +1,15 @@
 // Market.h
 
-#ifndef MARKET_H
-#define MARKET_H
+#ifndef ABM_MARKET_MARKET_H
+#define ABM_MARKET_MARKET_H
 
 #include <cstddef>
-#include <cstdint>
-#include <memory>
 #include <string>
 #include <vector>
 
-#include "ControlParameters/MarketConfig.h"
 #include "Utility/SimulationConstants.h"
 
 namespace abm {
-
-class RandomEngine;
-
-/**
- * Parameters for pre-generating a latent fundamental-value path.
- *
- * Grouping these values avoids swappable adjacent numeric arguments and keeps
- * the experimental interpretation explicit at call sites.
- */
-struct TrueValueGenerationParameters {
-    /** Number of future fundamental values to draw and append. */
-    std::size_t timeSteps{0};
-
-    /**
-     * Initial latent value used only when the asset has no stored fundamental
-     * history.
-     */
-    double initialValue{0.0};
-
-    /** Deterministic drift added to the latent fundamental value each period. */
-    double driftPerStep{0.0};
-
-    /** Standard deviation of the additive Gaussian fundamental-value shock. */
-    double shockStdDev{0.01};
-
-    /** Lower bound applied after drift and stochastic innovation are combined. */
-    double minimumValue{kMinimumPrice};
-};
-
-/**
- * Parameters controlling one-period latent fundamental-value evolution.
- *
- * The functional form is selected by `processType`:
- *   ArithmeticRandomWalk    F_{t+1} = max(F_min, F_t + mu + sigma * zeta)
- *   GeometricBrownianMotion F_{t+1} = max(F_min, F_t * exp((mu - sigma^2/2) + sigma * zeta))
- *
- * where zeta is a standard normal innovation. The units of `driftPerStep` and
- * `shockStdDev` follow the chosen process; see FundamentalProcessType.
- */
-struct FundamentalValueProcessParameters {
-    /** Stochastic process used to evolve the latent fundamental value. */
-    FundamentalProcessType processType{FundamentalProcessType::ArithmeticRandomWalk};
-
-    /** Deterministic drift applied to the latent fundamental value each period. */
-    double driftPerStep{0.0};
-
-    /** Scale of the Gaussian fundamental-value innovation. */
-    double shockStdDev{0.01};
-
-    /** Lower bound applied after drift and stochastic innovation are combined. */
-    double minimumValue{kMinimumPrice};
-};
 
 /** One asset's realised-price and latent-fundamental histories. */
 struct AssetPriceSeries {
@@ -86,28 +31,16 @@ struct AssetPriceSeries {
  * keyed by asset name, which made the market the only component in the model
  * with its own addressing scheme and put a string comparison in the per-agent,
  * per-step valuation path. Names are retained only to label diagnostics.
+ *
+ * The market is a passive record: it stores what the fundamental process and
+ * the order book produced and answers questions about that history. It draws no
+ * random numbers of its own, so it is freely copyable and a copy can be taken
+ * for diagnostics without duplicating or desynchronising any random stream. The
+ * fundamental process that extends `trueValues` lives in
+ * FundamentalValueProcess.
  */
 class Market {
-public:
-    /** Constructs a reproducible market with a documented default seed. */
-    Market();
-
-    /** Constructs a reproducible market with an experiment-supplied seed. */
-    explicit Market(std::uint64_t seed);
-
-    /**
-     * Copying a market would duplicate the random engine state and make later
-     * stochastic draws ambiguous for reproducibility audits.
-     */
-    Market(const Market&) = delete;
-    Market& operator=(const Market&) = delete;
-
-    /** Transfers price histories and random-engine state as one experiment state. */
-    Market(Market&& other) noexcept;
-    Market& operator=(Market&& other) noexcept;
-
-    ~Market();
-
+  public:
     /**
      * Sizes the per-asset histories and records names for diagnostics.
      *
@@ -121,6 +54,15 @@ public:
 
     /** Returns the number of assets this market carries histories for. */
     [[nodiscard]] std::size_t assetCount() const;
+
+    /**
+     * Returns a human-readable label for an asset, for diagnostics only.
+     *
+     * Public so that collaborators which extend a market's histories — notably
+     * FundamentalValueProcess — can name the offending asset in their own error
+     * messages rather than reporting a bare index.
+     */
+    [[nodiscard]] std::string assetLabel(std::size_t assetIndex) const;
 
     /**
      * Appends a realised market price for an asset.
@@ -162,84 +104,17 @@ public:
                                                              std::size_t window) const;
 
     /** Calculates a simple RSI indicator over the latest period observations. */
-    [[nodiscard]] double calculateRSI(
-        std::size_t assetIndex,
-        std::size_t period = kRelativeStrengthIndexPeriod) const;
+    [[nodiscard]] double calculateRSI(std::size_t assetIndex,
+                                      std::size_t period = kRelativeStrengthIndexPeriod) const;
 
-    /**
-     * Advances one asset's latent fundamental value by one period.
-     *
-     * The innovation is drawn independently of any other asset, so this
-     * overload is appropriate only for single-asset evolution or for tests.
-     * Multi-asset runs must use generateCorrelatedFundamentalValues so that
-     * the cross-asset correlation structure is respected.
-     */
-    [[nodiscard]] double generateFundamentalValue(
-        std::size_t assetIndex,
-        const FundamentalValueProcessParameters& parameters);
-
-    /**
-     * Advances every supplied asset by one period using correlated innovations.
-     *
-     * Purpose: fundamental values in a multi-asset market are not independent.
-     * A common macroeconomic factor makes fundamentals co-move, and that
-     * co-movement is what limits the diversification available to agents.
-     *
-     * Method: one standard normal z_j is drawn per asset in index order, then
-     * mapped to correlated standard normals via the closed-form one-factor
-     * square root of the equicorrelation matrix R (unit diagonal,
-     * `pairwiseCorrelation` off-diagonal):
-     *
-     *   zeta_j = a * z_j + b * sum_k z_k,
-     *   a = sqrt(1 - rho),
-     *   b = (sqrt(1 + (n - 1) * rho) - a) / n.
-     *
-     * This is preferred over a generic Cholesky factorization because it stays
-     * exact on the positive-semi-definite boundary (rho = 1, or the lower limit
-     * rho = -1/(n-1)) where Cholesky would fail on a singular matrix. Each
-     * asset then applies its own process to its own zeta_j.
-     *
-     * Reproducibility: with one asset, or with rho = 0, the map is exactly the
-     * identity and is short-circuited, so the innovation sigma * z_j is
-     * bit-identical to the legacy independent single-asset draw. The historical
-     * draw sequence is therefore preserved exactly.
-     *
-     * @param parameters Per-asset process parameters, one per configured
-     *        asset in index order.
-     * @param pairwiseCorrelation Correlation applied to every distinct pair.
-     * @return The new fundamental value for each asset, in index order.
-     *
-     * @throws std::invalid_argument when the parameter count does not match the
-     *         configured asset count, when the correlation is outside [-1, 1],
-     *         or when the implied correlation matrix is not positive
-     *         semi-definite.
-     */
-    [[nodiscard]] std::vector<double> generateCorrelatedFundamentalValues(
-        const std::vector<FundamentalValueProcessParameters>& parameters,
-        double pairwiseCorrelation);
-
-    /**
-     * Generates and stores a sequence of latent fundamental values.
-     *
-     * This helper is useful for reproducible experiments and tests where the
-     * fundamental process should be generated before agent interaction begins.
-     */
-    [[nodiscard]] std::vector<double> generateTrueValues(
-        std::size_t assetIndex,
-        const TrueValueGenerationParameters& parameters);
-
-private:
+  private:
     [[nodiscard]] const AssetPriceSeries& seriesAt(std::size_t assetIndex) const;
     [[nodiscard]] AssetPriceSeries& seriesAt(std::size_t assetIndex);
 
-    /** Returns a human-readable label for an asset, for diagnostics only. */
-    [[nodiscard]] std::string assetLabel(std::size_t assetIndex) const;
-
     std::vector<std::string> assetNames_;
     std::vector<AssetPriceSeries> series_;
-    std::unique_ptr<RandomEngine> randomEngine_;
 };
 
 } // namespace abm
 
-#endif // MARKET_H
+#endif // ABM_MARKET_MARKET_H

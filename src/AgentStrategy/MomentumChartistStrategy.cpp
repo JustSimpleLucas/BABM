@@ -15,8 +15,7 @@ namespace abm {
 
 MomentumChartistStrategy::MomentumChartistStrategy(MomentumChartistStrategyParameters parameters)
     : ChartistStrategy(std::move(parameters.commonParameters)),
-      shortWindow_(parameters.shortWindow),
-      longWindow_(parameters.longWindow),
+      shortWindow_(parameters.shortWindow), longWindow_(parameters.longWindow),
       momentumSignalThreshold_(0.0) {
     setWindows(parameters.shortWindow, parameters.longWindow);
     setMomentumSignalThreshold(parameters.momentumSignalThreshold);
@@ -57,8 +56,8 @@ AgentAction MomentumChartistStrategy::generateSignal(const Market& market) const
     return AgentAction::Hold;
 }
 
-double MomentumChartistStrategy::forecastExcessReturn(
-    const Market& market, std::size_t forecastAssetIndex) const {
+double MomentumChartistStrategy::forecastExcessReturn(const Market& market,
+                                                      std::size_t forecastAssetIndex) const {
     const double gap = movingAverageGap(market, forecastAssetIndex);
     if (std::abs(gap) <= momentumSignalThreshold_) {
         return 0.0;

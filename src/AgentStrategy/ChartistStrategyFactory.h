@@ -1,7 +1,7 @@
 // ChartistStrategyFactory.h
 
-#ifndef CHARTIST_STRATEGY_FACTORY_H
-#define CHARTIST_STRATEGY_FACTORY_H
+#ifndef ABM_AGENT_STRATEGY_CHARTIST_STRATEGY_FACTORY_H
+#define ABM_AGENT_STRATEGY_CHARTIST_STRATEGY_FACTORY_H
 
 #include <memory>
 
@@ -19,11 +19,10 @@ class RandomEngine;
  * chartist class list and makes the random strategy sampling rule explicit in
  * one place.
  */
-[[nodiscard]] std::unique_ptr<TradingStrategy> createChartistStrategy(
-    const SimulationConfig& config,
-    const AssetAllocationLine& allocationLine,
-    RandomEngine& random);
+[[nodiscard]] std::unique_ptr<TradingStrategy>
+createChartistStrategy(const SimulationConfig& config, const AssetAllocationLine& allocationLine,
+                       RandomEngine& random);
 
 } // namespace abm
 
-#endif // CHARTIST_STRATEGY_FACTORY_H
+#endif // ABM_AGENT_STRATEGY_CHARTIST_STRATEGY_FACTORY_H

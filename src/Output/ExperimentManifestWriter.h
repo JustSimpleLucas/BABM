@@ -1,12 +1,12 @@
 // ExperimentManifestWriter.h
 
-#ifndef OUTPUT_EXPERIMENT_MANIFEST_WRITER_H
-#define OUTPUT_EXPERIMENT_MANIFEST_WRITER_H
+#ifndef ABM_OUTPUT_EXPERIMENT_MANIFEST_WRITER_H
+#define ABM_OUTPUT_EXPERIMENT_MANIFEST_WRITER_H
 
 #include <string>
 
-#include "Analysis/StylisedFactMetrics.h"
 #include "ControlParameters/SimulationConfig.h"
+#include "Metrics/StylisedFactMetrics.h"
 
 namespace abm {
 
@@ -22,9 +22,8 @@ class SimulationRunResult;
 [[nodiscard]] bool appendExperimentManifest(const RuntimeConfig& runtimeConfig,
                                             const SimulationRunResult& result,
                                             const RunMetrics& metrics,
-                                            const std::string& configHash,
-                                            std::string& error);
+                                            const std::string& configHash, std::string& error);
 
 } // namespace abm
 
-#endif // OUTPUT_EXPERIMENT_MANIFEST_WRITER_H
+#endif // ABM_OUTPUT_EXPERIMENT_MANIFEST_WRITER_H

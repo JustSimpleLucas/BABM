@@ -33,9 +33,8 @@ ChartistStrategyMode selectConcreteChartistMode(ChartistStrategyMode mode, Rando
     }
 }
 
-ChartistStrategyParameters makeCommonChartistParameters(
-    const SimulationConfig& config,
-    const AssetAllocationLine& allocationLine) {
+ChartistStrategyParameters makeCommonChartistParameters(const SimulationConfig& config,
+                                                        const AssetAllocationLine& allocationLine) {
     ChartistStrategyParameters parameters;
     parameters.assetIndex = config.assets.primaryIndex();
     parameters.allocationLine = allocationLine;
@@ -48,9 +47,9 @@ ChartistStrategyParameters makeCommonChartistParameters(
     return parameters;
 }
 
-MomentumChartistStrategyParameters makeMomentumChartistParameters(
-    const SimulationConfig& config,
-    const AssetAllocationLine& allocationLine) {
+MomentumChartistStrategyParameters
+makeMomentumChartistParameters(const SimulationConfig& config,
+                               const AssetAllocationLine& allocationLine) {
     MomentumChartistStrategyParameters parameters;
     parameters.commonParameters = makeCommonChartistParameters(config, allocationLine);
     parameters.shortWindow = config.chartist.shortWindow;
@@ -59,18 +58,18 @@ MomentumChartistStrategyParameters makeMomentumChartistParameters(
     return parameters;
 }
 
-MeanReversionChartistStrategyParameters makeMeanReversionChartistParameters(
-    const SimulationConfig& config,
-    const AssetAllocationLine& allocationLine) {
+MeanReversionChartistStrategyParameters
+makeMeanReversionChartistParameters(const SimulationConfig& config,
+                                    const AssetAllocationLine& allocationLine) {
     MeanReversionChartistStrategyParameters parameters;
     parameters.commonParameters = makeCommonChartistParameters(config, allocationLine);
     parameters.longWindow = config.chartist.longWindow;
     return parameters;
 }
 
-BreakoutChartistStrategyParameters makeBreakoutChartistParameters(
-    const SimulationConfig& config,
-    const AssetAllocationLine& allocationLine) {
+BreakoutChartistStrategyParameters
+makeBreakoutChartistParameters(const SimulationConfig& config,
+                               const AssetAllocationLine& allocationLine) {
     BreakoutChartistStrategyParameters parameters;
     parameters.commonParameters = makeCommonChartistParameters(config, allocationLine);
     parameters.breakoutWindow = config.chartist.breakoutWindow;

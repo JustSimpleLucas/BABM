@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from ..cli_arguments import _figure_formats_argument
-from ..cli_handlers import _build_seed_robustness_report_from_public_cli
+from abm_analysis.report import build_seed_robustness_report
 from abm_analysis.report.static_export import STATIC_EXPORT_FORMATS
 
 
@@ -76,7 +76,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 def handle_robustness(args: argparse.Namespace) -> int:
     """Generate the dedicated seed-robustness report for an archived experiment."""
 
-    result = _build_seed_robustness_report_from_public_cli(
+    result = build_seed_robustness_report(
         args.experiment,
         output_dir=args.output_dir,
         phase=args.phase,

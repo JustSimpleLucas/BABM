@@ -6,10 +6,10 @@ import argparse
 from pathlib import Path
 import sys
 from ..cli_arguments import _figure_formats_argument
-from ..cli_handlers import _run_seed_replication_from_public_cli
 from abm_analysis.report.static_export import STATIC_EXPORT_FORMATS
 from abm_analysis.replication import SeedReplicationOptions
 from abm_analysis.replication import parse_seed_spec
+from abm_analysis.replication import run_seed_replication
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
@@ -150,7 +150,7 @@ def handle_replicate(args: argparse.Namespace) -> int:
         generate_comparison_report=args.with_comparison_report,
         jobs=args.jobs,
     )
-    result = _run_seed_replication_from_public_cli(options)
+    result = run_seed_replication(options)
     print(f"Seed replication experiment: {result.experiment_dir}")
     print(f"Replication run ledger: {result.replication_runs_csv_path}")
     print(f"Replication summary: {result.replication_summary_json_path}")

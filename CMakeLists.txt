@@ -11,7 +11,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(AbmCompilerOptions)
 include(AbmBuildMetadata)
-include(AbmSourceSets)
 
 add_library(abm_project_includes INTERFACE)
 target_include_directories(abm_project_includes
@@ -30,30 +29,36 @@ target_compile_definitions(abm_build_metadata
         ABM_COMPILER_VERSION="${CMAKE_CXX_COMPILER_VERSION}"
 )
 
+#
+# Domain libraries are declared here without sources; each directory under src/
+# adds its own via target_sources(). The dependency edges below are therefore
+# the whole architecture in one place, while the file lists stay next to the
+# files. Nothing in a lower layer may link a higher one.
+#
 function(abm_add_domain_library target_name)
-    add_library(${target_name} STATIC ${ARGN})
+    add_library(${target_name} STATIC)
     target_compile_features(${target_name} PUBLIC cxx_std_17)
     target_link_libraries(${target_name} PUBLIC abm_project_includes)
     abm_apply_project_warnings(${target_name})
     abm_apply_project_sanitizers(${target_name})
 endfunction()
 
-abm_add_domain_library(abm_utility ${ABM_UTILITY_SOURCES})
+abm_add_domain_library(abm_utility)
 
-abm_add_domain_library(abm_config ${ABM_CONFIG_SOURCES})
+abm_add_domain_library(abm_config)
 target_link_libraries(abm_config PRIVATE abm_utility)
 
-abm_add_domain_library(abm_market ${ABM_MARKET_SOURCES})
+abm_add_domain_library(abm_market)
 target_link_libraries(abm_market PRIVATE abm_utility)
 
-abm_add_domain_library(abm_behavioural_finance ${ABM_BEHAVIOURAL_FINANCE_SOURCES})
+abm_add_domain_library(abm_behavioural_finance)
 target_link_libraries(abm_behavioural_finance
     PUBLIC
         abm_config
         abm_utility
 )
 
-abm_add_domain_library(abm_agents ${ABM_AGENT_SOURCES})
+abm_add_domain_library(abm_agents)
 target_link_libraries(abm_agents
     PUBLIC
         abm_behavioural_finance
@@ -71,7 +76,7 @@ target_link_libraries(abm_results
         abm_market
 )
 
-abm_add_domain_library(abm_simulation ${ABM_SIMULATION_SOURCES})
+abm_add_domain_library(abm_simulation)
 target_link_libraries(abm_simulation
     PUBLIC
         abm_agents
@@ -81,32 +86,32 @@ target_link_libraries(abm_simulation
         abm_utility
 )
 
-abm_add_domain_library(abm_analysis ${ABM_ANALYSIS_SOURCES})
-target_link_libraries(abm_analysis PUBLIC abm_results)
+abm_add_domain_library(abm_metrics)
+target_link_libraries(abm_metrics PUBLIC abm_results)
 
-abm_add_domain_library(abm_output ${ABM_OUTPUT_SOURCES})
+abm_add_domain_library(abm_output)
 target_link_libraries(abm_output
     PUBLIC
-        abm_analysis
         abm_config
+        abm_metrics
         abm_results
     PRIVATE
         abm_build_metadata
 )
 
-abm_add_domain_library(abm_archive ${ABM_DATA_MANAGEMENT_SOURCES} ${ABM_EXPERIMENT_SOURCES})
+abm_add_domain_library(abm_archive)
 target_link_libraries(abm_archive
     PUBLIC
         abm_config
         abm_output
 )
 
-abm_add_domain_library(abm_application ${ABM_APPLICATION_SOURCES})
+abm_add_domain_library(abm_application)
 target_link_libraries(abm_application
     PUBLIC
-        abm_analysis
         abm_archive
         abm_config
+        abm_metrics
         abm_output
         abm_simulation
         abm_utility
@@ -119,7 +124,7 @@ target_link_libraries(abm_core
         abm_application
         abm_archive
         abm_output
-        abm_analysis
+        abm_metrics
         abm_simulation
         abm_agents
         abm_behavioural_finance
@@ -129,6 +134,8 @@ target_link_libraries(abm_core
         abm_utility
 )
 
+add_subdirectory(src)
+
 add_executable(simulate app/simulate/main.cpp)
 target_link_libraries(simulate PRIVATE abm_core)
 abm_apply_project_warnings(simulate)
@@ -136,17 +143,5 @@ abm_apply_project_sanitizers(simulate)
 
 include(CTest)
 if(BUILD_TESTING)
-    function(abm_add_test_executable target_name)
-        add_executable(${target_name} ${ARGN})
-        target_link_libraries(${target_name} PRIVATE abm_core)
-        abm_apply_project_warnings(${target_name})
-        abm_apply_project_sanitizers(${target_name})
-        add_test(NAME ${target_name} COMMAND ${target_name})
-    endfunction()
-
-    abm_add_test_executable(abm_model_tests ${ABM_MODEL_TEST_SOURCES})
-    abm_add_test_executable(abm_config_parsing_tests ${ABM_CONFIG_PARSING_TEST_SOURCES})
-    abm_add_test_executable(abm_archive_workflow_tests ${ABM_ARCHIVE_WORKFLOW_TEST_SOURCES})
-    abm_add_test_executable(abm_config_validation_tests ${ABM_CONFIG_VALIDATION_TEST_SOURCES})
-    abm_add_test_executable(abm_run_artifact_writer_tests ${ABM_RUN_ARTIFACT_TEST_SOURCES})
+    add_subdirectory(tests)
 endif()

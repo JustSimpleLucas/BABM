@@ -1,7 +1,7 @@
 // BuyAndHoldStrategy.h
 
-#ifndef BUY_AND_HOLD_STRATEGY_H
-#define BUY_AND_HOLD_STRATEGY_H
+#ifndef ABM_AGENT_STRATEGY_BUY_AND_HOLD_STRATEGY_H
+#define ABM_AGENT_STRATEGY_BUY_AND_HOLD_STRATEGY_H
 
 #include <optional>
 #include <string>
@@ -78,4 +78,4 @@ class BuyAndHoldStrategy : public TradingStrategy {
 
 } // namespace abm
 
-#endif // BUY_AND_HOLD_STRATEGY_H
+#endif // ABM_AGENT_STRATEGY_BUY_AND_HOLD_STRATEGY_H

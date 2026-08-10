@@ -268,8 +268,7 @@ PythonAnalysisRunner::generatePostRunReports(const RuntimeConfig& runtimeConfig)
             buildPythonProcessRequest(runtimeConfig, importArguments);
         result.databaseImportSucceeded = runProcess(importRequest);
         if (!result.databaseImportSucceeded) {
-            result.message =
-                "PostgreSQL import failed. Staging artefacts were kept for recovery.";
+            result.message = "PostgreSQL import failed. Staging artefacts were kept for recovery.";
             result.databaseImportMessage = result.message;
             return result;
         }
@@ -296,8 +295,7 @@ PythonAnalysisRunner::generatePostRunReports(const RuntimeConfig& runtimeConfig)
         appendDatabaseConnectionArguments(runtimeConfig, runArguments);
     }
 
-    const ProcessRequest runRequest =
-        buildPythonProcessRequest(runtimeConfig, runArguments);
+    const ProcessRequest runRequest = buildPythonProcessRequest(runtimeConfig, runArguments);
     result.runReportSucceeded = runProcess(runRequest);
 
     if (!result.runReportSucceeded) {

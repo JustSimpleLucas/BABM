@@ -1,7 +1,7 @@
 // ProspectTheory.h
 
-#ifndef PROSPECT_THEORY_H
-#define PROSPECT_THEORY_H
+#ifndef ABM_BEHAVIOURAL_FINANCE_PROSPECT_THEORY_H
+#define ABM_BEHAVIOURAL_FINANCE_PROSPECT_THEORY_H
 
 #include <cstddef>
 #include <cstdint>
@@ -141,4 +141,4 @@ class ProspectTheory {
 
 } // namespace abm
 
-#endif // PROSPECT_THEORY_H
+#endif // ABM_BEHAVIOURAL_FINANCE_PROSPECT_THEORY_H

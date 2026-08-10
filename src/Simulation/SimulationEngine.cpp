@@ -12,13 +12,13 @@
 namespace abm {
 
 SimulationEngine::SimulationEngine(SimulationConfig config)
-    : config_(std::move(config)), market_(config_.seed), random_(config_.seed + 1U) {
+    : config_(std::move(config)), fundamentalProcess_(config_.seed), random_(config_.seed + 1U) {
     validateSimulationConfig(config_);
     normaliseSimulationConfig(config_);
 
     population_ = PopulationFactory::createPopulation(config_, random_);
     socialInfluenceModel_.initialize(population_, config_.social, random_);
-    (void)MarketProcess::initializeMarket(market_, config_, random_);
+    (void)MarketProcess::initializeMarket(market_, fundamentalProcess_, config_, random_);
     MarketProcess::initializeAgentWealths(population_, latestMarketPrices());
 }
 
@@ -50,7 +50,7 @@ SimulationRunResult SimulationEngine::run(const ProgressCallback& progressCallba
         MarketProcess::accrueRiskFreeCash(population_, config_.riskFreeRate);
 
         const std::vector<double> newFundamentals =
-            MarketProcess::generateNextFundamentals(market_, config_);
+            MarketProcess::generateNextFundamentals(market_, fundamentalProcess_, config_);
         socialInfluenceModel_.updateOpinions(population_, config_.social, random_);
 
         const std::vector<double> referencePrices = latestMarketPrices();

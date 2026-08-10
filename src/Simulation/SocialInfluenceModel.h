@@ -1,7 +1,7 @@
 // SocialInfluenceModel.h
 
-#ifndef SIMULATION_SOCIAL_INFLUENCE_MODEL_H
-#define SIMULATION_SOCIAL_INFLUENCE_MODEL_H
+#ifndef ABM_SIMULATION_SOCIAL_INFLUENCE_MODEL_H
+#define ABM_SIMULATION_SOCIAL_INFLUENCE_MODEL_H
 
 #include <vector>
 
@@ -20,16 +20,14 @@ namespace abm {
 class SocialInfluenceModel {
   public:
     /** Assigns social profiles and constructs the neighbour graph. */
-    void initialize(const SimulationPopulation& population,
-                    const SocialInfluenceConfig& config,
+    void initialize(const SimulationPopulation& population, const SocialInfluenceConfig& config,
                     RandomEngine& random);
 
     /** Resizes scratch storage for a new run without consuming random draws. */
     void prepareForRun(const SimulationPopulation& population);
 
     /** Updates each agent's current opinion from neighbours and private noise. */
-    void updateOpinions(const SimulationPopulation& population,
-                        const SocialInfluenceConfig& config,
+    void updateOpinions(const SimulationPopulation& population, const SocialInfluenceConfig& config,
                         RandomEngine& random);
 
   private:
@@ -39,4 +37,4 @@ class SocialInfluenceModel {
 
 } // namespace abm
 
-#endif // SIMULATION_SOCIAL_INFLUENCE_MODEL_H
+#endif // ABM_SIMULATION_SOCIAL_INFLUENCE_MODEL_H

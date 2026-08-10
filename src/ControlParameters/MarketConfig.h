@@ -1,7 +1,7 @@
 // MarketConfig.h
 
-#ifndef CONTROL_PARAMETERS_MARKET_CONFIG_H
-#define CONTROL_PARAMETERS_MARKET_CONFIG_H
+#ifndef ABM_CONTROL_PARAMETERS_MARKET_CONFIG_H
+#define ABM_CONTROL_PARAMETERS_MARKET_CONFIG_H
 
 #include <cstddef>
 #include <cstdint>
@@ -389,4 +389,4 @@ struct WarmupPriceProcessConfig {
 
 } // namespace abm
 
-#endif // CONTROL_PARAMETERS_MARKET_CONFIG_H
+#endif // ABM_CONTROL_PARAMETERS_MARKET_CONFIG_H

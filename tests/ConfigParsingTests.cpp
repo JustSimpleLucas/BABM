@@ -131,15 +131,15 @@ void testRuntimeConfigParsesProspectTheoryToggle(int& failures) {
             "config parser should read the proportional transaction-cost rate", failures);
         abm::test::expect(!runtimeConfig.simulation.transactionCosts.affectsDecisions,
                           "config parser should read transaction-cost decision toggle", failures);
+        abm::test::expect(runtimeConfig.simulation.transactionCosts.applyToForcedBuyIns,
+                          "config parser should read transaction-cost forced-buy-in toggle",
+                          failures);
         abm::test::expect(
-            runtimeConfig.simulation.transactionCosts.applyToForcedBuyIns,
-            "config parser should read transaction-cost forced-buy-in toggle", failures);
-        abm::test::expect(abm::test::nearlyEqual(
-                              runtimeConfig.simulation.fundamentalDriftPerStep(), 0.012),
-                          "config parser should read the fundamental drift per step", failures);
-        abm::test::expect(abm::test::nearlyEqual(
-                              runtimeConfig.simulation.minimumFundamentalValue(), 2.50),
-                          "config parser should read the minimum fundamental value", failures);
+            abm::test::nearlyEqual(runtimeConfig.simulation.fundamentalDriftPerStep(), 0.012),
+            "config parser should read the fundamental drift per step", failures);
+        abm::test::expect(
+            abm::test::nearlyEqual(runtimeConfig.simulation.minimumFundamentalValue(), 2.50),
+            "config parser should read the minimum fundamental value", failures);
         abm::test::expect(
             abm::test::nearlyEqual(runtimeConfig.simulation.warmupPriceProcess.noiseStdDev, 0.004),
             "config parser should read warm-up price noise as warm-up-only", failures);
@@ -159,8 +159,7 @@ void testRuntimeConfigParsesProspectTheoryToggle(int& failures) {
         abm::test::expect(runtimeConfig.simulation.numNoiseTraders == 7,
                           "config parser should read the noise-trader population count", failures);
         abm::test::expect(runtimeConfig.simulation.numBuyAndHoldAgents == 3,
-                          "config parser should read the buy-and-hold population count",
-                          failures);
+                          "config parser should read the buy-and-hold population count", failures);
         abm::test::expect(
             abm::test::nearlyEqual(runtimeConfig.simulation.noiseTrader.beliefShockStdDev, 0.031),
             "config parser should read the noise-trader belief-shock scale", failures);
@@ -194,10 +193,9 @@ void testRuntimeConfigParsesProspectTheoryToggle(int& failures) {
                           "config parser should read the run-log output path", failures);
         abm::test::expect(runtimeConfig.output.databaseOutputEnabled,
                           "config parser should read database_output_enabled = 1", failures);
-        abm::test::expect(runtimeConfig.output.databaseUrlEnvironmentVariable ==
-                              "ABM_TEST_DATABASE_URL",
-                          "config parser should read the database URL environment variable",
-                          failures);
+        abm::test::expect(
+            runtimeConfig.output.databaseUrlEnvironmentVariable == "ABM_TEST_DATABASE_URL",
+            "config parser should read the database URL environment variable", failures);
         abm::test::expect(runtimeConfig.output.databasePruneAfterImport,
                           "config parser should read database_prune_after_import = 1", failures);
         abm::test::expect(runtimeConfig.output.pythonAnalysisEnabled,
@@ -449,21 +447,18 @@ void testRuntimeConfigParsesMultiAssetDeclaration(int& failures) {
         abm::RuntimeConfig runtimeConfig = abm::loadRuntimeConfig(configPath.string());
         abm::SimulationConfig& simulation = runtimeConfig.simulation;
 
-        abm::test::expect(simulation.assets.size() == 2 &&
-                              simulation.assets[0].name == "alpha" &&
+        abm::test::expect(simulation.assets.size() == 2 && simulation.assets[0].name == "alpha" &&
                               simulation.assets[1].name == "beta",
                           "assets declaration should create definitions in declared order",
                           failures);
-        abm::test::expect(abm::test::nearlyEqual(simulation.assets[0].initialPrice, 105.0) &&
-                              abm::test::nearlyEqual(simulation.assets[0].initialStock, 5.0) &&
-                              abm::test::nearlyEqual(simulation.assets[0].priceTickSize, 0.05) &&
-                              abm::test::nearlyEqual(simulation.assets[0].fundamentalShockStdDev,
-                                                     0.04) &&
-                              abm::test::nearlyEqual(simulation.assets[0].fundamentalDriftPerStep,
-                                                     0.002) &&
-                              abm::test::nearlyEqual(simulation.assets[0].minimumFundamentalValue,
-                                                     2.0),
-                          "per-asset keys should populate the named asset definition", failures);
+        abm::test::expect(
+            abm::test::nearlyEqual(simulation.assets[0].initialPrice, 105.0) &&
+                abm::test::nearlyEqual(simulation.assets[0].initialStock, 5.0) &&
+                abm::test::nearlyEqual(simulation.assets[0].priceTickSize, 0.05) &&
+                abm::test::nearlyEqual(simulation.assets[0].fundamentalShockStdDev, 0.04) &&
+                abm::test::nearlyEqual(simulation.assets[0].fundamentalDriftPerStep, 0.002) &&
+                abm::test::nearlyEqual(simulation.assets[0].minimumFundamentalValue, 2.0),
+            "per-asset keys should populate the named asset definition", failures);
         abm::test::expect(abm::test::nearlyEqual(simulation.assets[1].initialPrice, 40.0) &&
                               abm::test::nearlyEqual(simulation.assets[1].initialStock, 10.0),
                           "second asset should receive its own parameters", failures);
@@ -510,8 +505,7 @@ void testRuntimeConfigRejectsMalformedAssetKeys(int& failures) {
                        "duplicate assets declarations should be rejected");
     expectParseFailure("assets = alpha, alpha\n",
                        "duplicate asset names in one declaration should be rejected");
-    expectParseFailure("assets = alpha,\n",
-                       "empty asset names should be rejected");
+    expectParseFailure("assets = alpha,\n", "empty asset names should be rejected");
     expectParseFailure("assets = alpha\nasset.alpha.unknown_parameter = 1.0\n",
                        "unknown per-asset parameters should be rejected");
     expectParseFailure("assets = alpha\nasset.beta.initial_price = 10.0\n",
@@ -577,16 +571,16 @@ void testRuntimeConfigParsesAssetProcessAndToggle(int& failures) {
         abm::RuntimeConfig runtimeConfig = abm::loadRuntimeConfig(configPath.string());
         abm::SimulationConfig& simulation = runtimeConfig.simulation;
 
-        abm::test::expect(
-            simulation.assets.size() == 2 &&
-                simulation.assets[0].fundamentalProcess ==
-                    abm::FundamentalProcessType::ArithmeticRandomWalk &&
-                simulation.assets[1].fundamentalProcess ==
-                    abm::FundamentalProcessType::GeometricBrownianMotion,
-            "per-asset fundamental_process should select the named process", failures);
-        abm::test::expect(
-            abm::test::nearlyEqual(simulation.assetFundamentalCorrelation, 0.35),
-            "asset_fundamental_correlation should parse into the simulation config", failures);
+        abm::test::expect(simulation.assets.size() == 2 &&
+                              simulation.assets[0].fundamentalProcess ==
+                                  abm::FundamentalProcessType::ArithmeticRandomWalk &&
+                              simulation.assets[1].fundamentalProcess ==
+                                  abm::FundamentalProcessType::GeometricBrownianMotion,
+                          "per-asset fundamental_process should select the named process",
+                          failures);
+        abm::test::expect(abm::test::nearlyEqual(simulation.assetFundamentalCorrelation, 0.35),
+                          "asset_fundamental_correlation should parse into the simulation config",
+                          failures);
 
         abm::validateSimulationConfig(simulation);
         abm::normaliseSimulationConfig(simulation);
@@ -620,13 +614,12 @@ void testDeclaredAssetsDefaultToGeometricBrownianMotion(int& failures) {
 
     try {
         abm::RuntimeConfig runtimeConfig = abm::loadRuntimeConfig(configPath.string());
-        abm::test::expect(
-            runtimeConfig.simulation.assets.size() == 2 &&
-                runtimeConfig.simulation.assets[0].fundamentalProcess ==
-                    abm::FundamentalProcessType::GeometricBrownianMotion &&
-                runtimeConfig.simulation.assets[1].fundamentalProcess ==
-                    abm::FundamentalProcessType::GeometricBrownianMotion,
-            "declared assets should default to geometric Brownian motion", failures);
+        abm::test::expect(runtimeConfig.simulation.assets.size() == 2 &&
+                              runtimeConfig.simulation.assets[0].fundamentalProcess ==
+                                  abm::FundamentalProcessType::GeometricBrownianMotion &&
+                              runtimeConfig.simulation.assets[1].fundamentalProcess ==
+                                  abm::FundamentalProcessType::GeometricBrownianMotion,
+                          "declared assets should default to geometric Brownian motion", failures);
     } catch (const std::exception& error) {
         std::cerr << "Unexpected default-process failure: " << error.what() << '\n';
         abm::test::expect(false, "default asset process configuration should parse", failures);
@@ -679,9 +672,9 @@ void testDisabledAssetCollapsesToSingleAsset(int& failures) {
         abm::test::expect(simulation.assets.disabled().size() == 1 &&
                               simulation.assets.disabled()[0].name == "beta",
                           "a disabled asset should be retained for provenance", failures);
-        abm::test::expect(simulation.assets.primaryIndex() == 0 && simulation.assetName() == "alpha",
-                          "the primary asset should resolve against enabled assets only",
-                          failures);
+        abm::test::expect(simulation.assets.primaryIndex() == 0 &&
+                              simulation.assetName() == "alpha",
+                          "the primary asset should resolve against enabled assets only", failures);
     } catch (const std::exception& error) {
         std::cerr << "Unexpected disabled-asset failure: " << error.what() << '\n';
         abm::test::expect(false, "disabled asset configuration should normalise", failures);

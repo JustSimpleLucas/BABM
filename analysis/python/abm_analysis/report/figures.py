@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from abm_analysis.data import build_runs_index
-from abm_analysis.multi_asset import list_assets
+from abm_analysis.archive.data import build_runs_index
+from abm_analysis.statistics.multi_asset import list_assets
 from abm_analysis.plots import (
     make_acf_figure,
     make_asset_allocative_efficiency_figure,

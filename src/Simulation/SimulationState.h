@@ -1,7 +1,7 @@
 // SimulationState.h
 
-#ifndef SIMULATION_STATE_H
-#define SIMULATION_STATE_H
+#ifndef ABM_SIMULATION_SIMULATION_STATE_H
+#define ABM_SIMULATION_SIMULATION_STATE_H
 
 #include <cstddef>
 #include <cstdint>
@@ -88,4 +88,4 @@ struct PriceFormationResult {
 
 } // namespace abm
 
-#endif // SIMULATION_STATE_H
+#endif // ABM_SIMULATION_SIMULATION_STATE_H

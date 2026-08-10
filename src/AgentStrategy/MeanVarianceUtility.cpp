@@ -15,8 +15,7 @@ void validateInputs(const MeanVarianceInputs& inputs) {
 }
 } // namespace
 
-double optimalRiskyWeight(const MeanVarianceInputs& inputs,
-                          double minRiskyWeight,
+double optimalRiskyWeight(const MeanVarianceInputs& inputs, double minRiskyWeight,
                           double maxRiskyWeight) {
     validateInputs(inputs);
     requireFinite(minRiskyWeight, "Minimum risky weight");

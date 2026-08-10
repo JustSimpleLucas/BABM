@@ -1,7 +1,7 @@
 // ChartistStrategy.h
 
-#ifndef CHARTIST_STRATEGY_H
-#define CHARTIST_STRATEGY_H
+#ifndef ABM_AGENT_STRATEGY_CHARTIST_STRATEGY_H
+#define ABM_AGENT_STRATEGY_CHARTIST_STRATEGY_H
 
 #include <cstddef>
 #include <optional>
@@ -149,4 +149,4 @@ class ChartistStrategy : public TradingStrategy {
 
 } // namespace abm
 
-#endif // CHARTIST_STRATEGY_H
+#endif // ABM_AGENT_STRATEGY_CHARTIST_STRATEGY_H

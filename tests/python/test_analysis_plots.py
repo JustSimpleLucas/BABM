@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from abm_analysis.data import discover_run_directories
-from abm_analysis.diagnostics import build_return_series_by_run
+from abm_analysis.archive.data import discover_run_directories
+from abm_analysis.statistics.diagnostics import build_return_series_by_run
 from abm_analysis.plots import (
     build_agent_summary_statistics,
     build_simulation_labels,

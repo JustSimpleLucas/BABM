@@ -7,19 +7,19 @@ from pathlib import Path
 
 import pandas as pd
 
-from abm_analysis.benchmarks import build_benchmark_diagnostics, build_benchmark_return_series
-from abm_analysis.comparisons import build_simulation_benchmark_comparison
-from abm_analysis.data import build_run_archive, build_runs_index, prepare_return_series
+from abm_analysis.archive.benchmarks import build_benchmark_diagnostics, build_benchmark_return_series
+from abm_analysis.statistics.comparisons import build_simulation_benchmark_comparison
+from abm_analysis.archive.data import build_run_archive, build_runs_index, prepare_return_series
 from abm_analysis.database import DEFAULT_DATABASE_URL_ENV
-from abm_analysis.diagnostics import run_asset_stylised_fact_diagnostics
-from abm_analysis.multi_asset import asset_series_id, build_asset_return_series
+from abm_analysis.statistics.diagnostics import run_asset_stylised_fact_diagnostics
+from abm_analysis.statistics.multi_asset import asset_series_id, build_asset_return_series
 from abm_analysis.plots import (
     build_agent_summary_statistics,
     build_asset_configuration_table,
     build_simulation_labels,
 )
-from abm_analysis.robustness import build_seed_robustness_summary
-from abm_analysis.stress import build_benchmark_stress_diagnostics, build_simulation_stress_diagnostics
+from abm_analysis.statistics.robustness import build_seed_robustness_summary
+from abm_analysis.statistics.stress import build_benchmark_stress_diagnostics, build_simulation_stress_diagnostics
 
 from .evidence import build_run_evidence_assessment
 from .figures import (

@@ -2,11 +2,11 @@
 
 #include "Application/SimulationApplication.h"
 
-#include "Analysis/StylisedFactMetrics.h"
 #include "Application/CliOptions.h"
 #include "Application/ConsoleReporter.h"
 #include "Application/PythonAnalysisRunner.h"
 #include "DataManagement/ExperimentDataWorkflow.h"
+#include "Metrics/StylisedFactMetrics.h"
 #include "Simulation/SimulationEngine.h"
 #include "Utility/ConsoleProgressBar.h"
 #include "Utility/ProcessMemoryUsage.h"

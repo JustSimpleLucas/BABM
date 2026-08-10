@@ -30,8 +30,7 @@ void testTwoAssetRunProducesIndependentPerAssetOutput(int& failures) {
     const abm::SimulationRunResult result = engine.run();
     const abm::MultiAssetRunData& multiAsset = result.multiAssetData();
 
-    abm::test::expect(multiAsset.assetNames.size() == 2 &&
-                          multiAsset.assetNames[0] == "alpha" &&
+    abm::test::expect(multiAsset.assetNames.size() == 2 && multiAsset.assetNames[0] == "alpha" &&
                           multiAsset.assetNames[1] == "beta",
                       "a two-asset run should record both assets in declared order", failures);
     abm::test::expect(multiAsset.assetStepDetails.size() == config.timeSteps * 2,
@@ -42,13 +41,12 @@ void testTwoAssetRunProducesIndependentPerAssetOutput(int& failures) {
     abm::test::expect(alphaFundamentals.back() > alphaFundamentals.front() &&
                           betaFundamentals.back() < betaFundamentals.front(),
                       "each asset's fundamental should follow its own configured drift", failures);
-    abm::test::expect(multiAsset.marketPriceHistories.at(0) != multiAsset.marketPriceHistories.at(1),
-                      "assets with distinct parameters should produce distinct price paths",
-                      failures);
+    abm::test::expect(
+        multiAsset.marketPriceHistories.at(0) != multiAsset.marketPriceHistories.at(1),
+        "assets with distinct parameters should produce distinct price paths", failures);
 
     abm::test::expect(result.marketPriceHistory() == multiAsset.marketPriceHistories.at(0),
-                      "single-asset outputs should project the designated primary asset",
-                      failures);
+                      "single-asset outputs should project the designated primary asset", failures);
 
     double alphaVolume = 0.0;
     double betaVolume = 0.0;
@@ -144,10 +142,9 @@ void testMultiAssetDeclarationPreservesLegacyTrajectory(int& failures) {
                       "declared single-asset config should reproduce the legacy fundamental "
                       "series exactly",
                       failures);
-    abm::test::expect(legacyResult.externalTradeLedger().size() ==
-                          declaredResult.externalTradeLedger().size(),
-                      "declared single-asset config should reproduce the legacy trade count",
-                      failures);
+    abm::test::expect(
+        legacyResult.externalTradeLedger().size() == declaredResult.externalTradeLedger().size(),
+        "declared single-asset config should reproduce the legacy trade count", failures);
 }
 
 void testSimulationIsSeedReproducible(int& failures) {
@@ -211,13 +208,14 @@ void testSimulationIsSeedReproducible(int& failures) {
                               lhs.asset.executedTrades == rhs.asset.executedTrades,
                           "seeded simulations should reproduce order-count diagnostics", failures);
         abm::test::expect(
-                abm::test::nearlyEqual(lhs.asset.marketPrice, rhs.asset.marketPrice) &&
+            abm::test::nearlyEqual(lhs.asset.marketPrice, rhs.asset.marketPrice) &&
                 abm::test::nearlyEqual(lhs.asset.tradedVolume, rhs.asset.tradedVolume) &&
                 abm::test::nearlyEqual(lhs.asset.realizedAllocativeSurplus,
                                        rhs.asset.realizedAllocativeSurplus) &&
                 abm::test::nearlyEqual(lhs.asset.maximumAllocativeSurplus,
                                        rhs.asset.maximumAllocativeSurplus) &&
-                abm::test::nearlyEqual(lhs.asset.allocativeEfficiency, rhs.asset.allocativeEfficiency) &&
+                abm::test::nearlyEqual(lhs.asset.allocativeEfficiency,
+                                       rhs.asset.allocativeEfficiency) &&
                 abm::test::nearlyEqual(lhs.wealthGiniCoefficient, rhs.wealthGiniCoefficient),
             "seeded simulations should reproduce per-step prices, volume, efficiency, and Gini",
             failures);
@@ -237,15 +235,17 @@ void testSimulationIsSeedReproducible(int& failures) {
     }
 
     for (const abm::StepDetails& step : first.stepDetails()) {
-        abm::test::expect(abm::test::nearlyEqual(step.asset.logReturn,
-                                                 std::log(step.asset.marketPrice / step.asset.referencePrice),
-                                                 1e-12),
+        abm::test::expect(abm::test::nearlyEqual(
+                              step.asset.logReturn,
+                              std::log(step.asset.marketPrice / step.asset.referencePrice), 1e-12),
                           "step diagnostics should expose realised log returns", failures);
-        abm::test::expect(
-            step.submittedOrders == step.asset.submittedLimitOrders + step.asset.submittedMarketOrders,
-            "microstructure diagnostics should partition submitted order styles", failures);
+        abm::test::expect(step.submittedOrders ==
+                              step.asset.submittedLimitOrders + step.asset.submittedMarketOrders,
+                          "microstructure diagnostics should partition submitted order styles",
+                          failures);
         abm::test::expect(std::isfinite(step.asset.bestBid) && std::isfinite(step.asset.bestAsk) &&
-                              std::isfinite(step.asset.bidAskSpread) && std::isfinite(step.asset.midQuote),
+                              std::isfinite(step.asset.bidAskSpread) &&
+                              std::isfinite(step.asset.midQuote),
                           "book quote diagnostics should remain finite", failures);
         abm::test::expect(step.asset.bidDepth >= 0.0 && step.asset.askDepth >= 0.0,
                           "book depth diagnostics should be non-negative", failures);
@@ -265,11 +265,13 @@ void testSimulationIsSeedReproducible(int& failures) {
                               failures);
         }
         if (step.asset.executedTrades > 0) {
-            abm::test::expect(abm::test::nearlyEqual(step.asset.marketPrice, step.asset.lastTradePrice, 1e-12),
-                              "last trade price should become the next market price", failures);
+            abm::test::expect(
+                abm::test::nearlyEqual(step.asset.marketPrice, step.asset.lastTradePrice, 1e-12),
+                "last trade price should become the next market price", failures);
         } else {
-            abm::test::expect(abm::test::nearlyEqual(step.asset.marketPrice, step.asset.referencePrice, 1e-12),
-                              "no-trade steps should carry forward the previous price", failures);
+            abm::test::expect(
+                abm::test::nearlyEqual(step.asset.marketPrice, step.asset.referencePrice, 1e-12),
+                "no-trade steps should carry forward the previous price", failures);
         }
     }
 }
@@ -301,8 +303,7 @@ void testDifferentSeedsProduceDivergentPricePaths(int& failures) {
     const std::vector<double>& basePrices = baseResult.marketPriceHistory();
     const std::vector<double>& reseededPrices = reseededResult.marketPriceHistory();
     abm::test::expect(basePrices.size() == reseededPrices.size(),
-                      "different seeds should still produce histories of equal length",
-                      failures);
+                      "different seeds should still produce histories of equal length", failures);
 
     // Index 0 is the shared initial price; warm-up rows occupy indices
     // 1..warmupSteps and simulation rows follow. Divergence must appear in
@@ -332,8 +333,7 @@ void testDifferentSeedsProduceDivergentPricePaths(int& failures) {
     bool anyLogReturnDiffers = false;
     for (std::size_t i = 0; i < comparedStepRows; ++i) {
         if (!abm::test::nearlyEqual(baseResult.stepDetails()[i].asset.logReturn,
-                                    reseededResult.stepDetails()[i].asset.logReturn,
-                                    1e-12)) {
+                                    reseededResult.stepDetails()[i].asset.logReturn, 1e-12)) {
             anyLogReturnDiffers = true;
             break;
         }
@@ -450,8 +450,9 @@ void testMarketPriceOnlyChangesAfterExecutedTrades(int& failures) {
         abm::test::expect(abm::test::nearlyEqual(step.asset.tradedVolume, 0.0),
                           "one-sided submitted orders should not clear any traded volume",
                           failures);
-        abm::test::expect(abm::test::nearlyEqual(step.asset.marketPrice, step.asset.referencePrice, 1e-12),
-                          "no-trade steps should carry forward the last realised price", failures);
+        abm::test::expect(
+            abm::test::nearlyEqual(step.asset.marketPrice, step.asset.referencePrice, 1e-12),
+            "no-trade steps should carry forward the last realised price", failures);
         abm::test::expect(abm::test::nearlyEqual(step.asset.rawReturn, 0.0, 1e-12),
                           "no-trade steps should not realise a price return", failures);
         abm::test::expect(abm::test::nearlyEqual(step.asset.logReturn, 0.0, 1e-12),

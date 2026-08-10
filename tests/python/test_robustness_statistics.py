@@ -4,19 +4,19 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from abm_analysis.robustness_tests import (
+from abm_analysis.statistics.robustness_tests import (
     build_adf_stationarity_table,
     build_cross_seed_distribution_tests,
     summarise_adf_rejections,
     summarise_pairwise_ks,
 )
-from abm_analysis.robustness_verdicts import (
+from abm_analysis.statistics.robustness_verdicts import (
     MINIMUM_SEEDS_FOR_VERDICTS,
     VerdictThresholds,
     build_robustness_verdicts,
     verdict_rows_for_report,
 )
-from abm_analysis.seed_convergence import (
+from abm_analysis.statistics.seed_convergence import (
     build_seed_convergence_table,
     final_relative_ci_half_widths,
 )

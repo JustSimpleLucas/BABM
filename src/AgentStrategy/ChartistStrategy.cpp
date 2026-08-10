@@ -20,8 +20,7 @@
 namespace abm {
 
 ChartistStrategy::ChartistStrategy(ChartistStrategyParameters parameters)
-    : assetIndex_(parameters.assetIndex),
-      allocationLine_(std::move(parameters.allocationLine)),
+    : assetIndex_(parameters.assetIndex), allocationLine_(std::move(parameters.allocationLine)),
       volatilityWindow_(parameters.volatilityWindow), riskFreeRate_(0.0), maxShortWeight_(0.30),
       referencePointMode_(parameters.referencePointMode),
       referenceMovingAverageWindow_(parameters.referenceMovingAverageWindow) {
@@ -107,9 +106,9 @@ std::optional<Order> ChartistStrategy::generateOrder(Agent& agent, const Market&
     if (!context.useValuationLimitPrice) {
         if (signal == AgentAction::Buy) {
             orderType = OrderType::BUY;
-            quantity = strategy_detail::buyQuantityTowardTarget(
-                targetRiskyUnits, agent.getStock(0), agent.getCash(), price,
-                context.transactionCostRate);
+            quantity = strategy_detail::buyQuantityTowardTarget(targetRiskyUnits, agent.getStock(0),
+                                                                agent.getCash(), price,
+                                                                context.transactionCostRate);
         } else {
             orderType = OrderType::SELL;
             quantity = strategy_detail::sellQuantityTowardTarget(targetRiskyUnits,
@@ -142,9 +141,9 @@ std::optional<Order> ChartistStrategy::generateOrder(Agent& agent, const Market&
         orderPrice = quote->price;
 
         if (orderType == OrderType::BUY) {
-            quantity = strategy_detail::buyQuantityTowardTarget(
-                targetRiskyUnits, agent.getStock(0), agent.getCash(), orderPrice,
-                context.transactionCostRate);
+            quantity = strategy_detail::buyQuantityTowardTarget(targetRiskyUnits, agent.getStock(0),
+                                                                agent.getCash(), orderPrice,
+                                                                context.transactionCostRate);
         } else {
             quantity = strategy_detail::sellQuantityTowardTarget(targetRiskyUnits,
                                                                  agent.getStock(0), false, true);
@@ -205,29 +204,26 @@ std::vector<Order> ChartistStrategy::generateOrders(Agent& agent, const Market& 
 
     const double lowerBound = std::max(allocationLine_.minRiskyWeight(), -maxShortWeight_);
     const std::vector<AssetWeightBounds> bounds(
-        assetCount,
-        AssetWeightBounds{lowerBound, std::max(0.0, allocationLine_.maxRiskyWeight())});
-    const std::vector<double> weights =
-        optimalRiskyWeights(PortfolioInputs{&excessReturns, &covariance,
-                                            allocationLine_.riskAversion(), &bounds,
-                                            maxGrossExposure_});
+        assetCount, AssetWeightBounds{lowerBound, std::max(0.0, allocationLine_.maxRiskyWeight())});
+    const std::vector<double> weights = optimalRiskyWeights(PortfolioInputs{
+        &excessReturns, &covariance, allocationLine_.riskAversion(), &bounds, maxGrossExposure_});
 
     std::vector<Order> orders;
     orders.reserve(assetCount);
     double remainingCash = agent.getCash();
     for (std::size_t assetIndex = 0; assetIndex < assetCount; ++assetIndex) {
-        const double targetUnits = strategy_detail::targetRiskyUnits(
-            strategy_detail::TargetUnitsRequest{wealth, weights[assetIndex], prices[assetIndex],
-                                                false, false});
+        const double targetUnits =
+            strategy_detail::targetRiskyUnits(strategy_detail::TargetUnitsRequest{
+                wealth, weights[assetIndex], prices[assetIndex], false, false});
 
         TradingOrderContext assetContext = context;
         assetContext.priceTickSize = assets[assetIndex].priceTickSize;
 
-        const double baselinePrice = std::max(
-            kMinimumPrice, prices[assetIndex] * std::exp(excessReturns[assetIndex]));
-        const double rawOrderPrice = std::max(
-            kMinimumPrice, baselinePrice * std::exp(std::max(0.0, context.opinionKappa) *
-                                                    context.socialOpinion));
+        const double baselinePrice =
+            std::max(kMinimumPrice, prices[assetIndex] * std::exp(excessReturns[assetIndex]));
+        const double rawOrderPrice =
+            std::max(kMinimumPrice, baselinePrice * std::exp(std::max(0.0, context.opinionKappa) *
+                                                             context.socialOpinion));
         const std::optional<strategy_detail::ValuationQuote> quote =
             strategy_detail::buildValuationQuote(
                 strategy_detail::ValuationQuoteRequest{rawOrderPrice, prices[assetIndex], false},
@@ -258,8 +254,8 @@ std::vector<Order> ChartistStrategy::generateOrders(Agent& agent, const Market& 
         order.assetIndex = static_cast<std::uint32_t>(assetIndex);
         order.timeStep = timeStep;
         if (quote->type == OrderType::BUY) {
-            remainingCash = std::max(0.0, remainingCash -
-                                              (quote->price * quantity *
+            remainingCash =
+                std::max(0.0, remainingCash - (quote->price * quantity *
                                                (1.0 + std::max(0.0, context.transactionCostRate))));
         }
         orders.push_back(order);

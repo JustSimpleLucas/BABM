@@ -74,9 +74,8 @@ std::vector<bool> selectProspectTheoryUsers(const SimulationConfig& config,
 
 SimulationPopulation PopulationFactory::createPopulation(const SimulationConfig& config,
                                                          RandomEngine& random) {
-    const std::size_t totalAgents =
-        config.numFundamentalists + config.numChartists + config.numNoiseTraders +
-        config.numBuyAndHoldAgents;
+    const std::size_t totalAgents = config.numFundamentalists + config.numChartists +
+                                    config.numNoiseTraders + config.numBuyAndHoldAgents;
 
     SimulationPopulation population;
     population.records.reserve(totalAgents);
@@ -151,8 +150,8 @@ SimulationPopulation PopulationFactory::createPopulation(const SimulationConfig&
                 config.noiseTrader.orderSizeFraction, config.noiseTrader.maxShortWeight,
                 noiseTraderSeed(config.seed, nextId));
         } else {
-            strategy = std::make_unique<BuyAndHoldStrategy>(
-                config.assets.primaryIndex(), config.buyAndHold.targetRiskyWeight);
+            strategy = std::make_unique<BuyAndHoldStrategy>(config.assets.primaryIndex(),
+                                                            config.buyAndHold.targetRiskyWeight);
         }
 
         const std::string initialStrategyType = strategy->strategyType();

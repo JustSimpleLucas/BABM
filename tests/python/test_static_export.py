@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import pytest
 
-from abm_analysis.data import discover_run_directories
+from abm_analysis.archive.data import discover_run_directories
 from abm_analysis.plots.common import REPORT_FONT_FAMILY, _apply_report_theme
 from abm_analysis.plots.publication import (
     PUBLICATION_WIDTH_PX,

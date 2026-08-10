@@ -77,10 +77,9 @@ void testOptimizerReducesToScalarRuleForOneAsset(int& failures) {
     const double scalarWeight = abm::optimalRiskyWeight(
         abm::MeanVarianceInputs{expectedExcessReturn, 0.0, sigma, riskAversion}, 0.0, 1.0);
 
-    abm::test::expect(weights.size() == 1 &&
-                          abm::test::nearlyEqual(weights[0], scalarWeight, 1e-12),
-                      "the one-asset Markowitz solve should equal the scalar rule exactly",
-                      failures);
+    abm::test::expect(
+        weights.size() == 1 && abm::test::nearlyEqual(weights[0], scalarWeight, 1e-12),
+        "the one-asset Markowitz solve should equal the scalar rule exactly", failures);
 }
 
 void testOptimizerAccountsForCrossAssetCovariance(int& failures) {
@@ -110,9 +109,8 @@ void testOptimizerAccountsForCrossAssetCovariance(int& failures) {
                       "correlated assets should receive smaller joint weights than independent "
                       "assets",
                       failures);
-    abm::test::expect(abm::test::nearlyEqual(
-                          correlatedWeights[0],
-                          excessReturns[0] / (3.0 * variance * 1.9), 1e-9),
+    abm::test::expect(abm::test::nearlyEqual(correlatedWeights[0],
+                                             excessReturns[0] / (3.0 * variance * 1.9), 1e-9),
                       "the correlated two-asset solve should match the closed-form solution",
                       failures);
 }
@@ -133,8 +131,7 @@ void testOptimizerAppliesBoundsAndGrossExposureCap(int& failures) {
      */
     abm::test::expect(abm::test::nearlyEqual(weights[0], 1.0 / 1.5, 1e-9) &&
                           abm::test::nearlyEqual(weights[1], -0.5 / 1.5, 1e-9),
-                      "bounds and the gross-exposure cap should shape the final weights",
-                      failures);
+                      "bounds and the gross-exposure cap should shape the final weights", failures);
 }
 
 void testOptimizerFallsBackToDiagonalOnDegenerateCovariance(int& failures) {
@@ -153,8 +150,7 @@ void testOptimizerFallsBackToDiagonalOnDegenerateCovariance(int& failures) {
     const std::vector<double> weights = abm::optimalRiskyWeights(
         abm::PortfolioInputs{&excessReturns, &degenerate, 3.0, &bounds, 0.0});
 
-    abm::test::expect(weights.size() == 2 && std::isfinite(weights[0]) &&
-                          std::isfinite(weights[1]),
+    abm::test::expect(weights.size() == 2 && std::isfinite(weights[0]) && std::isfinite(weights[1]),
                       "degenerate covariance should still yield finite bounded weights", failures);
 }
 
@@ -199,10 +195,10 @@ void testCovarianceEstimatorMatchesHandComputation(int& failures) {
     abm::test::expect(
         abm::test::nearlyEqual(covariance.at(0, 0), sampleCovariance(alphaReturns, alphaReturns),
                                1e-12) &&
-            abm::test::nearlyEqual(covariance.at(1, 1),
-                                   sampleCovariance(betaReturns, betaReturns), 1e-12) &&
-            abm::test::nearlyEqual(covariance.at(0, 1),
-                                   sampleCovariance(alphaReturns, betaReturns), 1e-12) &&
+            abm::test::nearlyEqual(covariance.at(1, 1), sampleCovariance(betaReturns, betaReturns),
+                                   1e-12) &&
+            abm::test::nearlyEqual(covariance.at(0, 1), sampleCovariance(alphaReturns, betaReturns),
+                                   1e-12) &&
             abm::test::nearlyEqual(covariance.at(0, 1), covariance.at(1, 0), 1e-15),
         "the covariance estimator should match the hand-computed sample covariance", failures);
 }
@@ -226,11 +222,11 @@ void testProspectAdjustmentIsScaleInvariant(int& failures) {
     highPriceAgent.recordExecutedTrade(0, abm::ExecutedTrade{abm::OrderType::BUY, 950.0, 5.0});
 
     const double lowReference = abm::strategy_detail::resolveProspectReferenceReturn(
-        lowPriceAgent, lowPriceMarket, 0,
-        abm::ProspectReferencePointMode::AveragePurchasePrice, 20, 10.0);
+        lowPriceAgent, lowPriceMarket, 0, abm::ProspectReferencePointMode::AveragePurchasePrice, 20,
+        10.0);
     const double highReference = abm::strategy_detail::resolveProspectReferenceReturn(
-        highPriceAgent, highPriceMarket, 0,
-        abm::ProspectReferencePointMode::AveragePurchasePrice, 20, 1000.0);
+        highPriceAgent, highPriceMarket, 0, abm::ProspectReferencePointMode::AveragePurchasePrice,
+        20, 1000.0);
 
     abm::test::expect(abm::test::nearlyEqual(lowReference, highReference, 1e-12),
                       "reference log returns should be identical across price scales", failures);

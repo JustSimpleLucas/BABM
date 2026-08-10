@@ -1,12 +1,12 @@
 // ExperimentDataWorkflow.h
 
-#ifndef DATA_MANAGEMENT_EXPERIMENT_DATA_WORKFLOW_H
-#define DATA_MANAGEMENT_EXPERIMENT_DATA_WORKFLOW_H
+#ifndef ABM_DATA_MANAGEMENT_EXPERIMENT_DATA_WORKFLOW_H
+#define ABM_DATA_MANAGEMENT_EXPERIMENT_DATA_WORKFLOW_H
 
 #include <string>
 
-#include "Analysis/StylisedFactMetrics.h"
 #include "ControlParameters/SimulationConfig.h"
+#include "Metrics/StylisedFactMetrics.h"
 #include "Output/RunArtifactWriter.h"
 
 namespace abm {
@@ -30,8 +30,7 @@ class ExperimentDataWorkflow {
      * @param error Human-readable error message on failure.
      * @return true when the run has a valid file-based output layout.
      */
-    [[nodiscard]] static bool prepareRunArchive(RuntimeConfig& runtimeConfig,
-                                                std::string& error);
+    [[nodiscard]] static bool prepareRunArchive(RuntimeConfig& runtimeConfig, std::string& error);
 
     /**
      * Writes all configured artifacts for a completed simulation run.
@@ -46,10 +45,9 @@ class ExperimentDataWorkflow {
     [[nodiscard]] static bool writeCompletedRun(const RuntimeConfig& runtimeConfig,
                                                 const SimulationRunResult& simulationResult,
                                                 const RunMetrics& metrics,
-                                                RunArtifactWriteResult& result,
-                                                std::string& error);
+                                                RunArtifactWriteResult& result, std::string& error);
 };
 
 } // namespace abm
 
-#endif // DATA_MANAGEMENT_EXPERIMENT_DATA_WORKFLOW_H
+#endif // ABM_DATA_MANAGEMENT_EXPERIMENT_DATA_WORKFLOW_H

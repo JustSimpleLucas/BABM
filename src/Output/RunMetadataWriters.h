@@ -1,12 +1,12 @@
 // RunMetadataWriters.h
 
-#ifndef OUTPUT_RUN_METADATA_WRITERS_H
-#define OUTPUT_RUN_METADATA_WRITERS_H
+#ifndef ABM_OUTPUT_RUN_METADATA_WRITERS_H
+#define ABM_OUTPUT_RUN_METADATA_WRITERS_H
 
 #include <string>
 
-#include "Analysis/StylisedFactMetrics.h"
 #include "ControlParameters/SimulationConfig.h"
+#include "Metrics/StylisedFactMetrics.h"
 
 namespace abm {
 
@@ -39,4 +39,4 @@ struct ConfigJsonExportRequest {
 } // namespace output_detail
 } // namespace abm
 
-#endif // OUTPUT_RUN_METADATA_WRITERS_H
+#endif // ABM_OUTPUT_RUN_METADATA_WRITERS_H

@@ -1,7 +1,7 @@
 // SimulationConfigValidation.h
 
-#ifndef SIMULATION_CONFIG_VALIDATION_H
-#define SIMULATION_CONFIG_VALIDATION_H
+#ifndef ABM_CONTROL_PARAMETERS_SIMULATION_CONFIG_VALIDATION_H
+#define ABM_CONTROL_PARAMETERS_SIMULATION_CONFIG_VALIDATION_H
 
 #include "ControlParameters/SimulationConfig.h"
 
@@ -26,4 +26,4 @@ void normaliseSimulationConfig(SimulationConfig& config);
 
 } // namespace abm
 
-#endif // SIMULATION_CONFIG_VALIDATION_H
+#endif // ABM_CONTROL_PARAMETERS_SIMULATION_CONFIG_VALIDATION_H

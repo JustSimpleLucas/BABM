@@ -3,7 +3,7 @@ flowchart TD
     root["CMakeLists.txt"]
     compiler["cmake/AbmCompilerOptions.cmake"]
     metadata["cmake/AbmBuildMetadata.cmake"]
-    sources["cmake/AbmSourceSets.cmake"]
+    sources["src/CMakeLists.txt<br/>+ per-directory target_sources()"]
 
     includes["abm_project_includes"]
     buildMetadata["abm_build_metadata"]

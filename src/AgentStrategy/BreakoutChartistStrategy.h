@@ -1,7 +1,7 @@
 // BreakoutChartistStrategy.h
 
-#ifndef BREAKOUT_CHARTIST_STRATEGY_H
-#define BREAKOUT_CHARTIST_STRATEGY_H
+#ifndef ABM_AGENT_STRATEGY_BREAKOUT_CHARTIST_STRATEGY_H
+#define ABM_AGENT_STRATEGY_BREAKOUT_CHARTIST_STRATEGY_H
 
 #include <cstddef>
 #include <string>
@@ -58,7 +58,7 @@ class BreakoutChartistStrategy final : public ChartistStrategy {
   protected:
     [[nodiscard]] AgentAction generateSignal(const Market& market) const override;
     [[nodiscard]] double forecastExcessReturn(const Market& market,
-                                               std::size_t forecastAssetIndex) const override;
+                                              std::size_t forecastAssetIndex) const override;
 
   private:
     [[nodiscard]] std::pair<double, double>
@@ -69,4 +69,4 @@ class BreakoutChartistStrategy final : public ChartistStrategy {
 
 } // namespace abm
 
-#endif // BREAKOUT_CHARTIST_STRATEGY_H
+#endif // ABM_AGENT_STRATEGY_BREAKOUT_CHARTIST_STRATEGY_H

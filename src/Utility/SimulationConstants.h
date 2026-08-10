@@ -1,7 +1,7 @@
 // SimulationConstants.h
 
-#ifndef SIMULATION_CONSTANTS_H
-#define SIMULATION_CONSTANTS_H
+#ifndef ABM_UTILITY_SIMULATION_CONSTANTS_H
+#define ABM_UTILITY_SIMULATION_CONSTANTS_H
 
 #include <cstddef>
 
@@ -80,4 +80,4 @@ inline constexpr std::size_t kRelativeStrengthIndexPeriod = 14;
 
 } // namespace abm
 
-#endif // SIMULATION_CONSTANTS_H
+#endif // ABM_UTILITY_SIMULATION_CONSTANTS_H

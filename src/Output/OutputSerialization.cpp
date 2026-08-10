@@ -201,8 +201,8 @@ std::string buildNormalizedConfigJson(const SimulationConfig& config) {
         << ",\n";
     out << R"(    "market_order_log_gap_threshold": )"
         << config.microstructure.marketOrderLogGapThreshold << ",\n";
-    out << R"(    "market_order_price_collar": )"
-        << config.microstructure.marketOrderPriceCollar << ",\n";
+    out << R"(    "market_order_price_collar": )" << config.microstructure.marketOrderPriceCollar
+        << ",\n";
     out << R"(    "book_depth_levels": )" << config.microstructure.bookDepthLevels << '\n';
     out << "  },\n";
     out << R"(  "short_sale": {)" << '\n';
@@ -214,8 +214,8 @@ std::string buildNormalizedConfigJson(const SimulationConfig& config) {
     out << "  },\n";
     out << R"(  "transaction_costs": {)" << '\n';
     out << R"(    "rate": )" << config.transactionCosts.rate << ",\n";
-    out << R"(    "affects_decisions": )"
-        << jsonBool(config.transactionCosts.affectsDecisions) << ",\n";
+    out << R"(    "affects_decisions": )" << jsonBool(config.transactionCosts.affectsDecisions)
+        << ",\n";
     out << R"(    "apply_to_forced_buy_ins": )"
         << jsonBool(config.transactionCosts.applyToForcedBuyIns) << '\n';
     out << "  },\n";

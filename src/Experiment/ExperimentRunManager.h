@@ -1,7 +1,7 @@
 // ExperimentRunManager.h
 
-#ifndef EXPERIMENT_RUN_MANAGER_H
-#define EXPERIMENT_RUN_MANAGER_H
+#ifndef ABM_EXPERIMENT_EXPERIMENT_RUN_MANAGER_H
+#define ABM_EXPERIMENT_EXPERIMENT_RUN_MANAGER_H
 
 #include <string>
 
@@ -18,7 +18,7 @@ namespace abm {
  * larger parameter sweeps are added later.
  */
 class ExperimentRunManager {
-public:
+  public:
     /**
      * Builds the required numeric run identifier for one ABM configuration.
      *
@@ -39,10 +39,9 @@ public:
      * @param error Human-readable error message on failure.
      * @return true when the layout is ready for writing simulation artifacts.
      */
-    [[nodiscard]] static bool prepareOutputLayout(RuntimeConfig& runtimeConfig,
-                                                  std::string& error);
+    [[nodiscard]] static bool prepareOutputLayout(RuntimeConfig& runtimeConfig, std::string& error);
 };
 
 } // namespace abm
 
-#endif // EXPERIMENT_RUN_MANAGER_H
+#endif // ABM_EXPERIMENT_EXPERIMENT_RUN_MANAGER_H

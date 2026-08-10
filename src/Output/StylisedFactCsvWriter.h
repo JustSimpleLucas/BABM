@@ -1,12 +1,12 @@
 // StylisedFactCsvWriter.h
 
-#ifndef OUTPUT_STYLISED_FACT_CSV_WRITER_H
-#define OUTPUT_STYLISED_FACT_CSV_WRITER_H
+#ifndef ABM_OUTPUT_STYLISED_FACT_CSV_WRITER_H
+#define ABM_OUTPUT_STYLISED_FACT_CSV_WRITER_H
 
 #include <string>
 #include <vector>
 
-#include "Analysis/StylisedFactMetrics.h"
+#include "Metrics/StylisedFactMetrics.h"
 
 namespace abm::output_detail {
 
@@ -22,4 +22,4 @@ namespace abm::output_detail {
 
 } // namespace abm::output_detail
 
-#endif // OUTPUT_STYLISED_FACT_CSV_WRITER_H
+#endif // ABM_OUTPUT_STYLISED_FACT_CSV_WRITER_H

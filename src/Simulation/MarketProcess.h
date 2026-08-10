@@ -1,11 +1,12 @@
 // MarketProcess.h
 
-#ifndef SIMULATION_MARKET_PROCESS_H
-#define SIMULATION_MARKET_PROCESS_H
+#ifndef ABM_SIMULATION_MARKET_PROCESS_H
+#define ABM_SIMULATION_MARKET_PROCESS_H
 
 #include <vector>
 
 #include "ControlParameters/SimulationConfig.h"
+#include "Market/FundamentalValueProcess.h"
 #include "Market/Market.h"
 #include "Simulation/SimulationState.h"
 
@@ -27,22 +28,27 @@ struct MarketInitializationResult {
  */
 class MarketProcess {
   public:
-    /** Seeds the market and warm-up histories before agent interaction begins. */
-    [[nodiscard]] static MarketInitializationResult initializeMarket(Market& market,
-                                                                     const SimulationConfig& config,
-                                                                     RandomEngine& random);
+    /**
+     * Seeds the market and warm-up histories before agent interaction begins.
+     *
+     * @param fundamentalProcess Draws the warm-up fundamental path; its stream
+     *        is separate from `random`, which draws the warm-up price noise.
+     */
+    [[nodiscard]] static MarketInitializationResult
+    initializeMarket(Market& market, FundamentalValueProcess& fundamentalProcess,
+                     const SimulationConfig& config, RandomEngine& random);
 
     /** Applies one period of risk-free cash accrual to every agent. */
     static void accrueRiskFreeCash(SimulationPopulation& population, double riskFreeRate);
 
     /** Advances and stores every asset's latent fundamental value by one period. */
-    [[nodiscard]] static std::vector<double> generateNextFundamentals(Market& market,
-                                                                      const SimulationConfig& config);
+    [[nodiscard]] static std::vector<double>
+    generateNextFundamentals(Market& market, FundamentalValueProcess& fundamentalProcess,
+                             const SimulationConfig& config);
 
     /** Converts clearing output into the realised next market price and returns. */
-    [[nodiscard]] static PriceFormationResult resolvePriceAfterClearing(
-        double referencePrice,
-        const MicrostructureStepResult& result);
+    [[nodiscard]] static PriceFormationResult
+    resolvePriceAfterClearing(double referencePrice, const MicrostructureStepResult& result);
 
     /** Initialises each agent's first mark-to-market wealth from per-asset prices. */
     static void initializeAgentWealths(SimulationPopulation& population,
@@ -55,4 +61,4 @@ class MarketProcess {
 
 } // namespace abm
 
-#endif // SIMULATION_MARKET_PROCESS_H
+#endif // ABM_SIMULATION_MARKET_PROCESS_H

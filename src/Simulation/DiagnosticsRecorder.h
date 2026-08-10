@@ -1,7 +1,7 @@
 // DiagnosticsRecorder.h
 
-#ifndef SIMULATION_DIAGNOSTICS_RECORDER_H
-#define SIMULATION_DIAGNOSTICS_RECORDER_H
+#ifndef ABM_SIMULATION_DIAGNOSTICS_RECORDER_H
+#define ABM_SIMULATION_DIAGNOSTICS_RECORDER_H
 
 #include <cstddef>
 #include <vector>
@@ -83,4 +83,4 @@ class DiagnosticsRecorder {
 
 } // namespace abm
 
-#endif // SIMULATION_DIAGNOSTICS_RECORDER_H
+#endif // ABM_SIMULATION_DIAGNOSTICS_RECORDER_H

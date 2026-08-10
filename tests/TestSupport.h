@@ -1,7 +1,7 @@
 // TestSupport.h
 
-#ifndef TESTS_TEST_SUPPORT_H
-#define TESTS_TEST_SUPPORT_H
+#ifndef ABM_TESTS_TEST_SUPPORT_H
+#define ABM_TESTS_TEST_SUPPORT_H
 
 #include <string>
 
@@ -65,4 +65,4 @@ void runRunArtifactWriterTests(int& failures);
 
 } // namespace abm::test
 
-#endif // TESTS_TEST_SUPPORT_H
+#endif // ABM_TESTS_TEST_SUPPORT_H

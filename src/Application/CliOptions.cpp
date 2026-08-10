@@ -21,9 +21,7 @@ CliParseResult parseSimulationCommandLine(int argc, char** argv) {
     const std::vector<std::string> arguments(argv, argv + argc);
     const std::string programName = arguments.empty() ? "simulate" : arguments.front();
 
-    const bool showHelp =
-        argc > 1 &&
-        (arguments.at(1) == "--help" || arguments.at(1) == "-h");
+    const bool showHelp = argc > 1 && (arguments.at(1) == "--help" || arguments.at(1) == "-h");
     if (showHelp) {
         printSimulationApplicationUsage(programName);
         result.shouldExit = true;
@@ -31,8 +29,7 @@ CliParseResult parseSimulationCommandLine(int argc, char** argv) {
         return result;
     }
 
-    const bool useExplicitConfigFlag =
-        argc > 1 && arguments.at(1) == "--config";
+    const bool useExplicitConfigFlag = argc > 1 && arguments.at(1) == "--config";
     if (useExplicitConfigFlag) {
         if (argc != 3) {
             printSimulationApplicationUsage(programName);

@@ -13,8 +13,7 @@ namespace abm {
 
 MeanReversionChartistStrategy::MeanReversionChartistStrategy(
     MeanReversionChartistStrategyParameters parameters)
-    : ChartistStrategy(std::move(parameters.commonParameters)),
-      longWindow_(parameters.longWindow) {
+    : ChartistStrategy(std::move(parameters.commonParameters)), longWindow_(parameters.longWindow) {
     setLongWindow(parameters.longWindow);
 }
 
@@ -39,8 +38,8 @@ AgentAction MeanReversionChartistStrategy::generateSignal(const Market& market) 
     return AgentAction::Hold;
 }
 
-double MeanReversionChartistStrategy::forecastExcessReturn(
-    const Market& market, std::size_t forecastAssetIndex) const {
+double MeanReversionChartistStrategy::forecastExcessReturn(const Market& market,
+                                                           std::size_t forecastAssetIndex) const {
     const double current = strategy_detail::latestPositiveMarketPrice(market, forecastAssetIndex);
     const double longMa = market.calculateMovingAverage(forecastAssetIndex, longWindow_);
 

@@ -1,7 +1,7 @@
 // ProspectPreferenceSampler.h
 
-#ifndef PROSPECT_PREFERENCE_SAMPLER_H
-#define PROSPECT_PREFERENCE_SAMPLER_H
+#ifndef ABM_BEHAVIOURAL_FINANCE_PROSPECT_PREFERENCE_SAMPLER_H
+#define ABM_BEHAVIOURAL_FINANCE_PROSPECT_PREFERENCE_SAMPLER_H
 
 #include "BehaviouralFinance/ProspectTheory.h"
 #include "ControlParameters/SimulationConfig.h"
@@ -21,4 +21,4 @@ namespace abm {
 
 } // namespace abm
 
-#endif // PROSPECT_PREFERENCE_SAMPLER_H
+#endif // ABM_BEHAVIOURAL_FINANCE_PROSPECT_PREFERENCE_SAMPLER_H

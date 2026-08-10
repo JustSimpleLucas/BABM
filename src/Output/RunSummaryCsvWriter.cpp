@@ -75,7 +75,8 @@ constexpr CsvColumn<Row> kColumns[] = {
      [](std::ostream& out, const Row& r) { out << boolToFlag(r.config.social.enabled); }},
     {"short_selling_enabled",
      [](std::ostream& out, const Row& r) { out << boolToFlag(r.config.shortSellingEnabled); }},
-    {"final_market_price", [](std::ostream& out, const Row& r) { out << r.stats.finalMarketPrice; }},
+    {"final_market_price",
+     [](std::ostream& out, const Row& r) { out << r.stats.finalMarketPrice; }},
     {"final_fundamental_price",
      [](std::ostream& out, const Row& r) { out << r.stats.finalFundamentalPrice; }},
     {"final_wealth_gini_coefficient",
@@ -106,8 +107,10 @@ constexpr CsvColumn<Row> kColumns[] = {
      [](std::ostream& out, const Row& r) { out << r.metrics.lag1SquaredReturnAutocorrelation; }},
     {"mean_traded_volume",
      [](std::ostream& out, const Row& r) { out << r.metrics.meanTradedVolume; }},
-    {"zero_return_share", [](std::ostream& out, const Row& r) { out << r.metrics.zeroReturnShare; }},
-    {"observation_count", [](std::ostream& out, const Row& r) { out << r.metrics.observationCount; }},
+    {"zero_return_share",
+     [](std::ostream& out, const Row& r) { out << r.metrics.zeroReturnShare; }},
+    {"observation_count",
+     [](std::ostream& out, const Row& r) { out << r.metrics.observationCount; }},
 };
 
 } // namespace

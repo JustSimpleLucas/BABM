@@ -12,8 +12,8 @@ from abm_analysis.environment import configure_analysis_environment
 
 configure_analysis_environment()
 
-from abm_analysis.data import discover_run_directories, parse_run_id
-from abm_analysis.diagnostics import run_stylised_fact_diagnostics
+from abm_analysis.archive.data import discover_run_directories, parse_run_id
+from abm_analysis.statistics.diagnostics import run_stylised_fact_diagnostics
 from abm_analysis.report import build_comparison_report, build_run_report
 
 __all__ = [

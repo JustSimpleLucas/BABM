@@ -21,8 +21,8 @@ FundamentalValueProcessParameters fundamentalProcessParameters(const AssetDefini
 }
 
 /** Collects the per-asset process parameters for a joint advance, in index order. */
-std::vector<FundamentalValueProcessParameters> jointFundamentalParameters(
-    const AssetUniverse& assets) {
+std::vector<FundamentalValueProcessParameters>
+jointFundamentalParameters(const AssetUniverse& assets) {
     std::vector<FundamentalValueProcessParameters> parameters;
     parameters.reserve(assets.size());
     for (const AssetDefinition& asset : assets) {
@@ -43,9 +43,9 @@ std::vector<std::string> assetNames(const AssetUniverse& assets) {
 
 } // namespace
 
-MarketInitializationResult MarketProcess::initializeMarket(Market& market,
-                                                           const SimulationConfig& config,
-                                                           RandomEngine& random) {
+MarketInitializationResult
+MarketProcess::initializeMarket(Market& market, FundamentalValueProcess& fundamentalProcess,
+                                const SimulationConfig& config, RandomEngine& random) {
     const AssetUniverse& assets = config.assets;
     const std::size_t primaryIndex = assets.primaryIndex();
 
@@ -73,8 +73,9 @@ MarketInitializationResult MarketProcess::initializeMarket(Market& market,
          * histories are unchanged. The warm-up price noise below is drawn from
          * a separate engine and is therefore unaffected by this regrouping.
          */
-        const std::vector<double> stepFundamentals = market.generateCorrelatedFundamentalValues(
-            warmupParameters, config.assetFundamentalCorrelation);
+        const std::vector<double> stepFundamentals =
+            fundamentalProcess.generateCorrelatedFundamentalValues(
+                market, warmupParameters, config.assetFundamentalCorrelation);
 
         for (std::size_t assetIndex = 0; assetIndex < assets.size(); ++assetIndex) {
             previousFundamental[assetIndex] = stepFundamentals[assetIndex];
@@ -88,14 +89,14 @@ MarketInitializationResult MarketProcess::initializeMarket(Market& market,
              * Warm-up uses a simple fundamental-pull process only to initialise
              * price history before the analysed continuous-LOB phase begins.
              */
-            const double mispricing = (previousFundamental[assetIndex] -
-                                       previousMarket[assetIndex]) /
-                                      std::max(previousMarket[assetIndex], kMinimumPrice);
+            const double mispricing =
+                (previousFundamental[assetIndex] - previousMarket[assetIndex]) /
+                std::max(previousMarket[assetIndex], kMinimumPrice);
             const double noise =
                 random.generateNormalDist(0.0, config.warmupPriceProcess.noiseStdDev);
-            const double rawReturn = std::clamp(
-                (config.warmupPriceProcess.fundamentalPullStrength * mispricing) + noise, -0.95,
-                0.95);
+            const double rawReturn =
+                std::clamp((config.warmupPriceProcess.fundamentalPullStrength * mispricing) + noise,
+                           -0.95, 0.95);
             previousMarket[assetIndex] =
                 std::max(kMinimumPrice, previousMarket[assetIndex] * (1.0 + rawReturn));
             market.storeMarketValue(assetIndex, previousMarket[assetIndex]);
@@ -105,8 +106,7 @@ MarketInitializationResult MarketProcess::initializeMarket(Market& market,
     return {previousMarket[primaryIndex], previousFundamental[primaryIndex]};
 }
 
-void MarketProcess::accrueRiskFreeCash(SimulationPopulation& population,
-                                       double riskFreeRate) {
+void MarketProcess::accrueRiskFreeCash(SimulationPopulation& population, double riskFreeRate) {
     /*
      * Formula note:
      * c_i,t+1 = c_i,t * (1 + r_f).
@@ -119,10 +119,11 @@ void MarketProcess::accrueRiskFreeCash(SimulationPopulation& population,
     }
 }
 
-std::vector<double> MarketProcess::generateNextFundamentals(Market& market,
-                                                            const SimulationConfig& config) {
-    return market.generateCorrelatedFundamentalValues(jointFundamentalParameters(config.assets),
-                                                      config.assetFundamentalCorrelation);
+std::vector<double>
+MarketProcess::generateNextFundamentals(Market& market, FundamentalValueProcess& fundamentalProcess,
+                                        const SimulationConfig& config) {
+    return fundamentalProcess.generateCorrelatedFundamentalValues(
+        market, jointFundamentalParameters(config.assets), config.assetFundamentalCorrelation);
 }
 
 PriceFormationResult

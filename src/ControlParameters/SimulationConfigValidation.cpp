@@ -212,8 +212,7 @@ void validateNoiseTraderConfig(const NoiseTraderConfig& noiseTrader) {
 }
 
 void validateBuyAndHoldConfig(const BuyAndHoldConfig& buyAndHold) {
-    requireInClosedUnitInterval(buyAndHold.targetRiskyWeight,
-                                "Buy-and-hold target risky weight");
+    requireInClosedUnitInterval(buyAndHold.targetRiskyWeight, "Buy-and-hold target risky weight");
     if (buyAndHold.targetRiskyWeight <= 0.0) {
         throw std::invalid_argument("Buy-and-hold target risky weight must be greater than 0.");
     }
@@ -248,8 +247,7 @@ void validateAssetDefinitions(const SimulationConfig& config) {
 
     for (std::size_t assetIndex = 0; assetIndex < config.assets.size(); ++assetIndex) {
         const AssetDefinition& asset = config.assets[assetIndex];
-        if (asset.name.empty() ||
-            asset.name.find_first_of(", \t.") != std::string::npos) {
+        if (asset.name.empty() || asset.name.find_first_of(", \t.") != std::string::npos) {
             throw std::invalid_argument(
                 "Asset name '" + asset.name +
                 "' is invalid: names must be non-empty and must not contain commas, dots, or "
@@ -285,9 +283,10 @@ void validateAssetDefinitions(const SimulationConfig& config) {
         if (asset.fundamentalProcess == FundamentalProcessType::GeometricBrownianMotion &&
             asset.fundamentalShockStdDev > kMaximumGeometricProcessLogStdDev) {
             throw std::invalid_argument(
-                prefix + "uses fundamental_process = gbm, where fundamental_shock_std_dev is a "
-                         "per-step log-return standard deviation rather than a price increment. "
-                         "The configured value exceeds " +
+                prefix +
+                "uses fundamental_process = gbm, where fundamental_shock_std_dev is a "
+                "per-step log-return standard deviation rather than a price increment. "
+                "The configured value exceeds " +
                 std::to_string(kMaximumGeometricProcessLogStdDev) +
                 ", which implies an implausible per-step volatility; check the units.");
         }

@@ -1,7 +1,7 @@
 // RunArchiveSchema.h
 
-#ifndef DATA_MANAGEMENT_RUN_ARCHIVE_SCHEMA_H
-#define DATA_MANAGEMENT_RUN_ARCHIVE_SCHEMA_H
+#ifndef ABM_DATA_MANAGEMENT_RUN_ARCHIVE_SCHEMA_H
+#define ABM_DATA_MANAGEMENT_RUN_ARCHIVE_SCHEMA_H
 
 #include <string>
 #include <vector>
@@ -41,4 +41,4 @@ requiredRunArtifactPaths(const OutputConfig& output);
 
 } // namespace abm
 
-#endif // DATA_MANAGEMENT_RUN_ARCHIVE_SCHEMA_H
+#endif // ABM_DATA_MANAGEMENT_RUN_ARCHIVE_SCHEMA_H

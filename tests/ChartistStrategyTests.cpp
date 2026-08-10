@@ -60,9 +60,9 @@ std::optional<abm::Order> generateMomentumOrder(const std::vector<double>& price
     return strategy.generateOrder(agent, market, 1);
 }
 
-std::optional<abm::Order>
-generateMomentumValuationOrder(const std::vector<double>& prices, double transactionCostRate,
-                               bool transactionCostAffectsDecisions) {
+std::optional<abm::Order> generateMomentumValuationOrder(const std::vector<double>& prices,
+                                                         double transactionCostRate,
+                                                         bool transactionCostAffectsDecisions) {
     abm::Market market;
     storePrices(market, prices);
 
@@ -76,8 +76,7 @@ generateMomentumValuationOrder(const std::vector<double>& prices, double transac
     return strategy.generateOrder(agent, market, 1, context);
 }
 
-std::optional<abm::Order> generateBreakoutOrder(const std::vector<double>& prices,
-                                                double cash,
+std::optional<abm::Order> generateBreakoutOrder(const std::vector<double>& prices, double cash,
                                                 double stock) {
     abm::Market market;
     storePrices(market, prices);
@@ -160,9 +159,9 @@ void testBreakoutBuySignalRequiresPriceAbovePreviousHigh(int& failures) {
     const std::optional<abm::Order> order =
         generateBreakoutOrder({100.0, 101.0, 102.0, 105.0}, 100000.0, 0.0);
 
-    abm::test::expect(order.has_value(),
-                      "breakout should submit an order when price exceeds the previous channel high",
-                      failures);
+    abm::test::expect(
+        order.has_value(),
+        "breakout should submit an order when price exceeds the previous channel high", failures);
     if (order.has_value()) {
         abm::test::expect(order->type == abm::OrderType::BUY,
                           "upside breakout should generate a buy order", failures);
@@ -175,9 +174,10 @@ void testBreakoutSellSignalRequiresPriceBelowPreviousLow(int& failures) {
     const std::optional<abm::Order> order =
         generateBreakoutOrder({100.0, 99.0, 98.0, 96.0}, 10000.0, 10.0);
 
-    abm::test::expect(order.has_value(),
-                      "breakout should submit an order when price falls below the previous channel low",
-                      failures);
+    abm::test::expect(
+        order.has_value(),
+        "breakout should submit an order when price falls below the previous channel low",
+        failures);
     if (order.has_value()) {
         abm::test::expect(order->type == abm::OrderType::SELL,
                           "downside breakout should generate a sell order", failures);
@@ -202,8 +202,7 @@ std::optional<abm::Order> generateMomentumOrderWithAllocationFloor(double minRis
     abm::Agent agent(1U, abm::AgentEndowment{10000.0, {0.0}}, abm::ProspectTheory{}, false);
     abm::MomentumChartistStrategyParameters parameters;
     parameters.commonParameters = makeCommonChartistParameters();
-    parameters.commonParameters.allocationLine =
-        abm::AssetAllocationLine(3.0, minRiskyWeight, 1.0);
+    parameters.commonParameters.allocationLine = abm::AssetAllocationLine(3.0, minRiskyWeight, 1.0);
     parameters.shortWindow = 2;
     parameters.longWindow = 4;
     parameters.momentumSignalThreshold = 0.0;
@@ -238,11 +237,9 @@ void testBreakoutHoldsOnChannelBoundaryEquality(int& failures) {
         generateBreakoutOrder({100.0, 105.0, 95.0, 95.0}, 10000.0, 10.0);
 
     abm::test::expect(!highBoundaryOrder.has_value(),
-                      "breakout should hold when price equals the previous channel high",
-                      failures);
+                      "breakout should hold when price equals the previous channel high", failures);
     abm::test::expect(!lowBoundaryOrder.has_value(),
-                      "breakout should hold when price equals the previous channel low",
-                      failures);
+                      "breakout should hold when price equals the previous channel low", failures);
 }
 
 } // namespace

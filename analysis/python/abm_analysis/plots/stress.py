@@ -9,8 +9,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from abm_analysis.data import load_step_timeseries
-from abm_analysis.stress import annotate_stress_regimes
+from abm_analysis.archive.data import load_step_timeseries
+from abm_analysis.statistics.stress import annotate_stress_regimes
 
 from .common import (
     COLOUR_SEQUENCE,

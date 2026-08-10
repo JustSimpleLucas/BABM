@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from abm_analysis.run_discovery import (
+from abm_analysis.archive.run_discovery import (
     RUN_DIRECTORY_STDOUT_PREFIX,
     discover_new_run_directory,
     parse_run_directory_from_stdout,

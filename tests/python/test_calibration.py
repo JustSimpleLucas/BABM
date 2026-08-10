@@ -201,7 +201,7 @@ def test_calibrate_cli_defaults_to_release_simulator_without_running_optuna(
         captured["options"] = options
         return tmp_path / "calibration_output"
 
-    monkeypatch.setattr("abm_analysis.cli.run_calibration", fake_run_calibration)
+    monkeypatch.setattr("abm_analysis.commands.calibrate.run_calibration", fake_run_calibration)
     benchmark_dir = tmp_path / "benchmarks"
     benchmark_dir.mkdir()
     exit_code = cli_main(
@@ -239,7 +239,7 @@ def test_calibrate_cli_builds_options_without_running_optuna(
         captured["options"] = options
         return tmp_path / "calibration_output"
 
-    monkeypatch.setattr("abm_analysis.cli.run_calibration", fake_run_calibration)
+    monkeypatch.setattr("abm_analysis.commands.calibrate.run_calibration", fake_run_calibration)
     benchmark_dir = tmp_path / "benchmarks"
     benchmark_dir.mkdir()
     exit_code = cli_main(

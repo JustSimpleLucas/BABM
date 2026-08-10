@@ -5,12 +5,8 @@ from __future__ import annotations
 import argparse
 from datetime import datetime
 from pathlib import Path
-import sys
 
-from abm_analysis.benchmarks import default_benchmark_dir
-from abm_analysis.calibration import CalibrationOptions, run_calibration
-from abm_analysis.replication import SeedReplicationOptions, run_seed_replication
-from abm_analysis.report import build_seed_robustness_report
+from abm_analysis.archive.benchmarks import default_benchmark_dir
 
 
 def resolve_benchmark_dir(args: argparse.Namespace) -> Path | None:
@@ -60,33 +56,3 @@ def print_optional_outputs(result: object) -> None:
         value = getattr(result, attribute, None)
         if value is not None:
             print(f"{label}: {value}")
-
-
-def _run_calibration_from_public_cli(options: CalibrationOptions) -> Path:
-    """Respect the historic ``abm_analysis.cli.run_calibration`` patch point."""
-
-    cli_module = sys.modules.get("abm_analysis.cli")
-    runner = getattr(cli_module, "run_calibration", run_calibration)
-    return runner(options)
-
-
-def _run_seed_replication_from_public_cli(options: SeedReplicationOptions):
-    """Respect the public ``abm_analysis.cli.run_seed_replication`` patch point."""
-
-    cli_module = sys.modules.get("abm_analysis.cli")
-    runner = getattr(cli_module, "run_seed_replication", run_seed_replication)
-    return runner(options)
-
-
-def _build_seed_robustness_report_from_public_cli(experiment, **kwargs):
-    """Respect the public ``abm_analysis.cli.build_seed_robustness_report`` patch point."""
-
-    cli_module = sys.modules.get("abm_analysis.cli")
-    builder = getattr(cli_module, "build_seed_robustness_report", build_seed_robustness_report)
-    return builder(experiment, **kwargs)
-
-
-_resolve_benchmark_dir = resolve_benchmark_dir
-_print_import_summaries = print_import_summaries
-_timestamped_calibration_name = timestamped_calibration_name
-_print_optional_outputs = print_optional_outputs

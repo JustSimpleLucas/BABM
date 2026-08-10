@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from abm_analysis.multi_asset import (
+from abm_analysis.statistics.multi_asset import (
     compute_portfolio_composition,
     compute_price_ratio,
     compute_realised_volatility,
@@ -34,10 +34,10 @@ from abm_analysis.plots.multi_asset import (
     make_cross_asset_figure,
     make_portfolio_composition_figure,
 )
-from abm_analysis.diagnostics import run_asset_stylised_fact_diagnostics
+from abm_analysis.statistics.diagnostics import run_asset_stylised_fact_diagnostics
 from abm_analysis.report import build_run_report
 from abm_analysis.report.figures import multi_asset_figures, per_asset_core_figures
-from abm_analysis.robustness import merge_run_and_diagnostic_metrics
+from abm_analysis.statistics.robustness import merge_run_and_diagnostic_metrics
 
 from abm_test_helpers import make_synthetic_experiment, write_synthetic_asset_timeseries
 

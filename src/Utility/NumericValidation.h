@@ -1,7 +1,7 @@
 // NumericValidation.h
 
-#ifndef UTILITY_NUMERIC_VALIDATION_H
-#define UTILITY_NUMERIC_VALIDATION_H
+#ifndef ABM_UTILITY_NUMERIC_VALIDATION_H
+#define ABM_UTILITY_NUMERIC_VALIDATION_H
 
 #include <cstddef>
 
@@ -83,4 +83,4 @@ void requirePositiveSize(std::size_t value, const char* name);
 
 } // namespace abm
 
-#endif // UTILITY_NUMERIC_VALIDATION_H
+#endif // ABM_UTILITY_NUMERIC_VALIDATION_H

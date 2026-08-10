@@ -1,7 +1,7 @@
 // SimulationApplication.h
 
-#ifndef SIMULATION_APPLICATION_H
-#define SIMULATION_APPLICATION_H
+#ifndef ABM_APPLICATION_SIMULATION_APPLICATION_H
+#define ABM_APPLICATION_SIMULATION_APPLICATION_H
 
 namespace abm {
 
@@ -20,4 +20,4 @@ namespace abm {
 
 } // namespace abm
 
-#endif // SIMULATION_APPLICATION_H
+#endif // ABM_APPLICATION_SIMULATION_APPLICATION_H

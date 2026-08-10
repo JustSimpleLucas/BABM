@@ -10,7 +10,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from abm_analysis.data import load_step_timeseries, read_csv_if_exists, resolve_artifact_path
+from abm_analysis.archive.data import load_step_timeseries, read_csv_if_exists, resolve_artifact_path
 
 from .common import (
     AGENT_SUMMARY_METRICS,

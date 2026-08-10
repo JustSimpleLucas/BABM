@@ -1,7 +1,7 @@
 // LimitOrderBook.h
 
-#ifndef LIMIT_ORDER_BOOK_H
-#define LIMIT_ORDER_BOOK_H
+#ifndef ABM_ORDER_BOOK_LIMIT_ORDER_BOOK_H
+#define ABM_ORDER_BOOK_LIMIT_ORDER_BOOK_H
 
 #include <cstddef>
 #include <optional>
@@ -63,10 +63,8 @@ class LimitOrderBook {
     [[nodiscard]] std::size_t expireOrders(std::size_t currentTimeStep);
 
     /** Applies deterministic random and stale-price cancellations to resting orders. */
-    [[nodiscard]] std::size_t cancelStaleOrders(double referencePrice,
-                                                double baseProbability,
-                                                double mispricingSensitivity,
-                                                RandomEngine& random);
+    [[nodiscard]] std::size_t cancelStaleOrders(double referencePrice, double baseProbability,
+                                                double mispricingSensitivity, RandomEngine& random);
 
     /** Aggregates spread, best quote, depth, and resting-order diagnostics. */
     [[nodiscard]] LimitOrderBookMetrics metrics(std::size_t depthLevels) const;
@@ -104,4 +102,4 @@ class LimitOrderBook {
 
 } // namespace abm
 
-#endif // LIMIT_ORDER_BOOK_H
+#endif // ABM_ORDER_BOOK_LIMIT_ORDER_BOOK_H

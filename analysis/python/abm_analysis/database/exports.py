@@ -7,7 +7,7 @@ from typing import Any
 
 import pandas as pd
 
-from abm_analysis.data import normalise_manifest_schema, parse_run_id
+from abm_analysis.archive.data import normalise_manifest_schema, parse_run_id
 
 from .constants import (
     AGENT_SNAPSHOT_COLUMNS,

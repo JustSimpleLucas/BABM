@@ -1,6 +1,6 @@
 // MeanVarianceUtility.h
-#ifndef MEAN_VARIANCE_UTILITY_H
-#define MEAN_VARIANCE_UTILITY_H
+#ifndef ABM_AGENT_STRATEGY_MEAN_VARIANCE_UTILITY_H
+#define ABM_AGENT_STRATEGY_MEAN_VARIANCE_UTILITY_H
 
 namespace abm {
 
@@ -36,10 +36,9 @@ struct MeanVarianceInputs {
  * @param maxRiskyWeight Upper portfolio bound.
  * @return Risky-asset portfolio weight after applying bounds.
  */
-[[nodiscard]] double optimalRiskyWeight(const MeanVarianceInputs& inputs,
-                                        double minRiskyWeight,
+[[nodiscard]] double optimalRiskyWeight(const MeanVarianceInputs& inputs, double minRiskyWeight,
                                         double maxRiskyWeight);
 
 } // namespace abm
 
-#endif // MEAN_VARIANCE_UTILITY_H
+#endif // ABM_AGENT_STRATEGY_MEAN_VARIANCE_UTILITY_H

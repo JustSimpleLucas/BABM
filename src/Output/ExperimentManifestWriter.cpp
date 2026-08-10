@@ -18,48 +18,47 @@ namespace abm {
 namespace {
 
 const std::vector<std::string>& experimentManifestColumns() {
-    static const std::vector<std::string> columns{
-        "run_id",
-        "experiment_name",
-        "run_label",
-        "created_at_local",
-        "status",
-        "config_hash",
-        "seed",
-        "time_steps",
-        "warmup_steps",
-        "fundamental_shock_std_dev",
-        "fundamental_drift_per_step",
-        "minimum_fundamental_value",
-        "num_fundamentalists",
-        "num_chartists",
-        "num_noise_traders",
-        "num_buy_and_hold_agents",
-        "buy_hold_target_risky_weight",
-        "control_prospect_theory_enabled",
-        "control_prospect_theory_agent_fraction",
-        "control_prospect_heterogeneity_enabled",
-        "social_enabled",
-        "short_selling_enabled",
-        "loss_aversion",
-        "prospect_scenario_count",
-        "final_market_price",
-        "final_fundamental_price",
-        "final_wealth_gini_coefficient",
-        "total_traded_volume",
-        "average_absolute_order_imbalance",
-        "mean_allocative_efficiency",
-        "allocative_efficiency_observations",
-        "mean_log_return",
-        "log_return_std_dev",
-        "excess_kurtosis",
-        "max_drawdown",
-        "lag1_return_autocorrelation",
-        "lag1_abs_return_autocorrelation",
-        "lag1_squared_return_autocorrelation",
-        "stylised_absence_autocorrelation_conclusion",
-        "stylised_fat_tails_conclusion",
-        "stylised_volatility_clustering_conclusion"};
+    static const std::vector<std::string> columns{"run_id",
+                                                  "experiment_name",
+                                                  "run_label",
+                                                  "created_at_local",
+                                                  "status",
+                                                  "config_hash",
+                                                  "seed",
+                                                  "time_steps",
+                                                  "warmup_steps",
+                                                  "fundamental_shock_std_dev",
+                                                  "fundamental_drift_per_step",
+                                                  "minimum_fundamental_value",
+                                                  "num_fundamentalists",
+                                                  "num_chartists",
+                                                  "num_noise_traders",
+                                                  "num_buy_and_hold_agents",
+                                                  "buy_hold_target_risky_weight",
+                                                  "control_prospect_theory_enabled",
+                                                  "control_prospect_theory_agent_fraction",
+                                                  "control_prospect_heterogeneity_enabled",
+                                                  "social_enabled",
+                                                  "short_selling_enabled",
+                                                  "loss_aversion",
+                                                  "prospect_scenario_count",
+                                                  "final_market_price",
+                                                  "final_fundamental_price",
+                                                  "final_wealth_gini_coefficient",
+                                                  "total_traded_volume",
+                                                  "average_absolute_order_imbalance",
+                                                  "mean_allocative_efficiency",
+                                                  "allocative_efficiency_observations",
+                                                  "mean_log_return",
+                                                  "log_return_std_dev",
+                                                  "excess_kurtosis",
+                                                  "max_drawdown",
+                                                  "lag1_return_autocorrelation",
+                                                  "lag1_abs_return_autocorrelation",
+                                                  "lag1_squared_return_autocorrelation",
+                                                  "stylised_absence_autocorrelation_conclusion",
+                                                  "stylised_fat_tails_conclusion",
+                                                  "stylised_volatility_clustering_conclusion"};
     return columns;
 }
 
@@ -195,64 +194,60 @@ std::vector<std::string> buildExperimentManifestRow(const RuntimeConfig& runtime
     const SimulationConfig& config = result.config();
     const SimulationStats& stats = result.stats();
 
-    return {
-        runtimeConfig.output.runId,
-        runtimeConfig.output.experimentName,
-        runtimeConfig.output.runLabel,
-        runtimeConfig.output.createdAtLocal,
-        "completed",
-        configHash,
-        std::to_string(config.seed),
-        std::to_string(config.timeSteps),
-        std::to_string(config.warmupSteps),
-        output_detail::formatFixedDouble(config.fundamentalShockStdDev()),
-        output_detail::formatFixedDouble(config.fundamentalDriftPerStep()),
-        output_detail::formatFixedDouble(config.minimumFundamentalValue()),
-        std::to_string(config.numFundamentalists),
-        std::to_string(config.numChartists),
-        std::to_string(config.numNoiseTraders),
-        std::to_string(config.numBuyAndHoldAgents),
-        output_detail::formatFixedDouble(config.buyAndHold.targetRiskyWeight),
-        std::to_string(output_detail::boolToFlag(config.control.prospectTheoryEnabled)),
-        output_detail::formatFixedDouble(config.control.prospectTheoryAgentFraction),
-        std::to_string(
-            output_detail::boolToFlag(config.control.prospectParameterHeterogeneityEnabled)),
-        std::to_string(output_detail::boolToFlag(config.social.enabled)),
-        std::to_string(output_detail::boolToFlag(config.shortSellingEnabled)),
-        output_detail::formatFixedDouble(config.control.lossAversion),
-        std::to_string(config.control.prospectScenarioCount),
-        output_detail::formatFixedDouble(stats.finalMarketPrice),
-        output_detail::formatFixedDouble(stats.finalFundamentalPrice),
-        output_detail::formatFixedDouble(metrics.finalWealthGiniCoefficient),
-        output_detail::formatFixedDouble(stats.totalTradedVolume),
-        output_detail::formatFixedDouble(stats.averageAbsoluteOrderImbalance),
-        output_detail::formatFixedDouble(metrics.meanAllocativeEfficiency),
-        std::to_string(metrics.allocativeEfficiencyObservations),
-        output_detail::formatFixedDouble(metrics.meanLogReturn),
-        output_detail::formatFixedDouble(metrics.logReturnStdDev),
-        output_detail::formatFixedDouble(metrics.excessKurtosis),
-        output_detail::formatFixedDouble(metrics.maxDrawdown),
-        output_detail::formatFixedDouble(metrics.lag1ReturnAutocorrelation),
-        output_detail::formatFixedDouble(metrics.lag1AbsoluteReturnAutocorrelation),
-        output_detail::formatFixedDouble(metrics.lag1SquaredReturnAutocorrelation),
-        metrics.autocorrelationConclusion,
-        metrics.fatTailsConclusion,
-        metrics.volatilityClusteringConclusion};
+    return {runtimeConfig.output.runId,
+            runtimeConfig.output.experimentName,
+            runtimeConfig.output.runLabel,
+            runtimeConfig.output.createdAtLocal,
+            "completed",
+            configHash,
+            std::to_string(config.seed),
+            std::to_string(config.timeSteps),
+            std::to_string(config.warmupSteps),
+            output_detail::formatFixedDouble(config.fundamentalShockStdDev()),
+            output_detail::formatFixedDouble(config.fundamentalDriftPerStep()),
+            output_detail::formatFixedDouble(config.minimumFundamentalValue()),
+            std::to_string(config.numFundamentalists),
+            std::to_string(config.numChartists),
+            std::to_string(config.numNoiseTraders),
+            std::to_string(config.numBuyAndHoldAgents),
+            output_detail::formatFixedDouble(config.buyAndHold.targetRiskyWeight),
+            std::to_string(output_detail::boolToFlag(config.control.prospectTheoryEnabled)),
+            output_detail::formatFixedDouble(config.control.prospectTheoryAgentFraction),
+            std::to_string(
+                output_detail::boolToFlag(config.control.prospectParameterHeterogeneityEnabled)),
+            std::to_string(output_detail::boolToFlag(config.social.enabled)),
+            std::to_string(output_detail::boolToFlag(config.shortSellingEnabled)),
+            output_detail::formatFixedDouble(config.control.lossAversion),
+            std::to_string(config.control.prospectScenarioCount),
+            output_detail::formatFixedDouble(stats.finalMarketPrice),
+            output_detail::formatFixedDouble(stats.finalFundamentalPrice),
+            output_detail::formatFixedDouble(metrics.finalWealthGiniCoefficient),
+            output_detail::formatFixedDouble(stats.totalTradedVolume),
+            output_detail::formatFixedDouble(stats.averageAbsoluteOrderImbalance),
+            output_detail::formatFixedDouble(metrics.meanAllocativeEfficiency),
+            std::to_string(metrics.allocativeEfficiencyObservations),
+            output_detail::formatFixedDouble(metrics.meanLogReturn),
+            output_detail::formatFixedDouble(metrics.logReturnStdDev),
+            output_detail::formatFixedDouble(metrics.excessKurtosis),
+            output_detail::formatFixedDouble(metrics.maxDrawdown),
+            output_detail::formatFixedDouble(metrics.lag1ReturnAutocorrelation),
+            output_detail::formatFixedDouble(metrics.lag1AbsoluteReturnAutocorrelation),
+            output_detail::formatFixedDouble(metrics.lag1SquaredReturnAutocorrelation),
+            metrics.autocorrelationConclusion,
+            metrics.fatTailsConclusion,
+            metrics.volatilityClusteringConclusion};
 }
 
 } // namespace
 
-bool appendExperimentManifest(const RuntimeConfig& runtimeConfig,
-                              const SimulationRunResult& result,
-                              const RunMetrics& metrics,
-                              const std::string& configHash,
+bool appendExperimentManifest(const RuntimeConfig& runtimeConfig, const SimulationRunResult& result,
+                              const RunMetrics& metrics, const std::string& configHash,
                               std::string& error) {
     if (!runtimeConfig.output.experimentOutputEnabled) {
         return true;
     }
-    if (!output_detail::ensureParentDirectoryExists(
-            runtimeConfig.output.experimentManifestCsvPath,
-            error)) {
+    if (!output_detail::ensureParentDirectoryExists(runtimeConfig.output.experimentManifestCsvPath,
+                                                    error)) {
         return false;
     }
     if (!migrateExperimentManifestSchema(runtimeConfig.output.experimentManifestCsvPath, error)) {
@@ -265,8 +260,8 @@ bool appendExperimentManifest(const RuntimeConfig& runtimeConfig,
 
     std::ofstream out(runtimeConfig.output.experimentManifestCsvPath, std::ios::app);
     if (!out.is_open()) {
-        error = "Unable to open experiment manifest: " +
-                runtimeConfig.output.experimentManifestCsvPath;
+        error =
+            "Unable to open experiment manifest: " + runtimeConfig.output.experimentManifestCsvPath;
         return false;
     }
 
@@ -274,8 +269,7 @@ bool appendExperimentManifest(const RuntimeConfig& runtimeConfig,
         out << makeCsvRow(experimentManifestColumns()) << '\n';
     }
 
-    out << makeCsvRow(
-               buildExperimentManifestRow(runtimeConfig, result, metrics, configHash))
+    out << makeCsvRow(buildExperimentManifestRow(runtimeConfig, result, metrics, configHash))
         << '\n';
 
     out.flush();

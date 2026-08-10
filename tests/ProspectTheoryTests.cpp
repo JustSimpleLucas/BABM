@@ -357,8 +357,7 @@ void testProspectReferencePointResolutionModes(int& failures) {
     applyExecutedTrade(agent, abm::OrderType::BUY, 150.0, 2.0);
 
     const double averagePurchaseReference = abm::strategy_detail::resolveProspectReferencePoint(
-        agent, market, 0, abm::ProspectReferencePointMode::AveragePurchasePrice, 20,
-        120.0);
+        agent, market, 0, abm::ProspectReferencePointMode::AveragePurchasePrice, 20, 120.0);
     abm::test::expect(abm::test::nearlyEqual(averagePurchaseReference, 150.0),
                       "average-purchase mode should use the agent's entry price", failures);
 
@@ -418,8 +417,7 @@ void testProspectReferencePointIsPerAsset(int& failures) {
     agent.updateStock(1, 3.0);
 
     const double alphaReference = abm::strategy_detail::resolveProspectReferencePoint(
-        agent, market, 0, abm::ProspectReferencePointMode::AveragePurchasePrice, 20,
-        100.0);
+        agent, market, 0, abm::ProspectReferencePointMode::AveragePurchasePrice, 20, 100.0);
     const double betaReference = abm::strategy_detail::resolveProspectReferencePoint(
         agent, market, 1, abm::ProspectReferencePointMode::AveragePurchasePrice, 20, 40.0);
 

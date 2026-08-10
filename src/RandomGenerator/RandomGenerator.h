@@ -1,7 +1,7 @@
 // RandomGenerator.h
 
-#ifndef RANDOM_GENERATOR_H
-#define RANDOM_GENERATOR_H
+#ifndef ABM_RANDOM_GENERATOR_RANDOM_GENERATOR_H
+#define ABM_RANDOM_GENERATOR_RANDOM_GENERATOR_H
 
 #include <algorithm>
 #include <cstdint>
@@ -17,7 +17,7 @@ namespace abm {
  * experiment metadata easier to audit.
  */
 class RandomEngine {
-public:
+  public:
     explicit RandomEngine(std::uint64_t seed);
 
     /** Draws a real value uniformly from the closed interval accepted by STL. */
@@ -35,15 +35,14 @@ public:
      * This is used when the model needs fair random activation while preserving
      * exact reproducibility for a fixed simulation seed.
      */
-    template <typename RandomIt>
-    void shuffle(RandomIt first, RandomIt last) {
+    template <typename RandomIt> void shuffle(RandomIt first, RandomIt last) {
         std::shuffle(first, last, rng_);
     }
 
-private:
+  private:
     std::mt19937_64 rng_;
 };
 
 } // namespace abm
 
-#endif // RANDOM_GENERATOR_H
+#endif // ABM_RANDOM_GENERATOR_RANDOM_GENERATOR_H

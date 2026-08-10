@@ -91,9 +91,9 @@ std::vector<Order> NoiseTraderStrategy::generateOrders(Agent& agent, const Marke
     std::size_t assetIndex = 0;
     if (assetCount > 1) {
         const double uniformDraw = random_.generateUniformDist(0.0, 1.0);
-        assetIndex = std::min(
-            static_cast<std::size_t>(uniformDraw * static_cast<double>(assetCount)),
-            assetCount - 1);
+        assetIndex =
+            std::min(static_cast<std::size_t>(uniformDraw * static_cast<double>(assetCount)),
+                     assetCount - 1);
     }
 
     TradingOrderContext assetContext = context;
@@ -108,9 +108,9 @@ std::vector<Order> NoiseTraderStrategy::generateOrders(Agent& agent, const Marke
     return orders;
 }
 
-std::optional<Order> NoiseTraderStrategy::generateOrderForAsset(
-    Agent& agent, double marketPrice, std::size_t assetIndex, int timeStep,
-    const TradingOrderContext& context) {
+std::optional<Order>
+NoiseTraderStrategy::generateOrderForAsset(Agent& agent, double marketPrice, std::size_t assetIndex,
+                                           int timeStep, const TradingOrderContext& context) {
     const double wealth = agent.getWealth();
     if (!(wealth > 0.0)) {
         return std::nullopt;

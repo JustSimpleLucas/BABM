@@ -18,8 +18,8 @@ constexpr int kMaximumRegularizationRetries = 3;
                                                 const std::vector<AssetWeightBounds>& bounds) {
     for (std::size_t assetIndex = 0; assetIndex < weights.size(); ++assetIndex) {
         const AssetWeightBounds& interval = bounds[assetIndex];
-        weights[assetIndex] = std::clamp(weights[assetIndex], interval.minWeight,
-                                         interval.maxWeight);
+        weights[assetIndex] =
+            std::clamp(weights[assetIndex], interval.minWeight, interval.maxWeight);
     }
     return weights;
 }
@@ -64,8 +64,7 @@ std::vector<double> optimalRiskyWeights(const PortfolioInputs& inputs) {
                 break;
             }
         }
-        diagonalLoading =
-            diagonalLoading == 0.0 ? kInitialDiagonalLoading : diagonalLoading * 10.0;
+        diagonalLoading = diagonalLoading == 0.0 ? kInitialDiagonalLoading : diagonalLoading * 10.0;
     }
 
     if (!solved) {
@@ -77,8 +76,8 @@ std::vector<double> optimalRiskyWeights(const PortfolioInputs& inputs) {
         for (std::size_t assetIndex = 0; assetIndex < assetCount; ++assetIndex) {
             const double variance =
                 std::max(inputs.covariance->at(assetIndex, assetIndex), varianceFloor);
-            weights[assetIndex] = expectedExcessReturns[assetIndex] /
-                                  (inputs.riskAversion * variance);
+            weights[assetIndex] =
+                expectedExcessReturns[assetIndex] / (inputs.riskAversion * variance);
         }
     }
 

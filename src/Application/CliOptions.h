@@ -1,7 +1,7 @@
 // CliOptions.h
 
-#ifndef APPLICATION_CLI_OPTIONS_H
-#define APPLICATION_CLI_OPTIONS_H
+#ifndef ABM_APPLICATION_CLI_OPTIONS_H
+#define ABM_APPLICATION_CLI_OPTIONS_H
 
 #include "ControlParameters/SimulationConfig.h"
 
@@ -37,4 +37,4 @@ void printSimulationApplicationUsage(const std::string& programName);
 
 } // namespace abm
 
-#endif // APPLICATION_CLI_OPTIONS_H
+#endif // ABM_APPLICATION_CLI_OPTIONS_H

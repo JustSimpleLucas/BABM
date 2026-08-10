@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build-test:
+    name: Build and test
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake --preset debug -DABM_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build --preset debug
+
+      - name: Test
+        run: ctest --preset debug
+
+  format:
+    name: Formatting
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Fails on any file that differs from .clang-format, so the documented
+      # style stays mechanically true rather than maintained by hand.
+      - name: Check clang-format compliance
+        run: |
+          git ls-files 'src/*.h' 'src/*.cpp' 'tests/*.h' 'tests/*.cpp' 'app/*.cpp' \
+            | xargs clang-format --style=file --dry-run --Werror
+
+  python-test:
+    name: Python analysis tests
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install analysis package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      # The PostgreSQL integration test skips unless ABM_TEST_DATABASE_URL is
+      # set, and report tests pass --no-export-images, so no database or Chrome
+      # install is needed here.
+      - name: Run tests
+        run: python -m pytest -q

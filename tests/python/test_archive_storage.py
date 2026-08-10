@@ -10,13 +10,13 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from abm_analysis.archives import (
+from abm_analysis.archive.archives import (
     build_run_archive,
     discover_run_directories,
     resolve_artifact_path,
     validate_run_archive,
 )
-from abm_analysis.compression import (
+from abm_analysis.archive.compression import (
     COMPRESSIBLE_RUN_ARTIFACTS,
     compress_run_archive,
 )
@@ -25,7 +25,7 @@ from abm_analysis.database import table_builders
 from abm_analysis.database.constants import ASSET_TIMESERIES_COLUMNS
 from abm_analysis.database.normalisation import _normalise_table_record
 from abm_analysis.database.table_builders import _insert_dataframe
-from abm_analysis.timeseries import load_asset_timeseries, load_step_timeseries
+from abm_analysis.archive.timeseries import load_asset_timeseries, load_step_timeseries
 from abm_test_helpers import write_synthetic_run
 
 

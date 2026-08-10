@@ -1,7 +1,7 @@
 // NoiseTraderStrategy.h
 
-#ifndef NOISE_TRADER_STRATEGY_H
-#define NOISE_TRADER_STRATEGY_H
+#ifndef ABM_AGENT_STRATEGY_NOISE_TRADER_STRATEGY_H
+#define ABM_AGENT_STRATEGY_NOISE_TRADER_STRATEGY_H
 
 #include <optional>
 #include <string>
@@ -95,4 +95,4 @@ class NoiseTraderStrategy : public TradingStrategy {
 
 } // namespace abm
 
-#endif // NOISE_TRADER_STRATEGY_H
+#endif // ABM_AGENT_STRATEGY_NOISE_TRADER_STRATEGY_H

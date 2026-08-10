@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from abm_analysis.robustness_verdicts import VerdictThresholds
+from abm_analysis.statistics.robustness_verdicts import VerdictThresholds
 
 from .constants import CONFIG_KEY_PATTERN
 from .models import BudgetSettings, CalibrationSettings, RankingSettings, ScoreWeights

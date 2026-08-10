@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from abm_analysis.benchmarks import load_benchmark_timeseries
+from abm_analysis.archive.benchmarks import load_benchmark_timeseries
 from abm_analysis.database import (
     CURRENT_SCHEMA_VERSION,
     REQUIRED_SCHEMA_INDEXES,

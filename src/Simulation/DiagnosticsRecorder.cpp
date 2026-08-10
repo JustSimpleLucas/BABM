@@ -2,7 +2,7 @@
 
 #include "Simulation/DiagnosticsRecorder.h"
 
-#include "Analysis/StylisedFactMetrics.h"
+#include "Metrics/StylisedFactMetrics.h"
 #include "Utility/SimulationConstants.h"
 
 #include <algorithm>
@@ -55,8 +55,7 @@ namespace {
  * cleanly and corrupt the exported research time series.
  */
 [[nodiscard]] AssetStepDetails buildAssetStepRecord(std::size_t step, std::size_t assetIndex,
-                                                    double referencePrice,
-                                                    double fundamentalPrice,
+                                                    double referencePrice, double fundamentalPrice,
                                                     const MicrostructureStepResult& microstructure,
                                                     const PriceFormationResult& price) {
     AssetStepDetails record{};
@@ -111,9 +110,9 @@ void DiagnosticsRecorder::recordStep(const StepRecordingRequest& request) {
 
     const MicrostructureStepResult& microstructure = *request.microstructureResult;
     StepDetails stepRecord{};
-    stepRecord.asset = buildAssetStepRecord(
-        request.step, request.config->assets.primaryIndex(), request.referencePrice,
-        request.newFundamental, microstructure, *request.priceResult);
+    stepRecord.asset = buildAssetStepRecord(request.step, request.config->assets.primaryIndex(),
+                                            request.referencePrice, request.newFundamental,
+                                            microstructure, *request.priceResult);
     stepRecord.submittedOrders = request.submittedOrders;
     stepRecord.netDemand = microstructure.netDemand;
     stepRecord.notionalImbalance = notionalImbalance;
@@ -156,16 +155,16 @@ void DiagnosticsRecorder::recordAssetSteps(const StepRecordingRequest& request) 
             const Agent& agent = agentRecord.agent;
             double agentWealth = agent.getCash();
             for (std::size_t assetIndex = 0; assetIndex < assetCount; ++assetIndex) {
-                agentWealth +=
-                    agent.getStock(assetIndex) * (*request.perAssetPriceResults)[assetIndex].nextPrice;
+                agentWealth += agent.getStock(assetIndex) *
+                               (*request.perAssetPriceResults)[assetIndex].nextPrice;
             }
             if (!(agentWealth > 0.0)) {
                 continue;
             }
             ++solventAgentCount;
             for (std::size_t assetIndex = 0; assetIndex < assetCount; ++assetIndex) {
-                const double assetValue =
-                    agent.getStock(assetIndex) * (*request.perAssetPriceResults)[assetIndex].nextPrice;
+                const double assetValue = agent.getStock(assetIndex) *
+                                          (*request.perAssetPriceResults)[assetIndex].nextPrice;
                 meanPortfolioWeights[assetIndex] += assetValue / agentWealth;
             }
         }
@@ -180,9 +179,9 @@ void DiagnosticsRecorder::recordAssetSteps(const StepRecordingRequest& request) 
         const MicrostructureStepResult& microstructure = (*request.perAssetResults)[assetIndex];
         const PriceFormationResult& price = (*request.perAssetPriceResults)[assetIndex];
 
-        AssetStepDetails record = buildAssetStepRecord(
-            request.step, assetIndex, (*request.referencePrices)[assetIndex],
-            (*request.newFundamentals)[assetIndex], microstructure, price);
+        AssetStepDetails record =
+            buildAssetStepRecord(request.step, assetIndex, (*request.referencePrices)[assetIndex],
+                                 (*request.newFundamentals)[assetIndex], microstructure, price);
         record.meanAgentPortfolioWeight = meanPortfolioWeights[assetIndex];
         record.portfolioWeightAgentCount = solventAgentCount;
         assetStepDetails_.push_back(record);

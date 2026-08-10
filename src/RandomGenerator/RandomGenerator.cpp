@@ -4,8 +4,7 @@
 
 namespace abm {
 
-RandomEngine::RandomEngine(std::uint64_t seed)
-    : rng_(seed) {}
+RandomEngine::RandomEngine(std::uint64_t seed) : rng_(seed) {}
 
 double RandomEngine::generateUniformDist(double minimum, double maximum) {
     std::uniform_real_distribution<double> dist(minimum, maximum);
