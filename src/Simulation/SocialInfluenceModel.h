@@ -5,7 +5,7 @@
 
 #include <vector>
 
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 #include "RandomGenerator/RandomGenerator.h"
 #include "Simulation/SimulationState.h"
 

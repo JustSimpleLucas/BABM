@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 
 namespace abm {
 

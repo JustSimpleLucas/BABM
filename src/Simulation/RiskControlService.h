@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "Agent/Agent.h"
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 #include "Results/SimulationRunResult.h"
 #include "Simulation/SimulationState.h"
 

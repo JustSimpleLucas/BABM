@@ -72,7 +72,7 @@ source .venv/bin/activate
 If it worked, your terminal prompt now starts with `(.venv)`. Then install the analysis package:
 
 ```bash
-pip install --upgrade pip && pip install -r requirements.txt && pip install -e .
+pip install --upgrade pip && pip install -r requirements.txt
 ```
 
 **3. Build the simulator**
@@ -414,7 +414,7 @@ import with `db validate` (compares source CSV row counts against the database) 
 app/simulate/main.cpp   Executable entry point (forwards argc/argv only)
 src/                    The C++ model engine, one directory per domain
   Application/            CLI parsing, run coordination, console summary, Python hand-off
-  ControlParameters/      Config schema, parsing, setting appliers, validation
+  Config/                 Config schema, parsing, setting appliers, validation
   Market/ OrderBook/      Fundamental-value process, market state, limit-order book
   BehaviouralFinance/     Cumulative Prospect Theory and per-agent preference sampling
   Agent/ AgentStrategy/   Agents plus fundamentalist, chartist, noise-trader, buy-and-hold rules
@@ -423,18 +423,19 @@ src/                    The C++ model engine, one directory per domain
   Output/ DataManagement/ Experiment/   Artefact writers, archive schema, run-folder policy
   RandomGenerator/ Utility/ RiskManagement/   Seeded RNG, numerics, tick pricing, short-sale controls
 analysis/python/abm_analysis/
-  commands/ cli*.py        One module per subcommand plus parser wiring
+  cli.py                   The console-script entry point; everything else CLI-shaped is below
+  commands/                One module per subcommand, the parser, and the options they share
   archive/                 Reading run archives, run-ids, manifests, benchmarks, compression
   statistics/              Stylised-fact tests, stress diagnostics, robustness verdicts, convergence
-  calibration/             Optuna study, scoring, execution, seed validation
+  calibration/             Optuna study, scoring, execution, seed validation, trial worker
   plots/ report/           Figures and the HTML/PDF report builders
   database/                Optional PostgreSQL schema, imports, exports, validation
   web/                     Read-only local dashboard: run catalogue, statistics API, single page
 config/                 simulation.cfg, calibration search space, benchmark manifest
 data/                   Simulation output, calibration studies, empirical data (git-ignored)
-docs/                   Code map and Mermaid architecture/flow diagrams
-tests/                  C++ CTest suites and the Python pytest suite
-formalism.tex           LaTeX write-up of the model's mathematics
+docs/                   Code map, Mermaid diagrams, and the LaTeX formalism
+tests/cpp/              C++ CTest suites, mirroring src/
+tests/python/           Python pytest suite, mirroring analysis/python/
 ```
 
 ---
@@ -509,4 +510,4 @@ cmake --preset sanitizers && cmake --build --preset sanitizers && ctest --preset
 | [docs/baselines.md](docs/baselines.md) | Recorded baseline results, used to detect unintended behavioural drift. |
 | `docs/*.mmd` | Mermaid diagrams: class architecture, build structure, data management, simulation flow, agent decision flow, sequence diagram. |
 | [AGENTS.md](AGENTS.md) | Research context and the working rules for contributors (naming, reproducibility, required commands). |
-| `formalism.tex` | The model's mathematics — the paper-side counterpart of the code. |
+| `docs/formalism.tex` | The model's mathematics — the paper-side counterpart of the code. |

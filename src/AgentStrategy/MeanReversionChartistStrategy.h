@@ -8,7 +8,7 @@
 
 #include "AgentStrategy/AssetAllocationLine.h"
 #include "AgentStrategy/ChartistStrategy.h"
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 
 namespace abm {
 

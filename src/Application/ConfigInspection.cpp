@@ -2,7 +2,7 @@
 
 #include "Application/ConfigInspection.h"
 
-#include "ControlParameters/ConfigKeyRegistry.h"
+#include "Config/ConfigKeyRegistry.h"
 
 #include <algorithm>
 #include <iomanip>

@@ -7,7 +7,7 @@
 
 #include "AgentStrategy/AssetAllocationLine.h"
 #include "AgentStrategy/TradingStrategy.h"
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 
 namespace abm {
 class RandomEngine;

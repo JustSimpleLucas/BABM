@@ -3,7 +3,7 @@
 #ifndef ABM_APPLICATION_CONFIG_INSPECTION_H
 #define ABM_APPLICATION_CONFIG_INSPECTION_H
 
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 
 #include <cstddef>
 #include <iosfwd>

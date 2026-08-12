@@ -5,7 +5,7 @@
 
 #include <string>
 
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 #include "OrderBook/Order.h"
 
 namespace abm::output_detail {

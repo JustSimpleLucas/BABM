@@ -3,7 +3,7 @@
 #ifndef ABM_APPLICATION_PYTHON_ANALYSIS_RUNNER_H
 #define ABM_APPLICATION_PYTHON_ANALYSIS_RUNNER_H
 
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 
 #include <string>
 

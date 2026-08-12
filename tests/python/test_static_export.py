@@ -160,7 +160,7 @@ def test_figure_index_respects_format_selection(monkeypatch, tmp_path: Path) -> 
 
 
 def test_cli_parses_figure_formats() -> None:
-    from abm_analysis.cli_parser import build_parser
+    from abm_analysis.commands import build_parser
 
     parser = build_parser()
     args = parser.parse_args(["robustness", "some_dir", "--figure-formats", "png,pdf"])

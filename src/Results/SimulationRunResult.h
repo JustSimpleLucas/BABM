@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 #include "OrderBook/Order.h"
 
 namespace abm {

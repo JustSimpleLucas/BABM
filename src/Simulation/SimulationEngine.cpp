@@ -2,7 +2,7 @@
 
 #include "Simulation/SimulationEngine.h"
 
-#include "ControlParameters/SimulationConfigValidation.h"
+#include "Config/SimulationConfigValidation.h"
 #include "Market/CovarianceEstimator.h"
 #include "Simulation/MarketProcess.h"
 #include "Simulation/PopulationFactory.h"

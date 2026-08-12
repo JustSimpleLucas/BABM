@@ -1,2 +1,0 @@
-[console_scripts]
-abm-analysis = abm_analysis.cli:main

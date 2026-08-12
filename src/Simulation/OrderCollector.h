@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <vector>
 
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 #include "Market/Market.h"
 #include "OrderBook/Order.h"
 #include "RandomGenerator/RandomGenerator.h"

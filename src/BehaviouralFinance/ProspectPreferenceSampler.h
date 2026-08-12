@@ -4,7 +4,7 @@
 #define ABM_BEHAVIOURAL_FINANCE_PROSPECT_PREFERENCE_SAMPLER_H
 
 #include "BehaviouralFinance/ProspectTheory.h"
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 #include "RandomGenerator/RandomGenerator.h"
 
 namespace abm {

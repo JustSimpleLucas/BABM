@@ -5,7 +5,7 @@
 
 #include <string>
 
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 #include "Metrics/StylisedFactMetrics.h"
 #include "Output/RunArtifactWriter.h"
 

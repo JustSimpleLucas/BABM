@@ -3,7 +3,7 @@
 #ifndef ABM_APPLICATION_CONSOLE_REPORTER_H
 #define ABM_APPLICATION_CONSOLE_REPORTER_H
 
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 #include "Utility/ProcessMemoryUsage.h"
 
 #include <cstddef>

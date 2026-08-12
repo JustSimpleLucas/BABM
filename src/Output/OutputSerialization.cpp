@@ -2,7 +2,7 @@
 
 #include "Output/OutputSerialization.h"
 
-#include "ControlParameters/SimulationConfigParsing.h"
+#include "Config/SimulationConfigParsing.h"
 
 #include <filesystem>
 #include <iomanip>

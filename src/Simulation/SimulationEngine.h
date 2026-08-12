@@ -5,7 +5,7 @@
 
 #include <functional>
 
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 #include "Market/FundamentalValueProcess.h"
 #include "Market/Market.h"
 #include "RandomGenerator/RandomGenerator.h"

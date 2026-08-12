@@ -7,7 +7,7 @@ selected subcommand registered.
 
 from __future__ import annotations
 
-from .cli_parser import build_parser
+from .commands import build_parser
 
 __all__ = ["main"]
 

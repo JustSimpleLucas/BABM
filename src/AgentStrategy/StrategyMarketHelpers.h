@@ -4,7 +4,7 @@
 #define ABM_AGENT_STRATEGY_STRATEGY_MARKET_HELPERS_H
 
 #include "Agent/Agent.h"
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 #include "Market/Market.h"
 #include "Utility/SimulationConstants.h"
 

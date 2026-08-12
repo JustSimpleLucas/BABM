@@ -3,8 +3,8 @@
 #ifndef ABM_APPLICATION_CLI_OPTIONS_H
 #define ABM_APPLICATION_CLI_OPTIONS_H
 
-#include "ControlParameters/ConfigDiagnostics.h"
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/ConfigDiagnostics.h"
+#include "Config/SimulationConfig.h"
 
 #include <string>
 #include <vector>

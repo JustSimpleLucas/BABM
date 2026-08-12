@@ -3,7 +3,7 @@
 #ifndef ABM_SIMULATION_POPULATION_FACTORY_H
 #define ABM_SIMULATION_POPULATION_FACTORY_H
 
-#include "ControlParameters/SimulationConfig.h"
+#include "Config/SimulationConfig.h"
 #include "RandomGenerator/RandomGenerator.h"
 #include "Simulation/SimulationState.h"
 

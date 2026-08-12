@@ -2,8 +2,8 @@
 
 #include "Application/CliOptions.h"
 
-#include "ControlParameters/SimulationConfigIO.h"
-#include "ControlParameters/SimulationConfigValidation.h"
+#include "Config/SimulationConfigIO.h"
+#include "Config/SimulationConfigValidation.h"
 
 #include <iostream>
 #include <string>

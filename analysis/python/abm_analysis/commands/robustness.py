@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from ..cli_arguments import _figure_formats_argument
+from .shared_arguments import figure_formats_argument
 from abm_analysis.report import build_seed_robustness_report
 from abm_analysis.report.static_export import STATIC_EXPORT_FORMATS
 
@@ -63,7 +63,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     )
     robustness_parser.add_argument(
         "--figure-formats",
-        type=_figure_formats_argument,
+        type=figure_formats_argument,
         default=STATIC_EXPORT_FORMATS,
         help=(
             "Comma-separated static figure formats to export, e.g. png,pdf. "

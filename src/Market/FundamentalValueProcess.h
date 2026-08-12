@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "ControlParameters/MarketConfig.h"
+#include "Config/MarketConfig.h"
 #include "Market/Market.h"
 #include "RandomGenerator/RandomGenerator.h"
 #include "Utility/SimulationConstants.h"

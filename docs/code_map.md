@@ -33,12 +33,11 @@ launches the C++ binary and consumes its files.
 | `cmake/AbmBuildMetadata.cmake` | Captures model version, git commit, and dirty flag at configure time; these become compile definitions consumed by the output layer so every run records the exact build that produced it. |
 | `src/CMakeLists.txt` | Adds every domain directory. Each `src/<Domain>/CMakeLists.txt` then names the target its own sources belong to via `target_sources()`, so **adding a `.cpp` means editing that directory's list**, not a central one. |
 | `pyproject.toml` | Python package definition (`abm-analysis`), dependency pins, the `abm-analysis` console script, and the pytest configuration. |
-| `requirements.txt` | The same dependency set for plain `pip install -r`. |
+| `requirements.txt` | A one-line pointer (`-e .[test]`) so `pip install -r` works. Versions live only in `pyproject.toml`, so there is no second list to drift. |
 | `.github/workflows/ci.yml` | CI, three jobs: **build-test** configures the debug preset with warnings-as-errors, builds, and runs `ctest`; **format** fails on any C++ file that differs from `.clang-format`; **python-test** installs the analysis package and runs `pytest`. |
 | `.clang-format` | C++ formatting rules (LLVM base, 4-space indent, 100-column limit). Enforced by the `format` CI job; the whole tree is compliant. |
 | `.clang-tidy` | Static-analysis rules for editors and local runs (`bugprone`, `cppcoreguidelines`, `modernize`, `performance`, `readability`, with the noisiest checks disabled). Advisory — `WarningsAsErrors` is empty and CI does not run it. |
-| `formalism.tex` | The LaTeX write-up of the model's mathematics — the paper-side counterpart of the code. The only `.tex` source tracked; build products (`.toc`, `.aux`, …) and scratch drafts stay local. |
-| `note.txt` | Personal scratch list of frequently used command lines. |
+| `docs/formalism.tex` | The LaTeX write-up of the model's mathematics — the paper-side counterpart of the code. The only `.tex` source tracked; build products (`.toc`, `.aux`, …) and scratch drafts stay local. |
 | `docs/*.mmd` | Mermaid diagrams: class architecture, build structure, data management, simulation flow, agent decision flow, sequence diagram. |
 | `docs/baselines.md` | Recorded baseline results used to detect unintended behavioural drift. |
 
@@ -109,25 +108,25 @@ objects. It is split into a *schema* (headers holding plain records) and a
 
 | File | Function |
 | --- | --- |
-| `src/ControlParameters/SimulationConfig.h` | Stable facade that aggregates every domain config record. Older code includes just this; new code should include the narrower header it actually needs. |
-| `src/ControlParameters/ModelConfig.h` | The complete set of model parameters for one run (population sizes, steps, seed, warm-up, and so on). |
-| `src/ControlParameters/MarketConfig.h` | Per-asset market parameters: the GBM fundamental-value process, volatility, drift, initial price, cross-asset correlation, tick size, transaction costs. All declared assets share the same functional form so no asset is analytically privileged. |
-| `src/ControlParameters/StrategyConfig.h` | Strategy-side parameters, including the chartist mode selector (momentum / mean-reversion / breakout / RSI) and per-strategy thresholds. |
-| `src/ControlParameters/BehaviouralConfig.h` | Cumulative Prospect Theory parameters and the reference-point mode (fixed anchor vs. per-agent personal reference state). |
-| `src/ControlParameters/OutputConfig.h` | Where artefacts go and whether one-folder-per-run archiving is enabled. |
+| `src/Config/SimulationConfig.h` | Stable facade that aggregates every domain config record. Older code includes just this; new code should include the narrower header it actually needs. |
+| `src/Config/ModelConfig.h` | The complete set of model parameters for one run (population sizes, steps, seed, warm-up, and so on). |
+| `src/Config/MarketConfig.h` | Per-asset market parameters: the GBM fundamental-value process, volatility, drift, initial price, cross-asset correlation, tick size, transaction costs. All declared assets share the same functional form so no asset is analytically privileged. |
+| `src/Config/StrategyConfig.h` | Strategy-side parameters, including the chartist mode selector (momentum / mean-reversion / breakout / RSI) and per-strategy thresholds. |
+| `src/Config/BehaviouralConfig.h` | Cumulative Prospect Theory parameters and the reference-point mode (fixed anchor vs. per-agent personal reference state). |
+| `src/Config/OutputConfig.h` | Where artefacts go and whether one-folder-per-run archiving is enabled. |
 
 **Parsing and validation pipeline:**
 
 | File | Function |
 | --- | --- |
-| `src/ControlParameters/SimulationConfigIO.{h,cpp}` | Locates `config/simulation.cfg` (working directory first, then paths relative to the executable) and drives file reading. |
-| `src/ControlParameters/SimulationConfigParsing.{h,cpp}` | Low-level typed value parsing (`parseBoolValue`, `parseDoubleValue`, …), each call carrying the key name and source line so errors are traceable to a config line. |
-| `src/ControlParameters/SimulationConfigSettingAppliers.{h,cpp}` | Defines `ConfigSetting` (key + value + source location) and dispatches each parsed setting through an array of 16 applier functions until one claims the key. Unknown keys therefore fail loudly. |
+| `src/Config/SimulationConfigIO.{h,cpp}` | Locates `config/simulation.cfg` (working directory first, then paths relative to the executable) and drives file reading. |
+| `src/Config/SimulationConfigParsing.{h,cpp}` | Low-level typed value parsing (`parseBoolValue`, `parseDoubleValue`, …), each call carrying the key name and source line so errors are traceable to a config line. |
+| `src/Config/SimulationConfigSettingAppliers.{h,cpp}` | Defines `ConfigSetting` (key + value + source location) and dispatches each parsed setting through an array of 16 applier functions until one claims the key. Unknown keys therefore fail loudly. |
 | `…SimulationSettings.cpp` | Appliers for core simulation keys and the `asset.*` per-asset key family. |
 | `…StrategySettings.cpp` | Appliers for fundamentalist / chartist / noise-trader / buy-and-hold keys. |
 | `…BehaviouralSettings.cpp` | Appliers for `control_*` keys: prospect theory, heterogeneity, social influence, short selling. |
 | `…OutputSettings.cpp` | Appliers for `experiment_output_*` keys. |
-| `src/ControlParameters/SimulationConfigValidation.{h,cpp}` | Checks feasibility of the fully assembled config (positive counts, admissible probabilities, consistent asset lists). Separate from engine construction so configs can be tested without running a simulation. |
+| `src/Config/SimulationConfigValidation.{h,cpp}` | Checks feasibility of the fully assembled config (positive counts, admissible probabilities, consistent asset lists). Separate from engine construction so configs can be tested without running a simulation. |
 
 ### 2.4 Market microstructure (`abm_market`)
 
@@ -242,7 +241,7 @@ of its collaborators, not in the controller itself.
 | `src/Utility/ConsoleProgressBar.{h,cpp}` | Terminal progress bar. Explicitly touches no model state, so console behaviour cannot affect results. |
 | `src/Utility/ProcessMemoryUsage.{h,cpp}` | OS process-memory diagnostic for interactive reporting; never enters archived output. |
 
-### 2.10 C++ tests (`tests/`)
+### 2.10 C++ tests (`tests/cpp/`)
 
 Five separate CTest executables, each with its own `…TestMain.cpp`. All of them
 share `TestSupport.{h,cpp}` (assertion helpers, temporary directories, config
@@ -269,11 +268,11 @@ the `abm-analysis` script.
 | --- | --- |
 | `__init__.py` | Package docstring stating the empirical-finance diagnostic workflow, plus public re-exports. |
 | `__main__.py` | Makes `python -m abm_analysis` work; forwards to `cli.main`. |
-| `cli.py` | The `main()` entry point: builds the parser, dispatches to a handler. |
-| `cli_parser.py` | Builds the top-level parser and lets each module in `commands/` register its own subcommand, in the order they appear in `--help`. |
-| `cli_arguments.py` | Option groups shared by more than one command (`--benchmark-*`, `--source`, database URL, `--figure-formats`). |
-| `commands/` | One module per subcommand (`run`, `compare`, `replicate`, `robustness`, `compress`, `calibrate`, `db`, `web`), each pairing its parser with its handler. |
-| `cli_handlers.py` | Helpers shared by more than one command handler: benchmark-directory resolution and the import/optional-output printers. |
+| `cli.py` | The `main()` entry point named in `pyproject.toml`: builds the parser, dispatches to a handler. The only CLI module outside `commands/`. |
+| `commands/__init__.py` | `build_parser()` — the top-level parser — and `COMMAND_MODULES`, whose order fixes the order subcommands appear in `--help`. Each module registers its own subcommand. |
+| `commands/` | One module per subcommand (`run`, `compare`, `replicate`, `robustness`, `compress`, `calibrate`, `convert-benchmarks`, `db`, `web`), each pairing its parser with its handler. |
+| `commands/shared_arguments.py` | Option groups shared by more than one command (`--benchmark-*`, `--source`, database URL, `--figure-formats`). |
+| `commands/shared_helpers.py` | Helpers shared by more than one command handler: benchmark-directory resolution and the import/optional-output printers. |
 | `environment.py` | Local environment setup for reproducible analysis runs. |
 
 ### 3.2 Reading simulator output (`archive/`)
@@ -324,7 +323,7 @@ Optuna searches the parameter space; the C++ binary remains the simulator.
 | `execution.py` | Launches simulator subprocesses per trial and handles the isolated-worker payload protocol. |
 | `robustness.py` | Re-runs top candidates across validation seeds inside a shared `simulation_runs/validation` directory, reusing the report's computations. |
 | `study.py` | Orchestrates the whole study and writes `best_config.cfg`, `calibration_trials.csv`, and `settings.json`. |
-| `../calibration_worker.py` | The isolated worker process for one trial. It exists so pandas/NumPy/statsmodels allocations are reclaimed by process exit — a hard memory reset every trial. |
+| `worker.py` | The isolated worker process for one trial, launched as `python -m abm_analysis.calibration.worker`. It exists so pandas/NumPy/statsmodels allocations are reclaimed by process exit — a hard memory reset every trial. |
 
 Candidates are ranked by **fit × seed-robustness pass rate**, not fit alone.
 
@@ -432,14 +431,16 @@ gets one column per market in every table and one line per market in every chart
 | `test_archive_storage.py` | Drift guard, caching, compression, chunked inserts. |
 | `test_static_export.py` | Kaleido figure export. |
 | `test_schema_sync.py` | **Cross-language guard** — asserts the C++ writer header literals, the Python required-column sets, and the PostgreSQL column tuples all still agree. This is the test that fails when a C++ CSV column changes without a Python update. |
-| `test_repository_hygiene.py` | Repository conventions (stray files, ignored paths). |
+| `test_repository_hygiene.py` | **Structural guard** — asserts the conventions this document describes: every `src/*.cpp` is named in its directory's `target_sources()` (so a new file cannot silently go uncompiled), every domain with sources has a `CMakeLists.txt` and is `add_subdirectory`'d, every source shares a prefix with a header in its directory, and no `*.egg-info` is tracked. |
+| `test_xlsx_conversion.py` | Builds minimal SpreadsheetML workbooks in-process and checks the benchmark conversion: shared/inline strings, booleans, date serials, padded gap rows, lock-file skipping, and the `convert-benchmarks` subcommand end to end. |
 | `test_web_app.py` | Dashboard run discovery across all three archive layouts, the data-root containment check, per-asset reporting for multi-asset runs, the agent panel, and the guarantee that the served metrics equal `statistics/diagnostics.py`'s and `plots/agents.py`'s. Also pins the awkward archives: the warm-up phase falling back to the primary market, and an `asset_timeseries.csv` that disagrees with its own run. |
 
-### 3.10 Standalone script
+### 3.10 Empirical data ingestion
 
 | File | Function |
 | --- | --- |
-| `analysis/scripts/xlsx_sheets_to_csv.py` | Dependency-free Excel → CSV converter used to turn `data/stock_data/*.xlsx` into the CSVs the benchmark loader reads. Skips Excel lock files. |
+| `archive/xlsx_conversion.py` | Dependency-free Excel → CSV converter that turns `data/stock_data/*.xlsx` into the CSVs `archive/benchmarks.py` reads. Built on `zipfile` plus SpreadsheetML rather than openpyxl, deliberately: the step runs only when new empirical data arrives, and this keeps openpyxl out of the runtime dependencies. Resolves shared strings, inline strings, booleans, and date-formatted serials; pads missing rows; skips Excel `~$` lock files. |
+| `commands/convert_benchmarks.py` | Exposes it as `abm_analysis convert-benchmarks <path>`, so conversion is a documented pipeline step rather than a script run by hand. |
 
 ---
 
@@ -479,7 +480,7 @@ PythonAnalysisRunner → abm_analysis run → HTML report + figures
 ```
 search_space.json ─→ calibration/config.py ─→ Optuna (calibration/study.py)
         │                                            │
-        │                     per trial: calibration_worker.py (fresh process)
+        │                     per trial: calibration/worker.py (fresh process)
         │                                → execution.py → build/release/simulate
         │                                → run_discovery.py → archives.py
         │                                → scoring.py (distance to benchmark)

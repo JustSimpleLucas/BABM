@@ -270,7 +270,7 @@ def _run_candidate_in_worker_process(
     command = [
         sys.executable,
         "-m",
-        "abm_analysis.calibration_worker",
+        "abm_analysis.calibration.worker",
         str(request_path),
         str(response_path),
     ]
@@ -368,7 +368,7 @@ def _options_from_payload(payload: object) -> CalibrationOptions:
 def _worker_environment() -> dict[str, str]:
     """Build the environment for the worker subprocess, ensuring abm_analysis is importable.
 
-    The worker is launched via `python -m abm_analysis.calibration_worker`;
+    The worker is launched via `python -m abm_analysis.calibration.worker`;
     prepending the package's parent directory to PYTHONPATH keeps that import
     working regardless of the caller's working directory.
     """

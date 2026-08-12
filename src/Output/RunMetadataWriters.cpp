@@ -2,7 +2,7 @@
 
 #include "Output/RunMetadataWriters.h"
 
-#include "ControlParameters/ConfigKeyRegistry.h"
+#include "Config/ConfigKeyRegistry.h"
 #include "Output/OutputSerialization.h"
 #include "Results/SimulationRunResult.h"
 
