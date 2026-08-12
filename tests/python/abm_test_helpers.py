@@ -215,18 +215,23 @@ def write_synthetic_asset_timeseries(
     disabled_assets: list[str] | None = None,
     fundamental_correlation: float = 0.3,
     processes: dict[str, str] | None = None,
+    observations: int = 190,
 ) -> None:
     """Add a long-format ``asset_timeseries.csv`` and matching ``config.json``.
 
     Mirrors the simulator's artefacts closely enough to drive the multi-asset
     analytics and report panels: one row per (row_index, asset), including the
     per-asset portfolio weights that the composition chart consumes.
+
+    ``observations`` shortens the per-asset artefact without touching the run's
+    other files, which reproduces an archive whose ``asset_timeseries.csv``
+    disagrees with its own ``step_timeseries.csv``. That state exists in the
+    wild and consumers have to survive it.
     """
 
     import json
 
     rng = np.random.default_rng(seed)
-    observations = 190
     processes = processes or {}
     rows = []
     row_index = 0

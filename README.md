@@ -214,6 +214,7 @@ With the virtual environment active, the analysis layer runs as `python -m abm_a
 | `calibrate` | Searches the parameter space against empirical benchmark returns. |
 | `compress <experiment_dir>` | Gzips completed archives (the big per-row CSVs shrink ~5–10×; loaders read `.gz` transparently). |
 | `db …` | Optional PostgreSQL: `init`, `import-run`, `import-experiment`, `import-benchmarks`, `import-all`, `validate`, `inspect-run`. |
+| `web` | Opens the local dashboard for browsing every archived run and its market statistics ([§5.1](#51-the-market-statistics-dashboard)). |
 
 Every command supports `--help`. Report-producing commands share `--phase`, `--price-column`,
 `--output-dir`, `--export-images` / `--no-export-images`, and `--figure-formats`.
@@ -225,6 +226,65 @@ Every command supports `--help`. Report-producing commands share `--phase`, `--p
 ```bash
 .venv/bin/python -m abm_analysis compare data/experiments/demo
 ```
+
+### 5.1 The market-statistics dashboard
+
+The commands above write reports to disk — that is what makes them citable, but it also means
+answering "what did that run actually look like?" costs a report build. The dashboard is the quick
+way in: one command, and every archived run is browsable in your browser.
+
+```bash
+.venv/bin/python -m abm_analysis web
+```
+
+It prints an address (`http://127.0.0.1:8000/`) and opens it. Pick a run on the left.
+
+**Every traded market gets its own column.** A run configured with `assets = alpha, beta` is two
+markets, and the page reports both side by side rather than only the primary asset. That matters:
+on the demo two-asset run, alpha's excess kurtosis is 4.00 against beta's 0.17, and beta ends 970%
+above its fundamental while alpha ends 31% below — differences invisible in a single-asset view.
+
+For the selected run the page shows:
+
+- **Stylised-fact verdicts**, one per market — absence of linear autocorrelation, fat tails, and
+  volatility clustering, each with the test statistic behind it (Ljung–Box, Jarque–Bera, ARCH-LM,
+  GARCH). A run can reproduce a fact in one market and not the other, and the cards say so.
+- **Return distribution** — observations, mean, volatility, skewness, excess kurtosis, Jarque–Bera.
+- **Serial dependence** — lag-1 autocorrelation, Ljung–Box and ARCH-LM minimum p-values, and the
+  GARCH(1,1) α, β, and persistence.
+- **Market outcomes** — final price against the fundamental, mispricing, maximum drawdown, traded
+  volume, mean bid–ask spread, and allocative efficiency.
+- **Cross-asset** (two or more markets only) — realised rolling return correlation against the
+  configured fundamental ρ, and the relative price ratio.
+- **Agents** — population size, strategy count, wealth Gini, and a per-strategy table of agent
+  count, mean/median/s.d. final wealth, mean wealth change, mean trades, and mean traded volume,
+  with the final-wealth distribution drawn per strategy.
+- **Charts** — price against fundamental, the log-return series, the return distribution against a
+  fitted Gaussian, and the autocorrelation of raw, absolute, and squared returns. Colour identifies
+  the market; the price chart has a `Level | Indexed` switch so markets at different price levels
+  share one axis, and the autocorrelation panel switches between raw, |r|, and r².
+
+The `Phase` and `Price column` selectors at the top re-run the diagnostics on a different window or a
+different price series, the same way `--phase` and `--price-column` do for the report commands.
+
+Four things are worth knowing:
+
+- **It is read-only.** The dashboard never simulates and never writes to `data/`, so it is safe to
+  leave open while a long experiment is running.
+- **The numbers are the report's numbers.** Every statistic is recomputed by the same
+  `abm_analysis.statistics` functions the static reports use, so the two cannot disagree. Where a
+  figure comes straight from the simulator's `summary_metrics.csv` instead, it is labelled.
+- **It finds runs wherever they are.** Anything under `data/` holding a `step_timeseries.csv` is
+  listed, so experiments, calibration studies, and `data/latest` all appear without configuration.
+- **It states its own limits.** The simulator leaves `simulation_step` blank on initial and warm-up
+  rows of `asset_timeseries.csv`, so the per-asset panels cover the simulation phase only, and the
+  warm-up phase falls back to the primary market. Per-asset return diagnostics also use the
+  simulator's own `log_return` column, so `Price column` changes the price chart but not those
+  statistics. The footer of every run says which artefact was read and notes any such caveat.
+
+Useful options: `--data-root <dir>` to browse a different archive, `--port <n>` if 8000 is taken, and
+`--no-browser` to leave the browser alone. The server binds to `127.0.0.1`, so unpublished results
+are not exposed on the network.
 
 ---
 
@@ -369,6 +429,7 @@ analysis/python/abm_analysis/
   calibration/             Optuna study, scoring, execution, seed validation
   plots/ report/           Figures and the HTML/PDF report builders
   database/                Optional PostgreSQL schema, imports, exports, validation
+  web/                     Read-only local dashboard: run catalogue, statistics API, single page
 config/                 simulation.cfg, calibration search space, benchmark manifest
 data/                   Simulation output, calibration studies, empirical data (git-ignored)
 docs/                   Code map and Mermaid architecture/flow diagrams

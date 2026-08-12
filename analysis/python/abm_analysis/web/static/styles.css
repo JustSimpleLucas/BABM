@@ -1,0 +1,750 @@
+/* Interface styling for the BABM market-statistics dashboard.
+ *
+ * The palette is deliberately restrained: this is a research instrument whose
+ * output may be read next to thesis figures, so colour carries exactly two
+ * meanings — which asset a series belongs to, and whether a stylised fact was
+ * reproduced — and everything else stays neutral. Both light and dark schemes
+ * are defined because the dashboard is often open beside an editor.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --page-background: #f6f6f4;
+  --surface: #ffffff;
+  --surface-muted: #f0efec;
+  --border: #dedbd4;
+  --border-strong: #c6c2b8;
+  --text: #1c1b19;
+  --text-muted: #6b675f;
+  --text-faint: #8f8b82;
+  --accent: #2f5d8a;
+  --accent-soft: rgba(47, 93, 138, 0.1);
+
+  --verdict-supported: #2f7a4f;
+  --verdict-supported-soft: rgba(47, 122, 79, 0.12);
+  --verdict-partial: #a06a1c;
+  --verdict-partial-soft: rgba(160, 106, 28, 0.12);
+  --verdict-not-supported: #a33a32;
+  --verdict-not-supported-soft: rgba(163, 58, 50, 0.12);
+  --verdict-unavailable: #7b7770;
+  --verdict-unavailable-soft: rgba(123, 119, 112, 0.12);
+
+  /* Asset colours. --asset-1 equals the old single-series price colour, so a
+   * single-asset run's charts look exactly as they did before. The second is
+   * orange rather than another cool hue: blue against orange is the pairing
+   * that survives both a greyscale print and the common forms of colour
+   * blindness, and two markets is the case that matters most. */
+  --asset-1: #2f5d8a;
+  --asset-2: #c1622a;
+  --asset-3: #167c80;
+  --asset-4: #8b4a9c;
+
+  --series-fundamental: #a06a1c;
+  --series-returns: #4a5568;
+  --series-raw: #2f5d8a;
+  --series-absolute: #a33a32;
+  --series-squared: #2f7a4f;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-background: #16171a;
+    --surface: #1e2024;
+    --surface-muted: #26282d;
+    --border: #33363c;
+    --border-strong: #45484f;
+    --text: #e8e6e3;
+    --text-muted: #a3a09a;
+    --text-faint: #7c7973;
+    --accent: #7aa9d6;
+    --accent-soft: rgba(122, 169, 214, 0.14);
+
+    --verdict-supported: #6cbb8b;
+    --verdict-supported-soft: rgba(108, 187, 139, 0.16);
+    --verdict-partial: #d8a557;
+    --verdict-partial-soft: rgba(216, 165, 87, 0.16);
+    --verdict-not-supported: #e07b72;
+    --verdict-not-supported-soft: rgba(224, 123, 114, 0.16);
+    --verdict-unavailable: #9a968f;
+    --verdict-unavailable-soft: rgba(154, 150, 143, 0.16);
+
+    --asset-1: #7aa9d6;
+    --asset-2: #e5924f;
+    --asset-3: #4fa9ad;
+    --asset-4: #b47fc9;
+
+    --series-fundamental: #d8a557;
+    --series-returns: #9aa4b4;
+    --series-raw: #7aa9d6;
+    --series-absolute: #e07b72;
+    --series-squared: #6cbb8b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--page-background);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* ---------------------------------------------------------------- header */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.brand-mark {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.brand-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.control {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.control select {
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 8px;
+}
+
+.archive-root {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- layout */
+
+.layout {
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr);
+  align-items: start;
+  min-height: calc(100vh - 57px);
+}
+
+.sidebar {
+  position: sticky;
+  top: 57px;
+  height: calc(100vh - 57px);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.sidebar-head {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-head input {
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+}
+
+.sidebar-count {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.run-list {
+  overflow-y: auto;
+  padding: 8px 0 24px;
+  flex: 1;
+}
+
+.experiment-group {
+  margin-bottom: 4px;
+}
+
+.experiment-name {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.run-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: transparent;
+  padding: 7px 14px 7px 11px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+}
+
+.run-button:hover {
+  background: var(--surface-muted);
+}
+
+.run-button.is-selected {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+
+.run-button-id {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-button-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* --------------------------------------------------------------- content */
+
+.content {
+  padding: 24px 28px 64px;
+  max-width: 1180px;
+}
+
+.placeholder {
+  max-width: 540px;
+  padding-top: 40px;
+}
+
+.placeholder h1 {
+  font-size: 20px;
+  margin-bottom: 10px;
+}
+
+.placeholder p,
+.status {
+  color: var(--text-muted);
+}
+
+.status {
+  padding: 16px 0;
+  font-size: 14px;
+}
+
+.status.is-error {
+  color: var(--verdict-not-supported);
+}
+
+/* ------------------------------------------------------------ run header */
+
+.run-heading {
+  margin-bottom: 24px;
+}
+
+.run-heading h1 {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  word-break: break-all;
+}
+
+.run-provenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.run-provenance span strong {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.run-parameters,
+.asset-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.parameter-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.parameter-chip b {
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.parameter-chip.is-on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.parameter-chip.is-on b {
+  color: var(--accent);
+}
+
+/* Asset colour key, shared by the legend, table headings, and chart lines. */
+.asset-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: baseline;
+  background: var(--asset-1);
+}
+
+.asset-chip {
+  align-items: center;
+  border-color: var(--border-strong);
+}
+
+.asset-chip .asset-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.asset-chip .asset-detail {
+  color: var(--text-faint);
+}
+
+/* ---------------------------------------------------------------- panels */
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px 20px;
+  margin-bottom: 20px;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.panel-heading h2 {
+  font-size: 15px;
+}
+
+.panel-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 20px;
+}
+
+.panel-pair .panel {
+  margin-bottom: 20px;
+}
+
+.panel-message {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Segmented view switches. These only redraw an existing chart — they never
+ * refetch, so switching the autocorrelation series does not refit a GARCH. */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.segmented button {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface-muted);
+  border: 0;
+  border-left: 1px solid var(--border);
+  padding: 4px 11px;
+  cursor: pointer;
+}
+
+.segmented button:first-child {
+  border-left: 0;
+}
+
+.segmented button:hover {
+  color: var(--text);
+}
+
+.segmented button[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------- verdict cards */
+
+.fact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.fact-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 13px 15px;
+  background: var(--surface-muted);
+}
+
+.fact-card h3 {
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+
+.fact-expectation {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+
+/* One block per asset: a two-asset run can reproduce a fact in one market and
+ * not the other, and that difference is a result, not noise to average away. */
+.fact-asset {
+  border-left: 3px solid var(--verdict-unavailable);
+  padding-left: 10px;
+  margin-bottom: 10px;
+}
+
+.fact-asset:last-child {
+  margin-bottom: 0;
+}
+
+.fact-asset-name {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.fact-verdict {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+  color: var(--verdict-unavailable);
+  background: var(--verdict-unavailable-soft);
+}
+
+.fact-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12.5px;
+}
+
+.fact-evidence div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-muted);
+}
+
+.fact-evidence b {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.fact-asset[data-verdict="supported"] {
+  border-left-color: var(--verdict-supported);
+}
+.fact-asset[data-verdict="supported"] .fact-verdict {
+  color: var(--verdict-supported);
+  background: var(--verdict-supported-soft);
+}
+.fact-asset[data-verdict="partial"] {
+  border-left-color: var(--verdict-partial);
+}
+.fact-asset[data-verdict="partial"] .fact-verdict {
+  color: var(--verdict-partial);
+  background: var(--verdict-partial-soft);
+}
+.fact-asset[data-verdict="not-supported"] {
+  border-left-color: var(--verdict-not-supported);
+}
+.fact-asset[data-verdict="not-supported"] .fact-verdict {
+  color: var(--verdict-not-supported);
+  background: var(--verdict-not-supported-soft);
+}
+
+/* ---------------------------------------------------------------- tables */
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.metric-table,
+.agent-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.metric-table th,
+.metric-table td,
+.agent-table th,
+.agent-table td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.metric-table th:first-child,
+.metric-table td:first-child,
+.agent-table th:first-child,
+.agent-table td:first-child {
+  text-align: left;
+  width: 40%;
+  white-space: normal;
+}
+
+.metric-table thead th,
+.agent-table thead th {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.metric-table tbody tr:last-child td,
+.agent-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.metric-table td.metric-number,
+.agent-table td.metric-number {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+.metric-table td.is-missing,
+.agent-table td.is-missing {
+  color: var(--text-faint);
+}
+
+.metric-table tr.is-emphasis {
+  background: var(--accent-soft);
+}
+
+.metric-table tr.is-emphasis td:first-child {
+  font-weight: 600;
+}
+
+.metric-source {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  vertical-align: 1px;
+}
+
+/* Strategy names are short and there are many numeric columns, so the label
+ * column takes only what it needs rather than the metric tables' 40%. */
+.agent-table th:first-child,
+.agent-table td:first-child {
+  width: auto;
+}
+
+.agent-table td:first-child {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+/* ----------------------------------------------------------- metric grid */
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.metric-tile {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 13px 12px;
+}
+
+.metric-tile.is-emphasis {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.metric-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 3px;
+}
+
+.metric-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  display: block;
+}
+
+.metric-value.is-missing {
+  color: var(--text-faint);
+  font-size: 16px;
+}
+
+/* ---------------------------------------------------------------- charts */
+
+.chart {
+  width: 100%;
+  min-height: 320px;
+}
+
+#cross-asset-panel .chart,
+#chart-agent-wealth {
+  min-height: 300px;
+}
+
+#chart-agent-wealth {
+  margin-top: 18px;
+}
+
+.run-footer {
+  font-size: 12px;
+  color: var(--text-faint);
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  max-width: 90ch;
+}
+
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+    max-height: 280px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .content {
+    padding: 18px 16px 48px;
+  }
+
+  .metric-table th:first-child,
+  .metric-table td:first-child {
+    width: auto;
+  }
+}

@@ -1,0 +1,594 @@
+"""Tests for the read-only market-statistics web application.
+
+The dashboard's research value depends on three guarantees: that it finds every
+archived run regardless of where in ``data/`` it sits, that it reports **every**
+traded market rather than only the primary asset's projection, and that the
+numbers it serves are the statistics modules' numbers rather than a second,
+divergent implementation. All three are asserted here, alongside the containment
+check that keeps a client-supplied path from reaching outside the archive.
+
+The multi-asset tests use their own fixture rather than joining ``data_root``:
+the run counts asserted for the catalogue are load-bearing, and every
+single-asset test would otherwise pay for a fixture it does not use.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pandas as pd
+import pytest
+from fastapi.testclient import TestClient
+
+from abm_analysis.plots.agents import build_agent_summary_statistics
+from abm_analysis.statistics.diagnostics import (
+    run_asset_stylised_fact_diagnostics,
+    run_stylised_fact_diagnostics,
+)
+from abm_analysis.web.app import _archive_generation, create_app
+from abm_analysis.web.catalogue import build_catalogue, discover_runs, resolve_run_path
+from abm_analysis.web.run_view import build_run_view
+
+from abm_test_helpers import (
+    make_synthetic_experiment,
+    write_synthetic_asset_timeseries,
+    write_synthetic_run,
+)
+
+
+#: The four tokens ``_classify_conclusion`` can produce. The synthetic fixtures
+#: draw returns independently of price, so a test may assert membership here but
+#: never a particular verdict.
+VERDICT_TOKENS = {"supported", "partial", "not-supported", "unavailable"}
+
+SYNTHETIC_RUN_ID = "20260427143012_1_1_0_1_20_30_5_2_180_66"
+
+
+@pytest.fixture()
+def data_root(tmp_path: Path) -> Path:
+    """Build an archive that mirrors the three real layouts under ``data/``.
+
+    Runs appear inside an experiment directory, inside a calibration study, and
+    directly under the root — the shape ``data/latest`` takes.
+    """
+
+    root = tmp_path / "data"
+    experiments_dir = root / "experiments"
+    experiments_dir.mkdir(parents=True)
+
+    experiment_dir = make_synthetic_experiment(experiments_dir)
+
+    study_runs_dir = root / "calibration" / "study_20260101000000" / "simulation_runs"
+    study_runs_dir.mkdir(parents=True)
+    write_synthetic_run(
+        study_runs_dir / "20260427143212_1_0_0_1_20_30_5_2_180_68",
+        "20260427143212_1_0_0_1_20_30_5_2_180_68",
+        68,
+        0.01,
+    )
+
+    write_synthetic_run(root / "latest", "20260427143312_1_0_0_1_20_30_5_2_180_69", 69, 0.0)
+
+    # Report output written beside a run must never be mistaken for a run.
+    report_dir = experiment_dir / "20260427143012_1_1_0_1_20_30_5_2_180_66" / "python_analysis"
+    (report_dir / "figures").mkdir(parents=True)
+    (report_dir / "index.html").write_text("<html></html>", encoding="utf-8")
+
+    return root
+
+
+@pytest.fixture()
+def client(data_root: Path) -> TestClient:
+    """Return a test client bound to the synthetic archive."""
+
+    return TestClient(create_app(data_root))
+
+
+def test_discovery_finds_runs_at_every_archive_depth(data_root: Path) -> None:
+    discovered = {path.name for path in discover_runs(data_root)}
+
+    assert "20260427143012_1_1_0_1_20_30_5_2_180_66" in discovered
+    assert "20260427143212_1_0_0_1_20_30_5_2_180_68" in discovered
+    assert "latest" in discovered
+    assert len(discovered) == 4
+
+
+def test_discovery_ignores_report_output_beside_a_run(data_root: Path) -> None:
+    discovered = {path.name for path in discover_runs(data_root)}
+
+    assert "python_analysis" not in discovered
+    assert "figures" not in discovered
+
+
+def test_catalogue_groups_runs_by_containing_directory(data_root: Path) -> None:
+    catalogue = build_catalogue(data_root)
+    names = {experiment.name: experiment for experiment in catalogue}
+
+    assert "synthetic_experiment" in names
+    assert names["synthetic_experiment"].relative_path == "experiments/synthetic_experiment"
+    assert len(names["synthetic_experiment"].runs) == 2
+    # A calibration study keeps its full path as its label, because those runs
+    # come from a parameter search rather than a deliberate experiment.
+    assert "calibration/study_20260101000000/simulation_runs" in names
+
+
+def test_catalogue_entry_exposes_run_id_parameters(data_root: Path) -> None:
+    catalogue = build_catalogue(data_root)
+    experiment = next(entry for entry in catalogue if entry.name == "synthetic_experiment")
+    first_run = experiment.runs[0].to_dict()
+
+    assert first_run["run_id"] == "20260427143012_1_1_0_1_20_30_5_2_180_66"
+    assert first_run["seed"] == 66
+    assert first_run["time_steps"] == 180
+    assert first_run["population"]["chartists"] == 30
+
+
+def test_resolve_run_path_rejects_paths_outside_the_data_root(data_root: Path) -> None:
+    with pytest.raises(ValueError, match="outside the data root"):
+        resolve_run_path("../secrets", data_root)
+
+
+def test_resolve_run_path_rejects_directories_that_are_not_runs(data_root: Path) -> None:
+    with pytest.raises(ValueError, match="Not an archived run"):
+        resolve_run_path("experiments", data_root)
+
+
+def test_run_view_matches_the_diagnostics_module(data_root: Path) -> None:
+    """The dashboard must not become a second implementation of the statistics."""
+
+    run_dir = data_root / "experiments" / "synthetic_experiment" / "20260427143012_1_1_0_1_20_30_5_2_180_66"
+    view = build_run_view(run_dir)
+    diagnostics = run_stylised_fact_diagnostics(run_dir)
+
+    primary = view["assets"]["names"][0]
+    returns_group = next(group for group in view["metric_groups"] if group["key"] == "returns")
+    metrics = {metric["label"]: metric["values"][primary] for metric in returns_group["metrics"]}
+
+    assert view["observation_count"] == diagnostics["observation_count"]
+    assert metrics["Excess kurtosis"] == pytest.approx(diagnostics["excess_kurtosis"])
+    assert metrics["Skewness"] == pytest.approx(diagnostics["skewness"])
+    assert metrics["Jarque–Bera p"] == pytest.approx(diagnostics["jarque_bera_p_value"])
+
+
+def test_run_view_pairs_every_stylised_fact_with_its_evidence(data_root: Path) -> None:
+    run_dir = data_root / "experiments" / "synthetic_experiment" / "20260427143012_1_1_0_1_20_30_5_2_180_66"
+    view = build_run_view(run_dir)
+
+    primary = view["assets"]["names"][0]
+    facts = {fact["fact"]: fact for fact in view["stylised_facts"]}
+    assert set(facts) == {
+        "Absence of linear autocorrelation",
+        "Fat tails",
+        "Volatility clustering",
+    }
+    for fact in facts.values():
+        entry = fact["assets"][primary]
+        assert entry["verdict"] in VERDICT_TOKENS
+        assert entry["conclusion"]
+        assert len(entry["evidence"]) == 2
+
+
+def test_run_view_series_stay_index_aligned(data_root: Path) -> None:
+    run_dir = data_root / "experiments" / "synthetic_experiment" / "20260427143012_1_1_0_1_20_30_5_2_180_66"
+    view = build_run_view(run_dir)
+    series = view["series"]
+    track = series["assets"][view["assets"]["names"][0]]
+
+    assert series["point_count"] > 0
+    assert len(track["price"]) == series["point_count"]
+    assert len(track["log_return"]) == series["point_count"]
+    assert len(series["step"]) == series["point_count"]
+
+
+def test_run_view_payload_is_json_serialisable(data_root: Path) -> None:
+    """Missing pandas values must leave as ``null``, never as ``NaN`` tokens."""
+
+    run_dir = data_root / "latest"
+    encoded = json.dumps(build_run_view(run_dir))
+
+    assert "NaN" not in encoded
+    assert "Infinity" not in encoded
+
+
+def test_run_view_reports_insufficient_observations_instead_of_failing(data_root: Path) -> None:
+    run_dir = data_root / "latest"
+    view = build_run_view(run_dir, phase="warmup")
+
+    primary = view["assets"]["names"][0]
+    assert view["diagnostic_status"] == "insufficient_observations"
+    assert view["diagnostic_message"]
+    verdicts = {fact["assets"][primary]["verdict"] for fact in view["stylised_facts"]}
+    assert verdicts == {"unavailable"}
+
+
+def test_catalogue_endpoint_lists_every_run(client: TestClient) -> None:
+    payload = client.get("/api/catalogue").json()
+
+    assert payload["run_count"] == 4
+    assert payload["data_root_exists"] is True
+    assert payload["experiment_count"] == len(payload["experiments"])
+
+
+def test_run_endpoint_returns_the_statistics_payload(client: TestClient) -> None:
+    response = client.get(
+        "/api/run",
+        params={"path": "experiments/synthetic_experiment/20260427143012_1_1_0_1_20_30_5_2_180_66"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["run_id"] == "20260427143012_1_1_0_1_20_30_5_2_180_66"
+    assert payload["phase"] == "simulation"
+    assert len(payload["metric_groups"]) == 3
+    assert payload["assets"]["count"] == 1
+    assert payload["autocorrelation"]["available"] is True
+
+
+def test_run_endpoint_rejects_a_path_outside_the_archive(client: TestClient) -> None:
+    response = client.get("/api/run", params={"path": "../../etc"})
+
+    assert response.status_code == 404
+
+
+def test_run_endpoint_reports_an_unknown_price_column(client: TestClient) -> None:
+    response = client.get(
+        "/api/run",
+        params={
+            "path": "experiments/synthetic_experiment/20260427143012_1_1_0_1_20_30_5_2_180_66",
+            "price_column": "not_a_column",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "not_a_column" in response.json()["detail"]
+
+
+def test_index_page_is_served(client: TestClient) -> None:
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Market statistics" in response.text
+
+
+# --------------------------------------------------------------------------
+# The asset dimension
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def multi_asset_root(tmp_path: Path) -> Path:
+    """Build an archive holding one two-asset run.
+
+    ``write_synthetic_asset_timeseries`` is additive and ``write_synthetic_run``
+    creates the directory, so the order matters. The root sits beside, not
+    inside, ``data_root``'s, because a test may request both fixtures.
+    """
+
+    root = tmp_path / "multi_asset_data"
+    experiment_dir = root / "experiments" / "two_asset"
+    experiment_dir.mkdir(parents=True)
+    run_dir = experiment_dir / SYNTHETIC_RUN_ID
+    write_synthetic_run(run_dir, SYNTHETIC_RUN_ID, 66, 0.0)
+    write_synthetic_asset_timeseries(run_dir, ["alpha", "beta"])
+    return root
+
+
+@pytest.fixture()
+def multi_asset_run(multi_asset_root: Path) -> Path:
+    """Return the two-asset run directory."""
+
+    return multi_asset_root / "experiments" / "two_asset" / SYNTHETIC_RUN_ID
+
+
+def single_asset_run(data_root: Path) -> Path:
+    """Return the standard single-asset synthetic run."""
+
+    return data_root / "experiments" / "synthetic_experiment" / SYNTHETIC_RUN_ID
+
+
+def test_multi_asset_run_reports_every_traded_market(multi_asset_run: Path) -> None:
+    assets = build_run_view(multi_asset_run)["assets"]
+
+    assert assets["names"] == ["alpha", "beta"]
+    assert assets["count"] == 2
+    assert assets["is_multi_asset"] is True
+    assert assets["source"] == "asset_timeseries"
+    assert assets["primary"] == "alpha"
+    assert assets["fundamental_correlation"] == pytest.approx(0.3)
+
+
+def test_single_asset_run_reports_one_column(data_root: Path) -> None:
+    assets = build_run_view(single_asset_run(data_root))["assets"]
+
+    assert assets["count"] == 1
+    assert assets["is_multi_asset"] is False
+    assert assets["source"] == "step_timeseries"
+
+
+def test_every_metric_carries_a_value_for_every_asset(multi_asset_run: Path) -> None:
+    view = build_run_view(multi_asset_run)
+    names = set(view["assets"]["names"])
+
+    for group in view["metric_groups"]:
+        for metric in group["metrics"]:
+            if metric["scope"] == "primary":
+                # A primary-only statistic must not be repeated under another
+                # market's heading, so its row carries exactly one value.
+                assert set(metric["values"]) == {view["assets"]["primary"]}
+            else:
+                assert set(metric["values"]) == names
+
+
+def test_asset_metric_values_match_the_diagnostics_module(multi_asset_run: Path) -> None:
+    """The per-asset columns must not become a second implementation either."""
+
+    view = build_run_view(multi_asset_run)
+    rows = {
+        str(row["asset"]): row
+        for row in run_asset_stylised_fact_diagnostics(multi_asset_run)
+    }
+    returns_group = next(group for group in view["metric_groups"] if group["key"] == "returns")
+    metrics = {metric["label"]: metric["values"] for metric in returns_group["metrics"]}
+
+    for asset in view["assets"]["names"]:
+        assert metrics["Excess kurtosis"][asset] == pytest.approx(rows[asset]["excess_kurtosis"])
+        assert metrics["Skewness"][asset] == pytest.approx(rows[asset]["skewness"])
+        assert metrics["Jarque–Bera p"][asset] == pytest.approx(rows[asset]["jarque_bera_p_value"])
+
+
+def test_metrics_no_longer_explain_themselves(multi_asset_run: Path) -> None:
+    """The tables show numbers; the prose that used to sit under each was removed."""
+
+    view = build_run_view(multi_asset_run)
+
+    for group in view["metric_groups"]:
+        for metric in group["metrics"]:
+            assert "description" not in metric
+
+
+def test_stylised_facts_report_a_verdict_per_asset(multi_asset_run: Path) -> None:
+    view = build_run_view(multi_asset_run)
+    names = set(view["assets"]["names"])
+
+    assert len(view["stylised_facts"]) == 3
+    for fact in view["stylised_facts"]:
+        assert set(fact["assets"]) == names
+        for entry in fact["assets"].values():
+            assert entry["verdict"] in VERDICT_TOKENS
+            assert len(entry["evidence"]) == 2
+
+
+def test_series_expose_one_track_per_asset(multi_asset_run: Path) -> None:
+    view = build_run_view(multi_asset_run)
+    series = view["series"]
+
+    assert set(series["assets"]) == set(view["assets"]["names"])
+    for track in series["assets"].values():
+        assert len(track["price"]) == series["point_count"]
+        assert len(track["log_return"]) == series["point_count"]
+        assert track["base_price"] is not None
+    assert len(series["step"]) == series["point_count"]
+
+
+def test_autocorrelation_reports_one_function_per_asset(multi_asset_run: Path) -> None:
+    autocorrelation = build_run_view(multi_asset_run)["autocorrelation"]
+
+    assert autocorrelation["available"] is True
+    bands = []
+    for entry in autocorrelation["assets"].values():
+        assert len(entry["raw"]) == len(entry["lag"])
+        assert len(entry["absolute"]) == len(entry["lag"])
+        assert len(entry["squared"]) == len(entry["lag"])
+        bands.append(entry["confidence_band"])
+    # One shaded region is drawn, so the shared band must be the widest.
+    assert autocorrelation["confidence_band"] == pytest.approx(max(bands))
+
+
+def test_return_distribution_reports_one_density_per_asset(multi_asset_run: Path) -> None:
+    distribution = build_run_view(multi_asset_run)["return_distribution"]
+
+    assert distribution["available"] is True
+    for entry in distribution["assets"].values():
+        assert entry["available"] is True
+        assert len(entry["density"]) == len(entry["bin_centre"])
+
+
+def test_cross_asset_panel_requires_two_markets(multi_asset_run: Path, data_root: Path) -> None:
+    cross_asset = build_run_view(multi_asset_run)["cross_asset"]
+
+    assert cross_asset["available"] is True
+    assert cross_asset["asset_a"] == "alpha"
+    assert cross_asset["asset_b"] == "beta"
+    assert cross_asset["configured_correlation"] == pytest.approx(0.3)
+    assert len(cross_asset["rolling_correlation"]) == len(cross_asset["step"])
+    assert len(cross_asset["price_ratio"]) == len(cross_asset["step"])
+
+    assert build_run_view(single_asset_run(data_root))["cross_asset"]["available"] is False
+
+
+def test_multi_asset_payload_is_json_serialisable(multi_asset_run: Path) -> None:
+    encoded = json.dumps(build_run_view(multi_asset_run))
+
+    assert "NaN" not in encoded
+    assert "Infinity" not in encoded
+
+
+# --------------------------------------------------------------------------
+# The awkward archives
+# --------------------------------------------------------------------------
+
+
+def test_warmup_phase_falls_back_to_the_primary_market(multi_asset_run: Path) -> None:
+    """The per-asset artefact has no warm-up index, so the page must not blank.
+
+    ``asset_timeseries.csv`` leaves ``simulation_step`` empty for initial and
+    warm-up rows, and the panel loader indexes on that column, so asking for the
+    warm-up phase yields nothing per asset.
+    """
+
+    view = build_run_view(multi_asset_run, phase="warmup")
+
+    assert view["assets"]["source"] == "step_timeseries"
+    assert view["assets"]["count"] == 1
+    assert view["assets"]["notes"]
+    assert view["cross_asset"]["available"] is False
+    assert len(view["metric_groups"]) == 3
+
+
+def test_all_phase_notes_the_per_asset_step_index_limitation(multi_asset_run: Path) -> None:
+    view = build_run_view(multi_asset_run, phase="all")
+
+    assert view["assets"]["source"] == "asset_timeseries"
+    assert any("simulation phase only" in note for note in view["assets"]["notes"])
+
+
+def test_a_truncated_asset_artefact_keeps_the_full_statistics(tmp_path: Path) -> None:
+    """One inconsistent artefact must not silently truncate a run's statistics.
+
+    Gating on the presence of ``asset_timeseries.csv`` rather than on the number
+    of assets it records would drop this run from a full return series to a
+    handful of rows, and report "insufficient observations" for a run that has
+    plenty. This is ``data/latest``'s shape in the project's own archive.
+    """
+
+    run_dir = tmp_path / "truncated" / SYNTHETIC_RUN_ID
+    run_dir.parent.mkdir(parents=True)
+    write_synthetic_run(run_dir, SYNTHETIC_RUN_ID, 66, 0.0)
+    write_synthetic_asset_timeseries(run_dir, ["alpha"], observations=20)
+
+    view = build_run_view(run_dir)
+    expected = run_stylised_fact_diagnostics(run_dir)
+
+    assert view["assets"]["source"] == "step_timeseries"
+    assert view["observation_count"] == expected["observation_count"]
+    assert view["diagnostic_status"] == "completed"
+
+
+def test_an_asset_artefact_naming_another_asset_is_reported(tmp_path: Path) -> None:
+    """When the artefact and the config disagree on names, say so."""
+
+    run_dir = tmp_path / "mismatch" / SYNTHETIC_RUN_ID
+    run_dir.parent.mkdir(parents=True)
+    write_synthetic_run(run_dir, SYNTHETIC_RUN_ID, 66, 0.0)
+    write_synthetic_asset_timeseries(run_dir, ["test_asset"], observations=20)
+
+    configuration = json.loads((run_dir / "config.json").read_text(encoding="utf-8"))
+    configuration["assets"]["primary"] = "asset"
+    (run_dir / "config.json").write_text(json.dumps(configuration), encoding="utf-8")
+
+    view = build_run_view(run_dir)
+
+    assert view["assets"]["source"] == "step_timeseries"
+    assert any("test_asset" in note for note in view["assets"]["notes"])
+
+
+# --------------------------------------------------------------------------
+# Agents
+# --------------------------------------------------------------------------
+
+
+def test_agent_panel_summarises_each_strategy(data_root: Path) -> None:
+    agents = build_run_view(single_asset_run(data_root))["agents"]
+
+    assert agents["available"] is True
+    assert agents["agent_count"] == 12
+    assert agents["strategy_column"] == "current_strategy_type"
+    counts = {row["strategy"]: row["agent_count"] for row in agents["rows"]}
+    assert counts == {"chartist": 7, "fundamentalist": 5}
+
+
+def test_agent_summary_matches_the_plots_module(data_root: Path) -> None:
+    run_dir = single_asset_run(data_root)
+    agents = build_run_view(run_dir)["agents"]
+    expected = build_agent_summary_statistics(run_dir.parent, [run_dir.name])
+
+    by_strategy = expected.set_index("current_strategy_type")
+    for row in agents["rows"]:
+        assert row["final_wealth_mean"] == pytest.approx(
+            by_strategy.loc[row["strategy"], "final_wealth_mean"]
+        )
+
+
+def test_agent_wealth_distribution_uses_shared_bins(data_root: Path) -> None:
+    distribution = build_run_view(single_asset_run(data_root))["agents"]["wealth_distribution"]
+
+    assert distribution["available"] is True
+    assert len(distribution["strategies"]) == 2
+    for entry in distribution["strategies"]:
+        assert len(entry["density"]) == len(distribution["bin_centre"])
+
+
+def test_wealth_gini_moved_from_the_market_table_to_the_agent_panel(data_root: Path) -> None:
+    view = build_run_view(single_asset_run(data_root))
+
+    market = next(group for group in view["metric_groups"] if group["key"] == "market")
+    assert all(metric["label"] != "Wealth Gini (final)" for metric in market["metrics"])
+
+    gini = next(
+        metric for metric in view["agents"]["metrics"] if metric["label"] == "Wealth Gini (final)"
+    )
+    assert gini["source"] == "simulator summary"
+    assert gini["value"] is not None
+
+
+def test_agent_panel_reports_absence_without_failing(data_root: Path) -> None:
+    """A missing snapshot must say so, not make the panel vanish."""
+
+    run_dir = single_asset_run(data_root)
+    (run_dir / "agents_final.csv").unlink()
+
+    agents = build_run_view(run_dir)["agents"]
+
+    assert agents["available"] is False
+    assert agents["message"]
+    assert agents["rows"] == []
+    assert agents["wealth_distribution"]["available"] is False
+    # The Gini is a simulator scalar, so it survives the snapshot's absence.
+    assert any(metric["label"] == "Wealth Gini (final)" for metric in agents["metrics"])
+
+
+def test_single_strategy_population_still_renders(data_root: Path) -> None:
+    run_dir = single_asset_run(data_root)
+    agents = pd.read_csv(run_dir / "agents_final.csv")
+    agents["current_strategy_type"] = "noise_trader"
+    agents.to_csv(run_dir / "agents_final.csv", index=False)
+
+    panel = build_run_view(run_dir)["agents"]
+
+    assert len(panel["rows"]) == 1
+    assert panel["rows"][0]["strategy"] == "noise_trader"
+    assert panel["rows"][0]["agent_count"] == 12
+    assert len(panel["wealth_distribution"]["strategies"]) == 1
+
+
+# --------------------------------------------------------------------------
+# Application wiring
+# --------------------------------------------------------------------------
+
+
+def test_archive_generation_tracks_every_artefact_the_view_reads(multi_asset_run: Path) -> None:
+    """A stale cache key would serve numbers from a superseded archive."""
+
+    baseline = _archive_generation(multi_asset_run)
+
+    for filename in ("agents_final.csv", "asset_timeseries.csv", "config.json"):
+        path = multi_asset_run / filename
+        path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+        assert _archive_generation(multi_asset_run) != baseline, filename
+        baseline = _archive_generation(multi_asset_run)
+
+
+def test_run_endpoint_serves_the_multi_asset_payload(multi_asset_root: Path) -> None:
+    client = TestClient(create_app(multi_asset_root))
+
+    response = client.get(
+        "/api/run", params={"path": f"experiments/two_asset/{SYNTHETIC_RUN_ID}"}
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["assets"]["count"] == 2
+    assert payload["cross_asset"]["available"] is True
+    assert payload["agents"]["available"] is True
+    assert len(payload["metric_groups"]) == 3

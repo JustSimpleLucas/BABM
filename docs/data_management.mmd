@@ -44,6 +44,7 @@ flowchart LR
         seedRobustnessReport["robustness_reports/latest_seed_robustness report with cross-seed tests, convergence, verdicts, and CSV exports"]
         benchmarkImport["empirical benchmark CSV and manifest import"]
         inspectRun["db inspect-run provenance summary"]
+        webDashboard["abm_analysis web read-only local dashboard over data/ with per-asset statistics and agent outcomes"]
     end
 
     subgraph calibrationStore["Calibration Study Outputs"]
@@ -129,6 +130,15 @@ flowchart LR
     seedReplication --> noteJobs
     calibrateCli --> noteJobs
 
+    runFolder --> webDashboard
+    calibrationDir --> webDashboard
+    assetTimeSeries --> webDashboard
+    agents --> webDashboard
+    noteWebReadOnly["web serves statistics recomputed by statistics/diagnostics.py and statistics/multi_asset.py, plus agent outcomes via plots/agents.py; it never simulates and never writes to data/"]
+    webDashboard --> noteWebReadOnly
+    noteWebAssetGate["web reports per-asset statistics only when asset_timeseries.csv records two or more assets, so an archive whose per-asset artefact disagrees with its step series keeps the single-asset numbers"]
+    webDashboard --> noteWebAssetGate
+
     classDef producer fill:#eff6ff,stroke:#60a5fa,stroke-width:1px,color:#0f172a
     classDef staging fill:#fff7ed,stroke:#fb923c,stroke-width:1px,color:#0f172a
     classDef database fill:#eef2ff,stroke:#6366f1,stroke-width:1px,color:#0f172a
@@ -139,5 +149,5 @@ flowchart LR
     class runFolder,configSnapshot,metadata,timeSeries,assetTimeSeries,agents,optionalLedger,metrics staging
     class calibrationDir,calibrationTrials,calibrationBest,calibrationReports staging
     class experiments,runs,sqlTimeSeries,sqlAssetTimeSeries,sqlAgents,sqlLedger,sqlMetrics,sqlMechanisms,sqlBenchmarks,audit database
-    class dbCli,compressCli,seedReplication,calibrateCli,robustnessCli,sqlReports,staticFigures,fileFallback,seedRobustnessReport,benchmarkImport,inspectRun analysis
-    class noteNoPaths,notePrune,noteHashes,noteCompress,noteGuard,noteJobs policy
+    class dbCli,compressCli,seedReplication,calibrateCli,robustnessCli,sqlReports,staticFigures,fileFallback,seedRobustnessReport,benchmarkImport,inspectRun,webDashboard analysis
+    class noteNoPaths,notePrune,noteHashes,noteCompress,noteGuard,noteJobs,noteWebReadOnly,noteWebAssetGate policy

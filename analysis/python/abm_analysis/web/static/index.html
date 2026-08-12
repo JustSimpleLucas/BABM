@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BABM — Market statistics</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/vendor/plotly.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">BABM</span>
+      <span class="brand-title">Market statistics</span>
+    </div>
+    <div class="header-controls">
+      <label class="control">
+        <span>Phase</span>
+        <select id="phase-select">
+          <option value="simulation">Simulation only</option>
+          <option value="all">All rows (incl. warm-up)</option>
+          <option value="warmup">Warm-up only</option>
+        </select>
+      </label>
+      <label class="control">
+        <span>Price column</span>
+        <select id="price-column-select">
+          <option value="market_price">market_price</option>
+          <option value="last_trade_price">last_trade_price</option>
+          <option value="mid_quote">mid_quote</option>
+          <option value="fundamental_price">fundamental_price</option>
+        </select>
+      </label>
+      <div class="archive-root" id="archive-root" title="Archive root being served"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <input type="search" id="run-search" placeholder="Filter runs…" autocomplete="off">
+        <div class="sidebar-count" id="sidebar-count"></div>
+      </div>
+      <nav class="run-list" id="run-list"></nav>
+    </aside>
+
+    <main class="content" id="content">
+      <div class="placeholder" id="placeholder">
+        <h1>Select a run</h1>
+        <p>
+          Every archived run under the data root is listed on the left. Choosing one
+          recomputes its statistics from the run's own artefacts — the same functions
+          the static HTML reports use — with one column per traded market.
+        </p>
+      </div>
+
+      <article class="run-view" id="run-view" hidden>
+        <section class="run-heading">
+          <h1 id="run-id"></h1>
+          <div class="run-provenance" id="run-provenance"></div>
+          <div class="run-parameters" id="run-parameters"></div>
+          <div class="asset-legend" id="asset-legend"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Stylised facts</h2>
+          </div>
+          <div class="fact-grid" id="fact-grid"></div>
+        </section>
+
+        <section id="metric-sections"></section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Price path</h2>
+            <div class="segmented" id="price-scale" role="group" aria-label="Price scale">
+              <button type="button" data-value="level">Level</button>
+              <button type="button" data-value="indexed">Indexed</button>
+            </div>
+          </div>
+          <div class="chart" id="chart-price"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Log returns</h2>
+          </div>
+          <div class="chart" id="chart-returns"></div>
+        </section>
+
+        <section class="panel" id="cross-asset-panel" hidden>
+          <div class="panel-heading">
+            <h2>Cross-asset</h2>
+          </div>
+          <div class="metric-grid" id="cross-asset-metrics"></div>
+          <div class="panel-pair">
+            <div class="chart" id="chart-correlation"></div>
+            <div class="chart" id="chart-price-ratio"></div>
+          </div>
+        </section>
+
+        <div class="panel-pair">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Return distribution</h2>
+            </div>
+            <div class="chart" id="chart-distribution"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Autocorrelation</h2>
+              <div class="segmented" id="acf-series" role="group" aria-label="Autocorrelation series">
+                <button type="button" data-value="all">All</button>
+                <button type="button" data-value="raw">Raw</button>
+                <button type="button" data-value="absolute">|r|</button>
+                <button type="button" data-value="squared">r²</button>
+              </div>
+            </div>
+            <div class="chart" id="chart-autocorrelation"></div>
+          </section>
+        </div>
+
+        <section class="panel" id="agent-panel">
+          <div class="panel-heading">
+            <h2>Agents</h2>
+          </div>
+          <div class="metric-grid" id="agent-metrics"></div>
+          <div class="table-scroll" id="agent-table"></div>
+          <div class="chart" id="chart-agent-wealth"></div>
+          <p class="panel-message" id="agent-message" hidden></p>
+        </section>
+
+        <footer class="run-footer" id="run-footer"></footer>
+      </article>
+
+      <div class="status" id="status" hidden></div>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

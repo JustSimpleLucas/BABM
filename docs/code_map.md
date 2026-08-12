@@ -272,7 +272,7 @@ the `abm-analysis` script.
 | `cli.py` | The `main()` entry point: builds the parser, dispatches to a handler. |
 | `cli_parser.py` | Builds the top-level parser and lets each module in `commands/` register its own subcommand, in the order they appear in `--help`. |
 | `cli_arguments.py` | Option groups shared by more than one command (`--benchmark-*`, `--source`, database URL, `--figure-formats`). |
-| `commands/` | One module per subcommand (`run`, `compare`, `replicate`, `robustness`, `compress`, `calibrate`, `db`), each pairing its parser with its handler. |
+| `commands/` | One module per subcommand (`run`, `compare`, `replicate`, `robustness`, `compress`, `calibrate`, `db`, `web`), each pairing its parser with its handler. |
 | `cli_handlers.py` | Helpers shared by more than one command handler: benchmark-directory resolution and the import/optional-output printers. |
 | `environment.py` | Local environment setup for reproducible analysis runs. |
 
@@ -389,7 +389,29 @@ the queryable research store.
 | `audit.py` | Records the import audit trail. |
 | `validation.py` | Thesis-scale validation checks over imported data. |
 
-### 3.8 Python tests (`tests/python/`)
+### 3.8 Local dashboard (`web/`)
+
+A read-only FastAPI application for browsing the archive without generating a
+report first. It never simulates and never writes to `data/`; every statistic it
+serves is recomputed by `statistics/diagnostics.py` and `statistics/multi_asset.py`,
+so the dashboard and the citable static reports cannot disagree.
+
+Statistics are reported **per traded asset**: a run configured with two assets
+gets one column per market in every table and one line per market in every chart.
+
+| File | Function |
+| --- | --- |
+| `web/__init__.py` | Package docstring and the `create_app` / `serve` public API. |
+| `web/app.py` | The FastAPI application: the catalogue and run endpoints, the single-page interface, and the Plotly bundle served from the installed `plotly` package so the dashboard works offline. Caches each run's payload against a change stamp over all six artefacts it reads (`CACHE_KEY_ARTEFACTS`), because the GARCH fit dominates the cost of opening a run and `config.json` alone decides the asset universe. |
+| `web/catalogue.py` | Walks the data root and treats any directory holding `step_timeseries.csv` as a run, grouping runs by their parent. This is why `data/experiments/<name>/`, `data/calibration/<study>/simulation_runs/`, and `data/latest` are all found without hard-coding the three layouts. Also performs the containment check on client-supplied run paths. |
+| `web/run_view.py` | Assembles one run's payload: identity, parameters, the three metric tables (return moments, serial dependence, market outcomes) with a value per asset, and the stylised-fact verdicts with their evidence per asset. Delegates the asset and agent dimensions to the two modules below. |
+| `web/asset_view.py` | The per-asset half. `resolve_asset_context()` is the **only** place that decides whether a run is read from `asset_timeseries.csv` or `step_timeseries.csv`, gating on `len(list_assets(run_dir)) >= 2` rather than on the artefact's presence — see its docstring for the inconsistent-archive case that distinction protects. Also builds the per-asset series, distributions, autocorrelations, and the cross-asset panel. |
+| `web/agent_view.py` | The agent panel: the per-strategy table (via `plots.agents.build_agent_summary_statistics`, the same function behind the report's table) and the shared-bin final-wealth density per strategy. Reads the wealth Gini from `summary_metrics.csv`; the authoritative implementation is the simulator's. |
+| `web/metrics.py` | Cell builders and column helpers shared by the two view modules. Keeping them here rather than in either view is what stops the three modules importing each other in a circle. |
+| `web/serialisation.py` | Converts pandas/NumPy values to JSON primitives, mapping every non-finite value to `null` so an uncomputable diagnostic reads as absent rather than as a number. |
+| `web/static/` | The single-page interface: `index.html`, `styles.css` (light and dark, with the asset colour key), `app.js` (formatting, run selection, the metric tables, and the Plotly charts). Holds no analysis logic; the price-scale and autocorrelation switches redraw from the payload already in memory and never refetch. |
+
+### 3.9 Python tests (`tests/python/`)
 
 | File | Covers |
 | --- | --- |
@@ -411,8 +433,9 @@ the queryable research store.
 | `test_static_export.py` | Kaleido figure export. |
 | `test_schema_sync.py` | **Cross-language guard** — asserts the C++ writer header literals, the Python required-column sets, and the PostgreSQL column tuples all still agree. This is the test that fails when a C++ CSV column changes without a Python update. |
 | `test_repository_hygiene.py` | Repository conventions (stray files, ignored paths). |
+| `test_web_app.py` | Dashboard run discovery across all three archive layouts, the data-root containment check, per-asset reporting for multi-asset runs, the agent panel, and the guarantee that the served metrics equal `statistics/diagnostics.py`'s and `plots/agents.py`'s. Also pins the awkward archives: the warm-up phase falling back to the primary market, and an `asset_timeseries.csv` that disagrees with its own run. |
 
-### 3.9 Standalone script
+### 3.10 Standalone script
 
 | File | Function |
 | --- | --- |

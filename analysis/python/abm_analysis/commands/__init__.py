@@ -9,9 +9,9 @@ arguments, and the handler it dispatches to.
 
 from __future__ import annotations
 
-from . import calibrate, compare, compress, db, replicate, robustness, run
+from . import calibrate, compare, compress, db, replicate, robustness, run, web
 
 #: Registration order fixes the order subcommands appear in ``--help``.
-COMMAND_MODULES = (run, compare, replicate, robustness, compress, calibrate, db)
+COMMAND_MODULES = (run, compare, replicate, robustness, compress, calibrate, db, web)
 
 __all__ = ["COMMAND_MODULES"]
