@@ -47,8 +47,8 @@ from .artifacts import (
     _copy_best_runs,
     _prune_calibration_csv_artifacts,
     _write_best_config,
-    _write_best_runs_robustness_report_safely,
-    _write_calibration_report_safely,
+    _write_best_runs_robustness_tables_safely,
+    _write_calibration_tables_safely,
     _write_holdout_validation,
     _write_summary,
 )
@@ -282,17 +282,12 @@ def run_calibration(
     )
     best_runs_dir = _copy_best_runs(output_dir, best_seed_runs)
     best_trial_number = int(best_validation["trial_number"])
-    calibration_report_path = _write_calibration_report_safely(
+    calibration_tables_dir = _write_calibration_tables_safely(
         output_dir=output_dir,
-        options=options,
-        settings=settings,
         candidate_summary=_build_candidate_summary_frame(validation_results, best_trial_number),
         candidate_verdicts=_build_candidate_verdicts_frame(validation_results),
-        best_trial_number=best_trial_number,
-        validation_seed_count=len(validation_seeds),
-        estimated_total_runs=estimated_total_runs,
     )
-    best_runs_report_path = _write_best_runs_robustness_report_safely(
+    best_runs_robustness_tables_dir = _write_best_runs_robustness_tables_safely(
         best_runs_dir=best_runs_dir,
         output_dir=output_dir,
         options=options,
@@ -323,16 +318,17 @@ def run_calibration(
         search_seeds=search_seeds,
         estimated_total_runs=estimated_total_runs,
         robustness_verdicts_status=robustness_verdicts_status,
-        calibration_report_path=calibration_report_path,
-        best_runs_report_path=best_runs_report_path,
+        calibration_tables_dir=calibration_tables_dir,
+        best_runs_robustness_tables_dir=best_runs_robustness_tables_dir,
     )
     print(f"Calibration summary: {summary_path}")
     print(f"Best config: {best_config_path}")
     print(f"Best runs: {best_runs_dir}")
-    if calibration_report_path is not None:
-        print(f"Calibration report: {calibration_report_path}")
-    if best_runs_report_path is not None:
-        print(f"Best-runs robustness report: {best_runs_report_path}")
+    print(f"Holdout validation: {holdout_path}")
+    if calibration_tables_dir is not None:
+        print(f"Calibration tables: {calibration_tables_dir}")
+    if best_runs_robustness_tables_dir is not None:
+        print(f"Best-runs robustness tables: {best_runs_robustness_tables_dir}")
     return output_dir
 
 def _resolve_settings(options: CalibrationOptions) -> CalibrationSettings:

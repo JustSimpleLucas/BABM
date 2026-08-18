@@ -5,6 +5,7 @@ target_sources(abm_output
         AssetTimeseriesCsvWriter.cpp
         ExperimentManifestWriter.cpp
         OutputSerialization.cpp
+        ProtagonistTimeseriesCsvWriter.cpp
         RunArtifactWriter.cpp
         RunMetadataWriters.cpp
         RunSummaryCsvWriter.cpp

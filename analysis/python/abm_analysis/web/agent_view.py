@@ -6,11 +6,11 @@ traders and a run of 340 fundamentalists against 300 chartists produce different
 markets by construction — so the dashboard reports outcomes broken down by the
 strategy each agent was running at the end of the simulation.
 
-The per-strategy aggregation is ``plots.agents.build_agent_summary_statistics``,
-the same function behind the static report's Agent Summary Statistics table, so
-the two cannot disagree. No Gini is computed here: the authoritative
-implementation is the simulator's, and its result is read from
-``summary_metrics.csv``.
+The per-strategy aggregation is
+``statistics.agents.build_agent_summary_statistics``, the same function that
+writes the exported agent tables, so the two cannot disagree. No Gini is
+computed here: the authoritative implementation is the simulator's, and its
+result is read from ``summary_metrics.csv``.
 """
 
 from __future__ import annotations
@@ -21,9 +21,10 @@ from typing import Any
 import pandas as pd
 
 from abm_analysis.archive.archives import RunArchive
-from abm_analysis.archive.data import read_csv_if_exists
-from abm_analysis.plots.agents import build_agent_summary_statistics
-from abm_analysis.plots.common import AGENT_STRATEGY_COLUMN_CANDIDATES
+from abm_analysis.statistics.agents import (
+    AGENT_STRATEGY_COLUMN_CANDIDATES,
+    build_agent_summary_statistics,
+)
 from abm_analysis.web.metrics import (
     SIMULATOR_SUMMARY_SOURCE,
     density_histogram,
@@ -55,6 +56,7 @@ WEALTH_DISTRIBUTION_BINS = 40
 
 def build_agent_view(
     archive: RunArchive,
+    agents: pd.DataFrame,
     summary_metrics: dict[str, Any],
 ) -> dict[str, Any]:
     """Build the agent panel for one run.
@@ -63,9 +65,12 @@ def build_agent_view(
     the panel still shows the wealth Gini and states why the rest is missing.
     A panel that silently disappears leaves a reader unable to tell an absent
     artefact from a run with no agents.
+
+    ``agents`` is the frame ``metrics.read_agent_snapshot`` produced, passed in
+    rather than read here so that this panel and the protagonist panel describe
+    exactly the same population.
     """
 
-    agents = _agent_snapshot(archive)
     gini = metric(
         "Wealth Gini (final)",
         summary_metrics.get("final_wealth_gini_coefficient"),
@@ -104,23 +109,6 @@ def build_agent_view(
         "rows": _strategy_rows(summary, strategy_column),
         "wealth_distribution": _wealth_distribution(agents, strategy_column),
     }
-
-
-def _agent_snapshot(archive: RunArchive) -> pd.DataFrame:
-    """Read one run's end-of-run agent snapshot, with the derived wealth change.
-
-    ``wealth_change`` is derived the same way ``plots.agents`` derives it, so
-    the dashboard's column and the report's column mean the same thing.
-    """
-
-    agents = read_csv_if_exists(archive.agents_final_csv)
-    if agents.empty:
-        return agents
-    if "initial_wealth" in agents.columns and "final_wealth" in agents.columns:
-        agents["wealth_change"] = pd.to_numeric(
-            agents["final_wealth"], errors="coerce"
-        ) - pd.to_numeric(agents["initial_wealth"], errors="coerce")
-    return agents
 
 
 def _strategy_column(agents: pd.DataFrame) -> str | None:

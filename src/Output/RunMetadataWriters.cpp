@@ -3,6 +3,7 @@
 #include "Output/RunMetadataWriters.h"
 
 #include "Config/ConfigKeyRegistry.h"
+#include "Config/SimulationConfigParsing.h"
 #include "Output/OutputSerialization.h"
 #include "Results/SimulationRunResult.h"
 
@@ -172,6 +173,16 @@ bool exportMetadataJson(const std::string& outputPath, const RuntimeConfig& runt
         out << "null";
     }
     out << ",\n";
+    out << R"(    "protagonist_timeseries_csv": )";
+    if (config.protagonist.enabled) {
+        out << '"'
+            << jsonEscape(portableMetadataPath(runtimeConfig.output.protagonistTimeseriesCsvPath,
+                                               referenceDirectory))
+            << '"';
+    } else {
+        out << "null";
+    }
+    out << ",\n";
     out << R"(    "trade_ledger_enabled": )" << jsonBool(runtimeConfig.output.tradeLedgerEnabled)
         << ",\n";
     out << R"(    "trade_ledger_csv": )";
@@ -219,7 +230,8 @@ bool exportMetadataJson(const std::string& outputPath, const RuntimeConfig& runt
     out << R"(    "transaction_cost_apply_to_forced_buy_ins": )"
         << jsonBool(config.transactionCosts.applyToForcedBuyIns) << ",\n";
     out << R"(    "chartist_strategy_mode": ")"
-        << jsonEscape(chartistStrategyModeLabel(config.chartist.strategyMode)) << R"(",)" << '\n';
+        << jsonEscape(config_parsing::chartistStrategyModeName(config.chartist.strategyMode))
+        << R"(",)" << '\n';
     out << R"(    "chartist_momentum_signal_threshold": )"
         << config.chartist.momentumSignalThreshold << ",\n";
     out << R"(    "chartist_breakout_window": )" << config.chartist.breakoutWindow << ",\n";
@@ -230,7 +242,12 @@ bool exportMetadataJson(const std::string& outputPath, const RuntimeConfig& runt
     out << R"(    "prospect_heterogeneity_enabled": )"
         << jsonBool(config.control.prospectParameterHeterogeneityEnabled) << ",\n";
     out << R"(    "social_enabled": )" << jsonBool(config.social.enabled) << ",\n";
-    out << R"(    "short_selling_enabled": )" << jsonBool(config.shortSellingEnabled) << '\n';
+    out << R"(    "short_selling_enabled": )" << jsonBool(config.shortSellingEnabled) << ",\n";
+    out << R"(    "protagonist_enabled": )" << jsonBool(config.protagonist.enabled) << ",\n";
+    out << R"(    "protagonist_name": ")" << jsonEscape(config.protagonist.name) << R"(",)" << '\n';
+    out << R"(    "protagonist_strategy": ")"
+        << jsonEscape(config_parsing::protagonistStrategyKindName(config.protagonist.strategy))
+        << R"(")" << '\n';
     out << "  },\n";
     out << R"(  "summary_metrics": {)" << '\n';
     out << R"(    "completed_steps": )" << stats.completedSteps << ",\n";
@@ -293,6 +310,16 @@ bool exportRunLog(const std::string& outputPath, const RuntimeConfig& runtimeCon
     out << "Noise traders: " << config.numNoiseTraders << '\n';
     out << "Buy-and-hold agents: " << config.numBuyAndHoldAgents << '\n';
     out << "Buy-and-hold target risky weight: " << config.buyAndHold.targetRiskyWeight << '\n';
+    out << "Protagonist enabled: " << boolToFlag(config.protagonist.enabled) << '\n';
+    if (config.protagonist.enabled) {
+        out << "Protagonist name: " << config.protagonist.name << '\n';
+        out << "Protagonist strategy: "
+            << config_parsing::protagonistStrategyKindName(config.protagonist.strategy) << '\n';
+        out << "Protagonist initial cash: " << config.protagonist.initialCash << '\n';
+        out << "Protagonist initial stock: " << config.protagonist.initialStock << '\n';
+        out << "Protagonist Prospect Theory enabled: "
+            << boolToFlag(config.protagonist.prospectTheoryEnabled) << '\n';
+    }
     out << "Fundamental shock stddev: " << config.fundamentalShockStdDev() << '\n';
     out << "Fundamental drift per step: " << config.fundamentalDriftPerStep() << '\n';
     out << "Minimum fundamental value: " << config.minimumFundamentalValue() << '\n';

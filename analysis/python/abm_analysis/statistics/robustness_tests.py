@@ -139,7 +139,7 @@ def build_adf_stationarity_table(
     """Run the Augmented Dickey-Fuller test on each seed's log returns.
 
     Stationary log returns are a prerequisite for the moment-based robustness
-    metrics (means, variances, kurtosis) to be well defined, so the report
+    metrics (means, variances, kurtosis) to be well defined, so the table
     verifies stationarity seed by seed. The null hypothesis is a unit root
     (Dickey & Fuller, 1979); rejecting it for (nearly) every seed supports
     treating the per-seed metrics as draws from one stationary process.

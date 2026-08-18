@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DEFAULT_DATABASE_URL_ENV = "ABM_DATABASE_URL"
 
-CURRENT_SCHEMA_VERSION = 9
+CURRENT_SCHEMA_VERSION = 10
 
 IMPORTER_PACKAGE_NAME = "abm-analysis"
 
@@ -25,6 +25,7 @@ SCHEMA_TABLE_NAMES = (
     "benchmark_prices",
     "mechanism_diagnostics",
     "agent_step_diagnostics",
+    "protagonist_timeseries",
     "import_audit",
 )
 
@@ -141,6 +142,7 @@ AGENT_SNAPSHOT_COLUMNS = (
     "prospect_gamma_gain",
     "prospect_gamma_loss",
     "prospect_scenario_count",
+    "is_protagonist",
 )
 
 TRADE_LEDGER_COLUMNS = (
@@ -206,6 +208,31 @@ SUMMARY_METRIC_COLUMNS = (
     "mean_traded_volume",
     "zero_return_share",
     "observation_count",
+    "protagonist_enabled",
+    "protagonist_strategy",
+    "protagonist_agent_id",
+    "protagonist_final_wealth",
+    "protagonist_final_wealth_percentile",
+)
+
+#: Per-step record of the protagonist against the population wealth
+#: cross-section. Present only for runs that configured one, which is why the
+#: table is imported on the optional path rather than the mandatory one.
+PROTAGONIST_TIMESERIES_COLUMNS = (
+    "run_id",
+    "simulation_step",
+    "agent_id",
+    "cash",
+    "primary_asset_stock",
+    "wealth",
+    "risky_weight",
+    "cumulative_trades",
+    "cumulative_traded_volume",
+    "cumulative_transaction_costs_paid",
+    "population_mean_wealth",
+    "population_median_wealth",
+    "wealth_percentile_rank",
+    "population_size",
 )
 
 STYLISED_FACT_COLUMNS = (
@@ -279,6 +306,7 @@ STAGING_ARTIFACTS = (
     "step_timeseries.csv",
     "asset_timeseries.csv",
     "agents_final.csv",
+    "protagonist_timeseries.csv",
     "trade_ledger.csv",
     "summary_metrics.csv",
     "stylised_facts.csv",
@@ -294,7 +322,7 @@ JSONB_TABLE_COLUMNS = {
 }
 
 BOOLEAN_TABLE_COLUMNS = {
-    "agent_snapshots": {"prospect_theory_enabled"},
+    "agent_snapshots": {"prospect_theory_enabled", "is_protagonist"},
     "summary_metrics": {
         "transaction_cost_affects_decisions",
         "transaction_cost_apply_to_forced_buy_ins",
@@ -302,6 +330,7 @@ BOOLEAN_TABLE_COLUMNS = {
         "prospect_heterogeneity_enabled",
         "social_enabled",
         "short_selling_enabled",
+        "protagonist_enabled",
     },
 }
 
@@ -359,6 +388,13 @@ COUNT_TABLE_COLUMNS = {
         "num_buy_and_hold_agents",
         "allocative_efficiency_observations",
         "observation_count",
+        "protagonist_agent_id",
+    },
+    "protagonist_timeseries": {
+        "simulation_step",
+        "agent_id",
+        "cumulative_trades",
+        "population_size",
     },
 }
 
@@ -379,6 +415,7 @@ PATH_LIKE_METADATA_KEYS = {
     "step_timeseries_csv",
     "asset_timeseries_csv",
     "agents_final_csv",
+    "protagonist_timeseries_csv",
     "trade_ledger_csv",
     "summary_metrics_csv",
     "stylised_facts_csv",
@@ -390,6 +427,7 @@ PATH_LIKE_CONFIG_KEYS = {
     "simulation_csv_output",
     "asset_timeseries_csv_output",
     "agent_csv_output",
+    "protagonist_timeseries_csv_output",
     "trade_ledger_csv_output",
     "summary_metrics_csv_output",
     "stylised_facts_csv_output",

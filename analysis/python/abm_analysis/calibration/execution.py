@@ -492,8 +492,6 @@ def _execute_simulation(
         "experiment_root": simulations_root,
         "experiment_name": experiment_name,
         "run_label": f"{phase}_trial_{trial_number:04d}_seed_{seed}",
-        "python_analysis_enabled": False,
-        "python_analysis_generate_comparison": False,
     }
     config_path.write_text(patch_config_text(base_config_text, config_updates), encoding="utf-8")
 

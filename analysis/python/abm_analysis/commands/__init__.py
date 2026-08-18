@@ -16,19 +16,16 @@ from __future__ import annotations
 
 import argparse
 
-from . import calibrate, compare, compress, convert_benchmarks, db, replicate, robustness, run, web
+from . import calibrate, compress, convert_benchmarks, db, replicate, web
 
 #: Registration order fixes the order subcommands appear in ``--help``.
 COMMAND_MODULES = (
-    run,
-    compare,
+    web,
     replicate,
-    robustness,
-    compress,
     calibrate,
+    compress,
     convert_benchmarks,
     db,
-    web,
 )
 
 __all__ = ["COMMAND_MODULES", "build_parser"]
@@ -40,8 +37,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m abm_analysis",
         description=(
-            "Generate Python-only diagnostics and static Plotly HTML reports "
-            "for behavioural-finance ABM experiment outputs."
+            "Browse, replicate and calibrate behavioural-finance ABM experiment "
+            "outputs. Start with 'web' to explore an archive."
         ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)

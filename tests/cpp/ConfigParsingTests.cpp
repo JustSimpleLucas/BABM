@@ -67,10 +67,7 @@ void testRuntimeConfigParsesProspectTheoryToggle(int& failures) {
         out << "database_output_enabled = 1\n";
         out << "database_url_env = ABM_TEST_DATABASE_URL\n";
         out << "database_prune_after_import = 1\n";
-        out << "python_analysis_enabled = 1\n";
         out << "python_analysis_python = python3\n";
-        out << "python_analysis_generate_comparison = 1\n";
-        out << "python_analysis_max_comparison_runs = 4\n";
     }
 
     try {
@@ -198,16 +195,8 @@ void testRuntimeConfigParsesProspectTheoryToggle(int& failures) {
             "config parser should read the database URL environment variable", failures);
         abm::test::expect(runtimeConfig.output.databasePruneAfterImport,
                           "config parser should read database_prune_after_import = 1", failures);
-        abm::test::expect(runtimeConfig.output.pythonAnalysisEnabled,
-                          "config parser should read python_analysis_enabled = 1", failures);
         abm::test::expect(runtimeConfig.output.pythonAnalysisPythonPath == "python3",
                           "config parser should read the Python analysis interpreter", failures);
-        abm::test::expect(runtimeConfig.output.pythonAnalysisComparisonEnabled,
-                          "config parser should read python_analysis_generate_comparison = 1",
-                          failures);
-        abm::test::expect(runtimeConfig.output.pythonAnalysisMaxComparisonRuns == 4,
-                          "config parser should read the automatic comparison max-run count",
-                          failures);
     } catch (const std::exception& error) {
         std::cerr << "FAIL: config parser should accept control_prospect_theory_enabled: "
                   << error.what() << '\n';
@@ -763,7 +752,74 @@ void testRuntimeConfigRejectsInvalidAssetProcessAndCorrelation(int& failures) {
     std::filesystem::remove(configPath);
 }
 
+void testRuntimeConfigParsesProtagonistSettings(int& failures) {
+    const std::filesystem::path configPath =
+        std::filesystem::temp_directory_path() / "abm_config_protagonist_test.cfg";
+
+    {
+        std::ofstream out(configPath);
+        out << "protagonist_enabled = 1\n";
+        out << "protagonist_name = Alex\n";
+        out << "protagonist_strategy = chartist\n";
+        out << "protagonist_chartist_rule = rsi\n";
+        out << "protagonist_initial_cash = 25000.0\n";
+        out << "protagonist_initial_stock = 42\n";
+        out << "protagonist_prospect_theory_enabled = 1\n";
+        out << "protagonist_loss_aversion = 3.75\n";
+        out << "protagonist_timeseries_csv_output = protagonist.csv\n";
+    }
+
+    const abm::RuntimeConfig runtimeConfig = abm::loadRuntimeConfig(configPath.string());
+    const abm::ProtagonistConfig& protagonist = runtimeConfig.simulation.protagonist;
+
+    abm::test::expect(protagonist.enabled, "config parser should read protagonist_enabled = 1",
+                      failures);
+    abm::test::expect(protagonist.name == "Alex", "config parser should read the protagonist name",
+                      failures);
+    abm::test::expect(protagonist.strategy == abm::ProtagonistStrategyKind::Chartist,
+                      "config parser should read the protagonist strategy", failures);
+    abm::test::expect(protagonist.chartistRule == abm::ChartistStrategyMode::RelativeStrengthIndex,
+                      "config parser should read the protagonist's explicit chartist rule",
+                      failures);
+    abm::test::expect(abm::test::nearlyEqual(protagonist.initialCash, 25000.0),
+                      "config parser should read the protagonist's cash endowment", failures);
+    abm::test::expect(abm::test::nearlyEqual(protagonist.initialStock, 42.0),
+                      "config parser should read the protagonist's share endowment", failures);
+    abm::test::expect(protagonist.prospectTheoryEnabled,
+                      "config parser should read the protagonist's CPT switch", failures);
+    abm::test::expect(abm::test::nearlyEqual(protagonist.lossAversion, 3.75),
+                      "config parser should read the protagonist's loss aversion", failures);
+
+    /*
+     * `random` is a legitimate value for the anonymous chartist population and a
+     * rejected one for the protagonist. Sampling his rule would make it depend
+     * on the seed, so it could not be stated in a write-up.
+     */
+    {
+        std::ofstream out(configPath);
+        out << "protagonist_chartist_rule = random\n";
+    }
+
+    try {
+        const abm::RuntimeConfig sampledRule = abm::loadRuntimeConfig(configPath.string());
+        static_cast<void>(sampledRule);
+        abm::test::expect(false, "config parser should reject a sampled protagonist rule",
+                          failures);
+    } catch (const std::invalid_argument& error) {
+        abm::test::expect(
+            std::string(error.what()).find("protagonist_chartist_rule") != std::string::npos,
+            "a sampled protagonist rule should be reported against its own key", failures);
+    } catch (const std::exception& error) {
+        std::cerr << "FAIL: sampled protagonist rule should throw invalid_argument: "
+                  << error.what() << '\n';
+        ++failures;
+    }
+
+    std::filesystem::remove(configPath);
+}
+
 void runConfigParsingTests(int& failures) {
+    testRuntimeConfigParsesProtagonistSettings(failures);
     testRuntimeConfigParsesMultiAssetDeclaration(failures);
     testRuntimeConfigRejectsMalformedAssetKeys(failures);
     testMultiAssetConfigRejectsLegacyScalarMixing(failures);

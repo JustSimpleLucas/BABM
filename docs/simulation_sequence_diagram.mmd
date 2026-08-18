@@ -115,16 +115,12 @@ sequenceDiagram
             else Artifacts written
                 Workflow-->>App: true
                 App->>Reporter: printCompletedSimulationSummary(runtimeConfig simulationResult metrics memoryUsage)
-                App->>Python: generatePostRunReports(runtimeConfig)
+                App->>Python: runPostRunProcessing(runtimeConfig)
                 opt Database output enabled
                     Python->>Python: abm_analysis db import-run on the staged run directory
-                    Note over Python: A failed import keeps staging artefacts for recovery and skips report generation.
+                    Note over Python: A failed import keeps staging artefacts for recovery.
                 end
-                Python->>Python: abm_analysis run report from database or file source
-                opt Experiment comparison enabled
-                    Python->>Python: abm_analysis compare into comparison_reports/latest
-                end
-                Python->>Browser: open single-run python_analysis/index.html
+                Note over Python: Nothing is rendered and no browser is opened. Results are read by starting abm_analysis web separately.
                 Python-->>App: PythonAnalysisRunResult
                 App->>App: printPythonAnalysisStatus(result)
                 App-->>CLI: Return success

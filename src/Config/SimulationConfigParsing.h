@@ -45,6 +45,27 @@ struct ConfigValueContext {
                                                              const std::filesystem::path& path,
                                                              std::size_t lineNumber);
 
+/** Returns the canonical config token for a chartist technical rule. */
+[[nodiscard]] std::string chartistStrategyModeName(ChartistStrategyMode mode);
+
+/** Parses the protagonist's trading rule family. */
+[[nodiscard]] ProtagonistStrategyKind
+parseProtagonistStrategyKind(const std::string& rawValue, const std::filesystem::path& path,
+                             std::size_t lineNumber);
+
+/** Returns the canonical config token for a protagonist trading rule. */
+[[nodiscard]] std::string protagonistStrategyKindName(ProtagonistStrategyKind strategy);
+
+/**
+ * Parses the protagonist's concrete technical rule.
+ *
+ * Accepts the same tokens as parseChartistStrategyMode except `random`: an
+ * identified individual's rule must be stated rather than sampled.
+ */
+[[nodiscard]] ChartistStrategyMode parseProtagonistChartistRule(const std::string& rawValue,
+                                                                const std::filesystem::path& path,
+                                                                std::size_t lineNumber);
+
 [[nodiscard]] ProspectReferencePointMode
 parseProspectReferencePointMode(const std::string& rawValue, const std::filesystem::path& path,
                                 std::size_t lineNumber);

@@ -15,68 +15,58 @@ import shutil
 from typing import Any
 import numpy as np
 import pandas as pd
-from abm_analysis.report import (
-    build_calibration_report,
-    build_comparison_report,
-    build_seed_robustness_report,
+from abm_analysis.exports import (
+    write_calibration_tables,
+    write_holdout_validation,
+    write_seed_robustness_tables,
 )
 from .config import patch_config_text
 from .execution import _prune_run_csv_artifacts
 from .models import CalibrationOptions, CalibrationSettings
 
 
-def _write_calibration_report_safely(
+def _write_calibration_tables_safely(
     *,
     output_dir: Path,
-    options: CalibrationOptions,
-    settings: CalibrationSettings,
     candidate_summary: pd.DataFrame,
     candidate_verdicts: pd.DataFrame,
-    best_trial_number: int,
-    validation_seed_count: int,
-    estimated_total_runs: int,
 ) -> Path | None:
-    """Write the cross-candidate report; a failure must not void the study."""
+    """Write the cross-candidate tables; a failure must not void the study."""
 
     try:
-        return build_calibration_report(
+        tables = write_calibration_tables(
             output_dir,
-            calibration_name=options.calibration_name,
             candidate_summary=candidate_summary,
             candidate_verdicts=candidate_verdicts,
-            best_trial_number=best_trial_number,
-            robustness_penalty_weight=settings.ranking.robustness_penalty_weight,
-            borderline_credit=settings.ranking.borderline_credit,
-            validation_seed_count=validation_seed_count,
-            estimated_total_runs=estimated_total_runs,
         )
-    except Exception as exc:  # noqa: BLE001 - report loss must not void hours of runs.
-        print(f"Warning: calibration report generation failed: {exc}")
+        return tables.output_dir
+    except Exception as exc:  # noqa: BLE001 - export loss must not void hours of runs.
+        print(f"Warning: calibration table export failed: {exc}")
         return None
 
-def _write_best_runs_robustness_report_safely(
+def _write_best_runs_robustness_tables_safely(
     *,
     best_runs_dir: Path,
     output_dir: Path,
     options: CalibrationOptions,
 ) -> Path | None:
-    """Write the winner's full seed-robustness report from its best_runs copies.
+    """Write the winner's seed-robustness tables from its best_runs copies.
 
     ``best_runs/`` holds exactly the winner's validation replicates, which is
-    the experiment-dir shape the seed-robustness report was built for. Must
+    the experiment-dir shape the seed-robustness export was built for. Must
     run before CSV pruning removes the heavy per-run artefacts.
     """
 
     try:
-        result = build_seed_robustness_report(
+        tables = write_seed_robustness_tables(
             best_runs_dir,
             output_dir=output_dir / "best_runs_robustness_report",
             phase=options.phase,
             price_column=options.price_column,
         )
-        return result.report_path
-    except Exception as exc:  # noqa: BLE001 - report loss must not void hours of runs.
-        print(f"Warning: best-runs robustness report generation failed: {exc}")
+        return tables.output_dir
+    except Exception as exc:  # noqa: BLE001 - export loss must not void hours of runs.
+        print(f"Warning: best-runs robustness table export failed: {exc}")
         return None
 
 def _prune_calibration_csv_artifacts(
@@ -119,8 +109,6 @@ def _write_best_config(
             "experiment_root": output_dir,
             "experiment_name": "best_runs",
             "run_label": "best_optuna_config",
-            "python_analysis_enabled": True,
-            "python_analysis_generate_comparison": True,
         },
     )
     best_config_path.write_text(best_config_text, encoding="utf-8")
@@ -142,31 +130,17 @@ def _write_holdout_validation(
     best_runs_dir: Path,
     benchmark_dir: Path,
 ) -> Path:
-    holdout_dir = best_runs_dir.parent / "holdout_validation"
-    holdout_dir.mkdir(parents=True, exist_ok=True)
-    if not options.holdout_benchmark_series:
-        (holdout_dir / "summary.json").write_text(
-            json.dumps(
-                {
-                    "status": "not_run",
-                    "reason": "No holdout benchmark series was supplied.",
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        return holdout_dir
+    """Measure the winner against benchmark series held back from the search."""
 
-    build_comparison_report(
+    tables = write_holdout_validation(
         best_runs_dir,
-        output_dir=holdout_dir,
-        phase=options.phase,
-        price_column=options.price_column,
+        output_dir=best_runs_dir.parent / "holdout_validation",
         benchmark_dir=benchmark_dir,
         benchmark_series=options.holdout_benchmark_series,
+        phase=options.phase,
+        price_column=options.price_column,
     )
-    return holdout_dir
+    return tables.output_dir
 
 def _write_summary(
     *,
@@ -184,8 +158,8 @@ def _write_summary(
     search_seeds: tuple[int, ...],
     estimated_total_runs: int,
     robustness_verdicts_status: str,
-    calibration_report_path: Path | None,
-    best_runs_report_path: Path | None,
+    calibration_tables_dir: Path | None,
+    best_runs_robustness_tables_dir: Path | None,
 ) -> Path:
     best_parameters = dict(best_validation["parameters"])
     best_config_json_path = output_dir / "best_config.json"
@@ -200,11 +174,11 @@ def _write_summary(
         "best_runs": best_runs_dir.name,
         "holdout_validation": holdout_path.name,
     }
-    if calibration_report_path is not None:
-        outputs["calibration_report"] = str(calibration_report_path.relative_to(output_dir))
-    if best_runs_report_path is not None:
-        outputs["best_runs_robustness_report"] = str(
-            best_runs_report_path.relative_to(output_dir)
+    if calibration_tables_dir is not None:
+        outputs["calibration_tables"] = str(calibration_tables_dir.relative_to(output_dir))
+    if best_runs_robustness_tables_dir is not None:
+        outputs["best_runs_robustness_tables"] = str(
+            best_runs_robustness_tables_dir.relative_to(output_dir)
         )
     summary = {
         "calibration_name": options.calibration_name,

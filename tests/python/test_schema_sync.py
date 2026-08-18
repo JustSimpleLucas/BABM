@@ -28,6 +28,7 @@ from abm_analysis.database.constants import (
     ASSET_TIMESERIES_COLUMNS,
     BOOLEAN_TABLE_COLUMNS,
     COUNT_TABLE_COLUMNS,
+    PROTAGONIST_TIMESERIES_COLUMNS,
     STEP_TIMESERIES_COLUMNS,
     STYLISED_FACT_COLUMNS,
     SUMMARY_METRIC_COLUMNS,
@@ -93,6 +94,14 @@ def test_agent_snapshot_writer_matches_database_columns() -> None:
     assert REQUIRED_AGENT_FINAL_COLUMNS.issubset(header)
 
 
+def test_protagonist_timeseries_writer_matches_database_columns() -> None:
+    header = _extract_csv_header_columns(
+        OUTPUT_SOURCE_DIR / "ProtagonistTimeseriesCsvWriter.cpp"
+    )
+
+    assert ("run_id", *header) == PROTAGONIST_TIMESERIES_COLUMNS
+
+
 def test_trade_ledger_writer_matches_database_columns() -> None:
     header = _extract_csv_header_columns(
         OUTPUT_SOURCE_DIR / "TradeLedgerCsvWriter.cpp"
@@ -130,6 +139,7 @@ def test_every_import_column_exists_in_schema_ddl() -> None:
         TRADE_LEDGER_COLUMNS,
         SUMMARY_METRIC_COLUMNS,
         STYLISED_FACT_COLUMNS,
+        PROTAGONIST_TIMESERIES_COLUMNS,
     ):
         for column in table_columns:
             assert re.search(rf"\b{re.escape(column)}\b", ddl), (
@@ -146,6 +156,7 @@ def test_type_override_maps_reference_known_columns() -> None:
         "agent_snapshots": set(AGENT_SNAPSHOT_COLUMNS),
         "trade_ledger": set(TRADE_LEDGER_COLUMNS),
         "summary_metrics": set(SUMMARY_METRIC_COLUMNS),
+        "protagonist_timeseries": set(PROTAGONIST_TIMESERIES_COLUMNS),
     }
     for override_map in (BOOLEAN_TABLE_COLUMNS, COUNT_TABLE_COLUMNS):
         for table_name, columns in override_map.items():

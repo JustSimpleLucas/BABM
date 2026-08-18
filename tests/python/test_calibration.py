@@ -29,7 +29,7 @@ from abm_analysis.calibration.execution import (
 from abm_analysis.calibration.scoring import score_multi_asset_return_match
 from abm_analysis.calibration.study import _announce_run_budget, _attach_candidate_robustness
 from abm_analysis.cli import main as cli_main
-from abm_analysis.report import build_calibration_report
+from abm_analysis.exports import write_calibration_tables
 
 from abm_test_helpers import write_synthetic_asset_timeseries, write_synthetic_run
 
@@ -38,20 +38,20 @@ def test_patch_config_text_preserves_comments_and_appends_new_keys() -> None:
     base_config = (
         "# Example simulation config\n"
         "seed = 55 # baseline seed\n"
-        "python_analysis_enabled = 1\n"
+        "database_output_enabled = 1\n"
     )
 
     patched = patch_config_text(
         base_config,
         {
             "seed": 66,
-            "python_analysis_enabled": False,
+            "database_output_enabled": False,
             "experiment_output_enabled": True,
         },
     )
 
     assert "seed = 66 # baseline seed" in patched
-    assert "python_analysis_enabled = 0" in patched
+    assert "database_output_enabled = 0" in patched
     assert "experiment_output_enabled = 1" in patched
 
 
@@ -298,8 +298,6 @@ def test_run_calibration_with_fake_simulator_creates_best_outputs(tmp_path: Path
                 "experiment_root = data/experiments",
                 "experiment_name = demo",
                 "run_label = base",
-                "python_analysis_enabled = 1",
-                "python_analysis_generate_comparison = 1",
                 "num_noise_traders = 5",
             ]
         )
@@ -375,8 +373,6 @@ def test_run_calibration_with_parallel_search_seeds_preserves_trial_csv_order(
                 "experiment_root = data/experiments",
                 "experiment_name = demo",
                 "run_label = base",
-                "python_analysis_enabled = 1",
-                "python_analysis_generate_comparison = 1",
                 "num_noise_traders = 5",
             ]
         )
@@ -488,8 +484,6 @@ def test_run_calibration_reports_simulator_stderr_when_validation_creates_no_arc
                 "experiment_root = data/experiments",
                 "experiment_name = demo",
                 "run_label = base",
-                "python_analysis_enabled = 1",
-                "python_analysis_generate_comparison = 1",
                 "num_buy_and_hold_agents = 0",
             ]
         )
@@ -554,8 +548,6 @@ def test_worker_payload_runs_candidate_and_prunes_csv_outputs(tmp_path: Path) ->
                 f"experiment_root = {tmp_path / 'runs'}",
                 "experiment_name = search",
                 "run_label = worker",
-                "python_analysis_enabled = 0",
-                "python_analysis_generate_comparison = 0",
             ]
         )
         + "\n",
@@ -722,8 +714,6 @@ def test_run_calibration_writes_robustness_outputs(tmp_path: Path) -> None:
                 "experiment_root = data/experiments",
                 "experiment_name = demo",
                 "run_label = base",
-                "python_analysis_enabled = 1",
-                "python_analysis_generate_comparison = 1",
                 "num_noise_traders = 5",
             ]
         )
@@ -775,9 +765,8 @@ def test_run_calibration_writes_robustness_outputs(tmp_path: Path) -> None:
     )
 
     assert output_path == output_dir.resolve()
-    report_dir = output_dir / "calibration_report"
-    assert (report_dir / "index.html").is_file()
-    candidate_summary = pd.read_csv(report_dir / "candidate_validation_summary.csv")
+    tables_dir = output_dir / "calibration_report"
+    candidate_summary = pd.read_csv(tables_dir / "candidate_validation_summary.csv")
     assert {
         "trial_number",
         "mean_validation_score",
@@ -795,22 +784,35 @@ def test_run_calibration_writes_robustness_outputs(tmp_path: Path) -> None:
     assert candidate_summary["selected"].any()
     assert int(candidate_summary.iloc[0]["seed_count"]) == 6
 
-    candidate_verdicts = pd.read_csv(report_dir / "candidate_robustness_verdicts.csv")
+    candidate_verdicts = pd.read_csv(tables_dir / "candidate_robustness_verdicts.csv")
     assert {"trial_number", "criterion", "verdict"}.issubset(candidate_verdicts.columns)
     assert not candidate_verdicts.empty
 
-    assert (output_dir / "best_runs_robustness_report" / "index.html").is_file()
+    # The winner's own validation replicates get the full cross-seed export.
+    best_runs_tables = output_dir / "best_runs_robustness_report"
+    for name in (
+        "seed_robustness_summary.csv",
+        "cross_seed_distribution_tests.csv",
+        "adf_stationarity_by_seed.csv",
+        "seed_convergence.csv",
+        "robustness_verdicts.csv",
+    ):
+        assert (best_runs_tables / name).is_file(), name
+
+    # Holdout validation measures the winner against a series held back from
+    # the search, so it must record its own comparison rather than a status.
+    holdout_summary = json.loads(
+        (output_dir / "holdout_validation" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert holdout_summary["status"] == "not_run"
 
     summary = json.loads((output_dir / "calibration_summary.json").read_text(encoding="utf-8"))
     assert summary["validation_seeds"] == [1, 2, 3, 4, 5, 6]
     assert summary["estimated_total_runs"] == 1 + 1 * 6
     assert summary["best_robustness_pass_rate"] is not None
     assert summary["robustness_penalty_weight"] == 1.0
-    assert summary["outputs"]["calibration_report"] == "calibration_report/index.html"
-    assert (
-        summary["outputs"]["best_runs_robustness_report"]
-        == "best_runs_robustness_report/index.html"
-    )
+    assert summary["outputs"]["calibration_tables"] == "calibration_report"
+    assert summary["outputs"]["best_runs_robustness_tables"] == "best_runs_robustness_report"
 
 
 def test_announce_run_budget_warns_on_oversized_and_low_seed_campaigns(
@@ -974,7 +976,7 @@ def test_repo_search_space_respects_cpp_constraints() -> None:
         assert int(spec["low"]) >= 0, name
 
 
-def test_build_calibration_report_renders_ranking_and_verdicts(tmp_path: Path) -> None:
+def test_calibration_tables_record_the_ranking_and_every_verdict(tmp_path: Path) -> None:
     candidate_summary = pd.DataFrame(
         [
             {
@@ -1013,27 +1015,23 @@ def test_build_calibration_report_renders_ranking_and_verdicts(tmp_path: Path) -
         ]
     )
 
-    report_path = build_calibration_report(
+    tables = write_calibration_tables(
         tmp_path,
-        calibration_name="pytest_report",
         candidate_summary=candidate_summary,
         candidate_verdicts=candidate_verdicts,
-        best_trial_number=1,
-        robustness_penalty_weight=1.0,
-        borderline_credit=0.5,
-        validation_seed_count=6,
-        estimated_total_runs=13,
     )
 
-    assert report_path.is_file()
-    html = report_path.read_text(encoding="utf-8")
-    assert "Calibration Report: pytest_report" in html
-    assert "Candidate Ranking" in html
-    assert "Winner Robustness Verdicts" in html
-    assert "Fat-tailed returns reproducibility" in html
-    report_dir = tmp_path / "calibration_report"
-    assert (report_dir / "candidate_validation_summary.csv").is_file()
-    assert (report_dir / "candidate_robustness_verdicts.csv").is_file()
+    assert tables.output_dir == tmp_path / "calibration_report"
+    summary = pd.read_csv(tables.candidate_summary_csv_path)
+    # Both candidates survive, and the ranking columns that decided between
+    # them are what the file has to preserve.
+    assert sorted(summary["trial_number"].tolist()) == [0, 1]
+    assert summary.loc[summary["selected"], "trial_number"].tolist() == [1]
+    assert summary.set_index("trial_number").loc[1, "robust_ranking_score"] == 1.155
+
+    verdicts = pd.read_csv(tables.candidate_verdicts_csv_path)
+    assert verdicts["criterion"].tolist() == ["Fat-tailed returns reproducibility"]
+    assert verdicts["verdict"].tolist() == ["pass"]
 
 
 def _write_benchmark_dir(tmp_path: Path) -> Path:

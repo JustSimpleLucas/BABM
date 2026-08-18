@@ -19,6 +19,7 @@ from .constants import (
     ASSET_TIMESERIES_COLUMNS,
     JSONB_TABLE_COLUMNS,
     MECHANISM_DIAGNOSTIC_COLUMNS,
+    PROTAGONIST_TIMESERIES_COLUMNS,
     STAGING_ARTIFACTS,
     STEP_TIMESERIES_COLUMNS,
     STYLISED_FACT_COLUMNS,
@@ -138,6 +139,16 @@ def build_run_import_tables(run_dir: Path | str) -> dict[str, pd.DataFrame]:
             table_name="agent_step_diagnostics",
             required_columns={"row_index", "agent_id", "diagnostic_name"},
         ),
+        # Optional in the same sense as the diagnostics above: a run without a
+        # protagonist has no series to import, and that absence is a modelling
+        # choice rather than a broken archive.
+        "protagonist_timeseries": _prepare_optional_diagnostic_table(
+            read_csv_if_exists(archive.protagonist_timeseries_csv),
+            archive.run_id,
+            PROTAGONIST_TIMESERIES_COLUMNS,
+            table_name="protagonist_timeseries",
+            required_columns={"simulation_step", "agent_id", "wealth"},
+        ),
     }
 
 
@@ -204,6 +215,12 @@ def _insert_run_tables(connection: Any, import_tables: dict[str, pd.DataFrame]) 
         "agent_step_diagnostics",
         import_tables["agent_step_diagnostics"],
         AGENT_STEP_DIAGNOSTIC_COLUMNS,
+    )
+    rows += _insert_dataframe(
+        connection,
+        "protagonist_timeseries",
+        import_tables["protagonist_timeseries"],
+        PROTAGONIST_TIMESERIES_COLUMNS,
     )
     return rows
 

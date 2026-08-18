@@ -142,6 +142,88 @@ ChartistStrategyMode parseChartistStrategyMode(const std::string& rawValue,
                                 "breakout.");
 }
 
+std::string chartistStrategyModeName(ChartistStrategyMode mode) {
+    switch (mode) {
+    case ChartistStrategyMode::Random:
+        return "random";
+    case ChartistStrategyMode::Momentum:
+        return "momentum";
+    case ChartistStrategyMode::MeanReversion:
+        return "mean_reversion";
+    case ChartistStrategyMode::RelativeStrengthIndex:
+        return "relative_strength_index";
+    case ChartistStrategyMode::Breakout:
+        return "breakout";
+    }
+
+    return "unknown";
+}
+
+ProtagonistStrategyKind parseProtagonistStrategyKind(const std::string& rawValue,
+                                                     const std::filesystem::path& path,
+                                                     std::size_t lineNumber) {
+    const std::string value = normalizeString(rawValue);
+    if (value == "fundamentalist" || value == "value") {
+        return ProtagonistStrategyKind::Fundamentalist;
+    }
+    if (value == "chartist" || value == "technical") {
+        return ProtagonistStrategyKind::Chartist;
+    }
+    if (value == "noise_trader" || value == "noise-trader" || value == "noise") {
+        return ProtagonistStrategyKind::NoiseTrader;
+    }
+    if (value == "buy_and_hold" || value == "buy-and-hold" || value == "buy_hold" ||
+        value == "passive") {
+        return ProtagonistStrategyKind::BuyAndHold;
+    }
+
+    throw std::invalid_argument("Invalid protagonist_strategy at " +
+                                describeLocation(path, lineNumber) +
+                                ". Expected one of: fundamentalist, chartist, noise_trader, "
+                                "buy_and_hold.");
+}
+
+std::string protagonistStrategyKindName(ProtagonistStrategyKind strategy) {
+    switch (strategy) {
+    case ProtagonistStrategyKind::Fundamentalist:
+        return "fundamentalist";
+    case ProtagonistStrategyKind::Chartist:
+        return "chartist";
+    case ProtagonistStrategyKind::NoiseTrader:
+        return "noise_trader";
+    case ProtagonistStrategyKind::BuyAndHold:
+        return "buy_and_hold";
+    }
+
+    return "unknown";
+}
+
+ChartistStrategyMode parseProtagonistChartistRule(const std::string& rawValue,
+                                                  const std::filesystem::path& path,
+                                                  std::size_t lineNumber) {
+    /*
+     * The population's `random` mode samples a rule per agent, which is a
+     * reasonable way to populate a heterogeneous chartist crowd. It is not a
+     * reasonable way to specify an identified individual: his rule would depend
+     * on the seed and could not be stated in a write-up, so it is rejected here
+     * rather than resolved silently.
+     */
+    if (normalizeString(rawValue) == "random") {
+        throw std::invalid_argument(
+            "Invalid protagonist_chartist_rule at " + describeLocation(path, lineNumber) +
+            ". The protagonist's technical rule must be stated explicitly; expected one of: "
+            "momentum, mean_reversion, rsi, breakout.");
+    }
+
+    try {
+        return parseChartistStrategyMode(rawValue, path, lineNumber);
+    } catch (const std::invalid_argument&) {
+        throw std::invalid_argument("Invalid protagonist_chartist_rule at " +
+                                    describeLocation(path, lineNumber) +
+                                    ". Expected one of: momentum, mean_reversion, rsi, breakout.");
+    }
+}
+
 ProspectReferencePointMode parseProspectReferencePointMode(const std::string& rawValue,
                                                            const std::filesystem::path& path,
                                                            std::size_t lineNumber) {

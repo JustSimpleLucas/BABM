@@ -40,6 +40,13 @@
   --asset-3: #167c80;
   --asset-4: #8b4a9c;
 
+  /* The protagonist. Held apart from the asset ramp on purpose: he is a person
+   * in a chart of markets, and reusing a market's colour for him would read as
+   * a third asset. Magenta is outside the ramp in both themes and still
+   * separable from --asset-4 in greyscale. */
+  --protagonist: #a8106b;
+  --protagonist-soft: rgba(168, 16, 107, 0.12);
+
   --series-fundamental: #a06a1c;
   --series-returns: #4a5568;
   --series-raw: #2f5d8a;
@@ -76,6 +83,9 @@
     --asset-2: #e5924f;
     --asset-3: #4fa9ad;
     --asset-4: #b47fc9;
+
+    --protagonist: #ef79b4;
+    --protagonist-soft: rgba(239, 121, 180, 0.16);
 
     --series-fundamental: #d8a557;
     --series-returns: #9aa4b4;
@@ -431,6 +441,26 @@ h1, h2, h3 {
   margin: 12px 0 0;
   font-size: 13px;
   color: var(--text-muted);
+}
+
+/* The protagonist panel. Marked with a left edge in his own colour so the eye
+ * finds the one individual among panels that all describe aggregates, and so
+ * the chips beside the heading read as belonging to him rather than to the
+ * run. */
+#protagonist-panel {
+  border-left: 3px solid var(--protagonist);
+}
+
+.protagonist-identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.protagonist-identity .parameter-chip {
+  border-color: var(--protagonist);
+  background: var(--protagonist-soft);
+  color: var(--text);
 }
 
 /* Segmented view switches. These only redraw an existing chart — they never

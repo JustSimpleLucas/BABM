@@ -89,23 +89,6 @@ std::string jsonEscape(const std::string& value) {
     return escaped;
 }
 
-std::string chartistStrategyModeLabel(ChartistStrategyMode mode) {
-    switch (mode) {
-    case ChartistStrategyMode::Random:
-        return "random";
-    case ChartistStrategyMode::Momentum:
-        return "momentum";
-    case ChartistStrategyMode::MeanReversion:
-        return "mean_reversion";
-    case ChartistStrategyMode::RelativeStrengthIndex:
-        return "relative_strength_index";
-    case ChartistStrategyMode::Breakout:
-        return "breakout";
-    }
-
-    return "unknown";
-}
-
 std::string jsonBool(bool value) {
     return value ? "true" : "false";
 }
@@ -139,7 +122,7 @@ std::string buildNormalizedConfigJson(const SimulationConfig& config) {
     std::ostringstream out;
     out << std::fixed << std::setprecision(10);
     out << "{\n";
-    out << R"(  "schema_version": 7,)" << '\n';
+    out << R"(  "schema_version": 8,)" << '\n';
     out << R"(  "assets": {)" << '\n';
     out << R"(    "primary": ")" << jsonEscape(config.assetName()) << R"(",)" << '\n';
     out << R"(    "covariance_window": )" << config.covarianceWindow << ",\n";
@@ -268,7 +251,8 @@ std::string buildNormalizedConfigJson(const SimulationConfig& config) {
     out << R"(    "min_risky_weight": )" << config.chartist.allocation.minRiskyWeight << ",\n";
     out << R"(    "max_risky_weight": )" << config.chartist.allocation.maxRiskyWeight << ",\n";
     out << R"(    "strategy_mode": ")"
-        << jsonEscape(chartistStrategyModeLabel(config.chartist.strategyMode)) << '"' << '\n';
+        << jsonEscape(config_parsing::chartistStrategyModeName(config.chartist.strategyMode)) << '"'
+        << '\n';
     out << "  },\n";
     out << R"(  "noise_trader": {)" << '\n';
     out << R"(    "belief_shock_std_dev": )" << config.noiseTrader.beliefShockStdDev << ",\n";
@@ -277,6 +261,53 @@ std::string buildNormalizedConfigJson(const SimulationConfig& config) {
     out << "  },\n";
     out << R"(  "buy_and_hold": {)" << '\n';
     out << R"(    "target_risky_weight": )" << config.buyAndHold.targetRiskyWeight << '\n';
+    out << "  },\n";
+    /*
+     * The protagonist's block is always written, disabled or not, so the config
+     * hash distinguishes a run with an individually parameterised trader from an
+     * otherwise identical run without one.
+     */
+    out << R"(  "protagonist": {)" << '\n';
+    out << R"(    "enabled": )" << jsonBool(config.protagonist.enabled) << ",\n";
+    out << R"(    "name": ")" << jsonEscape(config.protagonist.name) << R"(",)" << '\n';
+    out << R"(    "strategy": ")"
+        << jsonEscape(config_parsing::protagonistStrategyKindName(config.protagonist.strategy))
+        << R"(",)" << '\n';
+    out << R"(    "chartist_rule": ")"
+        << jsonEscape(config_parsing::chartistStrategyModeName(config.protagonist.chartistRule))
+        << R"(",)" << '\n';
+    out << R"(    "initial_cash": )" << config.protagonist.initialCash << ",\n";
+    out << R"(    "initial_stock": )" << config.protagonist.initialStock << ",\n";
+    out << R"(    "risk_aversion": )" << config.protagonist.allocation.riskAversion << ",\n";
+    out << R"(    "min_risky_weight": )" << config.protagonist.allocation.minRiskyWeight << ",\n";
+    out << R"(    "max_risky_weight": )" << config.protagonist.allocation.maxRiskyWeight << ",\n";
+    out << R"(    "max_gross_exposure": )" << config.protagonist.allocation.maxGrossExposure
+        << ",\n";
+    out << R"(    "mispricing_threshold": )" << config.protagonist.mispricingThreshold << ",\n";
+    out << R"(    "stop_loss_threshold": )" << config.protagonist.stopLossThreshold << ",\n";
+    out << R"(    "take_profit_threshold": )" << config.protagonist.takeProfitThreshold << ",\n";
+    out << R"(    "volatility_window": )" << config.protagonist.volatilityWindow << ",\n";
+    out << R"(    "short_window": )" << config.protagonist.shortWindow << ",\n";
+    out << R"(    "long_window": )" << config.protagonist.longWindow << ",\n";
+    out << R"(    "momentum_signal_threshold": )" << config.protagonist.momentumSignalThreshold
+        << ",\n";
+    out << R"(    "breakout_window": )" << config.protagonist.breakoutWindow << ",\n";
+    out << R"(    "max_short_weight": )" << config.protagonist.maxShortWeight << ",\n";
+    out << R"(    "noise_belief_shock_std_dev": )" << config.protagonist.noiseBeliefShockStdDev
+        << ",\n";
+    out << R"(    "noise_order_size_fraction": )" << config.protagonist.noiseOrderSizeFraction
+        << ",\n";
+    out << R"(    "buy_hold_target_risky_weight": )" << config.protagonist.buyHoldTargetRiskyWeight
+        << ",\n";
+    out << R"(    "prospect_theory_enabled": )"
+        << jsonBool(config.protagonist.prospectTheoryEnabled) << ",\n";
+    out << R"(    "loss_aversion": )" << config.protagonist.lossAversion << ",\n";
+    out << R"(    "curvature_for_gain": )" << config.protagonist.curvatureForGain << ",\n";
+    out << R"(    "curvature_for_loss": )" << config.protagonist.curvatureForLoss << ",\n";
+    out << R"(    "prob_distortion_for_gain": )" << config.protagonist.probDistortionForGain
+        << ",\n";
+    out << R"(    "prob_distortion_for_loss": )" << config.protagonist.probDistortionForLoss
+        << '\n';
     out << "  },\n";
     out << R"(  "social_influence": {)" << '\n';
     out << R"(    "enabled": )" << jsonBool(config.social.enabled) << ",\n";

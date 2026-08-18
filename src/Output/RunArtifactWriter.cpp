@@ -6,6 +6,7 @@
 #include "Output/AssetTimeseriesCsvWriter.h"
 #include "Output/ExperimentManifestWriter.h"
 #include "Output/OutputSerialization.h"
+#include "Output/ProtagonistTimeseriesCsvWriter.h"
 #include "Output/RunMetadataWriters.h"
 #include "Output/RunSummaryCsvWriter.h"
 #include "Output/StepTimeseriesCsvWriter.h"
@@ -37,6 +38,18 @@ bool RunArtifactWriter::writeCompletedRun(const RuntimeConfig& runtimeConfig,
         if (!output_detail::exportAssetTimeseriesCsv(runtimeConfig.output.assetTimeseriesCsvPath,
                                                      simulationResult, error)) {
             error = "Asset timeseries CSV export failed: " + error;
+            return false;
+        }
+    }
+    /*
+     * Gated on the protagonist rather than on an output switch of its own: the
+     * series has no meaning without him, so a separate enable key could only
+     * ever be set to a value the model already implies.
+     */
+    if (simulationResult.config().protagonist.enabled) {
+        if (!output_detail::exportProtagonistTimeseriesCsv(
+                runtimeConfig.output.protagonistTimeseriesCsvPath, simulationResult, error)) {
+            error = "Protagonist timeseries CSV export failed: " + error;
             return false;
         }
     }

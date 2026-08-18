@@ -11,7 +11,7 @@ Recipe (release build, current `config/simulation.cfg`, 50 000 steps, seed 66):
 
 ```bash
 sed -e 's/^experiment_output_enabled = 1/experiment_output_enabled = 0/' \
-    -e 's/^python_analysis_enabled = 1/python_analysis_enabled = 0/' \
+    -e 's/^database_output_enabled = 1/database_output_enabled = 0/' \
     config/simulation.cfg > /tmp/baseline_check.cfg
 ./build/release/simulate /tmp/baseline_check.cfg
 shasum -a 256 data/latest/step_timeseries.csv
@@ -73,11 +73,10 @@ reported, calibrated, and screened on identical terms.
   `(run, asset)` with its own Ljung-Box, Jarque-Bera, ARCH LM, and GARCH
   results, plus its own drawdown and traded volume, so the two markets can
   legitimately reach different verdicts.
-- **Web report.** On a multi-asset run the core price, return, quote,
-  liquidity, order-flow, and allocative-efficiency figures are rebuilt per
-  asset under the same figure names, and the return distribution, ECDF, and ACF
-  panels plot one series per `(run, asset)`. The evidence cards and key-metric
-  rows name each asset. The Cross-Asset Dynamics section holds only the joint
+- **Dashboard.** On a multi-asset run every metric table gains one column per
+  asset and every chart one line per asset, and the return distribution and ACF
+  panels plot one series per `(run, asset)`. The stylised-fact verdict cards name
+  each asset. The Cross-Asset panel holds only the joint
   quantities — realised correlation, relative price, portfolio composition.
 - **Calibration.** Each asset's returns are scored against the empirical
   benchmarks independently and the trial objective is the mean of those scores,
@@ -113,7 +112,7 @@ Geometric Brownian motion is the model's fundamental-value theory and applies
 to every declared asset unless a configuration explicitly opts out. Assets are
 meant to differ in their parameters, not in their functional form: a shared
 process is what makes per-asset returns like-for-like, so no asset is
-privileged in the report, the calibration objective, or the stylised-fact
+privileged in the dashboard, the calibration objective, or the stylised-fact
 screen. Under `gbm` the Ito correction makes `mu` the expected arithmetic
 growth rate, so `E[F_{t+1} | F_t] = F_t * exp(mu)`.
 
@@ -176,26 +175,22 @@ disabling every asset, and rejects nominating a disabled asset as `primary_asset
 
 With Asset B disabled the run collapses exactly onto the single-asset model:
 `asset_timeseries.csv` carries only Asset A, `step_timeseries.csv` keeps its 34
-columns, and the analysis report contains no multi-asset section and no
-multi-asset figures. `test_disabled_asset_b_leaves_pre_existing_report_unchanged`
-asserts the generated figure index is identical to the single-asset baseline
-report's.
+columns, and no cross-asset dimension opens.
+`test_disabled_asset_b_is_screened_as_a_single_asset_run` asserts the diagnostics
+report only Asset A and that the rolling correlation and price ratio stay empty —
+the gate is the count of *recorded* assets, not the presence of the per-asset
+artefact.
 
-### Web output
+### Dashboard output
 
-Reports for multi-asset runs gain a **Multi-Asset Dynamics** section with four
-panels, plus an Asset Configuration table recording each asset's process,
-parameters, and units:
+Multi-asset runs gain a **Cross-Asset** panel, plus an asset-configuration table
+recording each asset's process, parameters, and units. Alongside the per-asset
+columns and lines in every other panel, it carries:
 
-1. price vs fundamental, one subplot per asset;
-2. per-asset traded volume and rolling realised volatility;
-3. cross-asset rolling return correlation (against the configured `rho_AB`
-   reference line) and the price ratio `p_A / p_B`;
-4. mean agent portfolio composition in each asset and cash, as a stacked area.
-
-Panels are stacked subplots rather than a single panel with an asset toggle
-because reports export publication figures to static PNG/PDF/SVG via Kaleido,
-and a Plotly `updatemenus` toggle would export only the selected asset.
+1. cross-asset rolling return correlation, against the configured `rho_AB`
+   reference line;
+2. the price ratio `p_A / p_B`;
+3. mean agent portfolio composition in each asset and cash.
 
 Portfolio weights come from `asset_timeseries.csv` columns
 `mean_agent_portfolio_weight` and `portfolio_weight_agent_count`, written per

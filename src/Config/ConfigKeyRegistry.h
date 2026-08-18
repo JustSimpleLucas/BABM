@@ -23,6 +23,7 @@ namespace abm::config_io_detail {
 enum class ConfigSection {
     Assets,
     Population,
+    Protagonist,
     RunControl,
     Behavioural,
     Social,

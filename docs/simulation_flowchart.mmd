@@ -16,7 +16,7 @@ flowchart TD
     subgraph engineInitialisation["Engine Initialisation"]
         validateConfig["validateSimulationConfig(config_)"]
         normaliseConfig["normaliseSimulationConfig(config_)"]
-        createPopulation["PopulationFactory.createPopulation()"]
+        createPopulation["PopulationFactory.createPopulation() adds the protagonist last, consuming no shared draws"]
         initialiseSocial["SocialInfluenceModel.initialize()"]
         initialiseMarket["MarketProcess.initializeMarket()"]
         initialiseWealth["MarketProcess.initializeAgentWealths()"]
@@ -44,7 +44,7 @@ flowchart TD
         refreshWealthBeforeMargin["MarketProcess.refreshAgentWealths()"]
         enforceMargin["RiskControlService.enforceMaintenanceMargin() with optional buy-in costs"]
         refreshWealthAfterMargin["MarketProcess.refreshAgentWealths() only if a forced buy-in traded"]
-        recordStep["DiagnosticsRecorder.recordStep(request) stores cost, allocative-efficiency, and wealth-inequality diagnostics"]
+        recordStep["DiagnosticsRecorder.recordStep(request) stores cost, allocative-efficiency, and wealth-inequality diagnostics, and the protagonist's standing in the wealth cross-section when one is configured"]
         updateProgress["SimulationClock.markStepCompleted()"]
     end
 
@@ -57,11 +57,8 @@ flowchart TD
         artifactDecision{"Artifacts written?"}
         returnArtifactFailure(["Return artifact failure"])
         printSummary["printCompletedSimulationSummary()"]
-        runPythonAnalysis["PythonAnalysisRunner.generatePostRunReports()"]
+        runPythonAnalysis["PythonAnalysisRunner.runPostRunProcessing()"]
         importDatabase["db import-run into PostgreSQL when database output is enabled"]
-        buildRunReport["Build single-run report from database or file source"]
-        refreshComparison["Refresh experiment comparison report in comparison_reports/latest"]
-        openRunReport["Open single-run HTML report in default browser"]
         printPythonStatus["printPythonAnalysisStatus()"]
         returnSuccess(["Return success"])
     end
@@ -86,7 +83,7 @@ flowchart TD
     loopDecision -- "No" --> completeRun --> buildResult --> sampleMemory --> calculateMetrics --> writeArtifacts
     writeArtifacts --> artifactDecision
     artifactDecision -- "No" --> returnArtifactFailure
-    artifactDecision -- "Yes" --> printSummary --> runPythonAnalysis --> importDatabase --> buildRunReport --> refreshComparison --> openRunReport --> printPythonStatus --> returnSuccess
+    artifactDecision -- "Yes" --> printSummary --> runPythonAnalysis --> importDatabase --> printPythonStatus --> returnSuccess
 
     classDef startEnd fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0f172a
     classDef application fill:#eff6ff,stroke:#60a5fa,stroke-width:1px,color:#0f172a
@@ -100,7 +97,7 @@ flowchart TD
     class runApp,parseConfig,runtimeConfig,prepareOutput,constructEngine application
     class validateConfig,normaliseConfig,createPopulation,initialiseSocial,initialiseMarket,initialiseWealth,createClock,resetPopulation,resetDiagnostics,resetCollector,clearBook,resetRisk,prepareSocial initialisation
     class accrueCash,updateFundamental,updateOpinions,getReferencePrice,processRestingOrders,scheduleAgents,collectOrders,executeOrders,resolvePrice,storePrice,refreshWealthBeforeMargin,enforceMargin,refreshWealthAfterMargin,recordStep,updateProgress simulation
-    class completeRun,buildResult,sampleMemory,calculateMetrics,writeArtifacts,printSummary,runPythonAnalysis,importDatabase,buildRunReport,refreshComparison,openRunReport,printPythonStatus output
+    class completeRun,buildResult,sampleMemory,calculateMetrics,writeArtifacts,printSummary,runPythonAnalysis,importDatabase,printPythonStatus output
     class parseDecision,outputDecision,loopDecision,artifactDecision decision
     class returnParseExit,returnOutputFailure,returnArtifactFailure failure
 

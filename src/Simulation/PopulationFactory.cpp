@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <memory>
 #include <numeric>
 #include <string>
@@ -70,6 +71,90 @@ std::vector<bool> selectProspectTheoryUsers(const SimulationConfig& config,
     return selected;
 }
 
+/**
+ * Builds the protagonist's Cumulative Prospect Theory preferences.
+ *
+ * Deliberately not routed through drawProspectPreferences: that function samples
+ * from the population's dispersion parameters, which is the correct treatment
+ * for an anonymous crowd and the wrong one for a named individual. Reading his
+ * five parameters straight out of the configuration keeps his psychology stated
+ * rather than drawn, and — because nothing is sampled — leaves the shared agent
+ * random stream untouched.
+ *
+ * The scenario count and reference-point scale stay population-wide: they
+ * describe how any CPT valuation is discretised in this model, not what one
+ * investor believes.
+ */
+ProspectTheory buildProtagonistPreferences(const SimulationConfig& config) {
+    ProspectTheoryParameters parameters;
+    parameters.lossAversion = config.protagonist.lossAversion;
+    parameters.curvatureForGain = config.protagonist.curvatureForGain;
+    parameters.curvatureForLoss = config.protagonist.curvatureForLoss;
+    parameters.probDistortionForGain = config.protagonist.probDistortionForGain;
+    parameters.probDistortionForLoss = config.protagonist.probDistortionForLoss;
+    parameters.referencePoint = config.control.referencePoint;
+    parameters.scenarioCount = config.control.prospectScenarioCount;
+    return ProspectTheory(parameters);
+}
+
+/**
+ * Builds the protagonist's trading strategy from his own parameters.
+ *
+ * He runs one of the four ordinary rules, so this mirrors the four branches of
+ * the population loop; the only difference is where the numbers come from. His
+ * chartist rule is taken from configuration rather than sampled, so no branch
+ * here consumes a random draw.
+ */
+std::unique_ptr<TradingStrategy> createProtagonistStrategy(const SimulationConfig& config,
+                                                           std::uint32_t agentId) {
+    const ProtagonistConfig& protagonist = config.protagonist;
+    const AssetAllocationLine allocationLine(protagonist.allocation.riskAversion,
+                                             protagonist.allocation.minRiskyWeight,
+                                             protagonist.allocation.maxRiskyWeight);
+
+    switch (protagonist.strategy) {
+    case ProtagonistStrategyKind::Chartist: {
+        ChartistRuleSettings settings;
+        settings.assetIndex = config.assets.primaryIndex();
+        settings.allocationLine = allocationLine;
+        settings.shortWindow = protagonist.shortWindow;
+        settings.longWindow = protagonist.longWindow;
+        settings.momentumSignalThreshold = protagonist.momentumSignalThreshold;
+        settings.breakoutWindow = protagonist.breakoutWindow;
+        settings.volatilityWindow = protagonist.volatilityWindow;
+        settings.maxShortWeight = protagonist.maxShortWeight;
+        settings.maxGrossExposure = protagonist.allocation.maxGrossExposure;
+        settings.riskFreeRate = config.riskFreeRate;
+        settings.referencePointMode = config.control.referencePointMode;
+        settings.referenceMovingAverageWindow = config.control.referenceMovingAverageWindow;
+        return createChartistStrategy(protagonist.chartistRule, settings);
+    }
+    case ProtagonistStrategyKind::NoiseTrader:
+        return std::make_unique<NoiseTraderStrategy>(
+            config.assets.primaryIndex(), protagonist.noiseBeliefShockStdDev,
+            protagonist.noiseOrderSizeFraction, protagonist.maxShortWeight,
+            noiseTraderSeed(config.seed, agentId));
+    case ProtagonistStrategyKind::BuyAndHold:
+        return std::make_unique<BuyAndHoldStrategy>(config.assets.primaryIndex(),
+                                                    protagonist.buyHoldTargetRiskyWeight);
+    case ProtagonistStrategyKind::Fundamentalist:
+        break;
+    }
+
+    FundamentalistStrategyParameters parameters;
+    parameters.assetIndex = config.assets.primaryIndex();
+    parameters.allocationLine = allocationLine;
+    parameters.mispricingThreshold = protagonist.mispricingThreshold;
+    parameters.riskThresholds = FundamentalistRiskThresholds{protagonist.stopLossThreshold,
+                                                             protagonist.takeProfitThreshold};
+    parameters.volatilityWindow = protagonist.volatilityWindow;
+    parameters.riskFreeRate = config.riskFreeRate;
+    parameters.referencePointMode = config.control.referencePointMode;
+    parameters.referenceMovingAverageWindow = config.control.referenceMovingAverageWindow;
+    parameters.maxGrossExposure = protagonist.allocation.maxGrossExposure;
+    return std::make_unique<FundamentalistStrategy>(parameters);
+}
+
 } // namespace
 
 SimulationPopulation PopulationFactory::createPopulation(const SimulationConfig& config,
@@ -77,9 +162,11 @@ SimulationPopulation PopulationFactory::createPopulation(const SimulationConfig&
     const std::size_t totalAgents = config.numFundamentalists + config.numChartists +
                                     config.numNoiseTraders + config.numBuyAndHoldAgents;
 
+    const std::size_t protagonistCount = config.protagonist.enabled ? 1U : 0U;
+
     SimulationPopulation population;
-    population.records.reserve(totalAgents);
-    population.agentsById.assign(totalAgents + 1, nullptr);
+    population.records.reserve(totalAgents + protagonistCount);
+    population.agentsById.assign(totalAgents + protagonistCount + 1, nullptr);
 
     const AssetAllocationLine fundamentalistAllocation(
         config.fundamentalist.allocation.riskAversion,
@@ -159,6 +246,34 @@ SimulationPopulation PopulationFactory::createPopulation(const SimulationConfig&
         population.agentsById.at(nextId) = &population.records.back().agent;
         ++nextId;
         ++creationIndex;
+    }
+
+    /*
+     * The protagonist is created last, and only after every anonymous agent has
+     * drawn its preferences and its strategy. That ordering is what makes the
+     * construct safe to switch on and off: the shuffle above, the CPT assignment
+     * and every per-agent draw are already complete, and nothing in this block
+     * touches `random`. A configuration with `protagonist_enabled = 0` therefore
+     * produces exactly the population it produced before he existed.
+     *
+     * He takes the highest agent id, which is also what lets the analysis layer
+     * recognise him in an archive written before the is_protagonist column
+     * existed.
+     */
+    if (config.protagonist.enabled) {
+        AgentEndowment protagonistEndowment{config.protagonist.initialCash, {}};
+        protagonistEndowment.stockByAsset.assign(config.assets.size(),
+                                                 config.protagonist.initialStock);
+
+        Agent protagonist(nextId, protagonistEndowment, buildProtagonistPreferences(config),
+                          config.protagonist.prospectTheoryEnabled);
+        std::unique_ptr<TradingStrategy> strategy = createProtagonistStrategy(config, nextId);
+
+        const std::string initialStrategyType = strategy->strategyType();
+        population.records.push_back(
+            AgentRecord{protagonist, initialStrategyType, std::move(strategy)});
+        population.agentsById.at(nextId) = &population.records.back().agent;
+        population.protagonistRecordIndex = population.records.size() - 1;
     }
 
     return population;

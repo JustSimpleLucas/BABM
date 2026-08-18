@@ -109,6 +109,12 @@ class RunArchive:
     metadata_json: Path | None
     asset_timeseries_csv: Path | None = None
 
+    #: Present only for runs that configured a protagonist. ``None`` therefore
+    #: means "this run had no identified individual", not "the archive is
+    #: incomplete", so consumers report the panel as unavailable rather than
+    #: treating the run as broken.
+    protagonist_timeseries_csv: Path | None = None
+
 
 @dataclass(frozen=True)
 class ArchiveValidationResult:
@@ -160,6 +166,7 @@ def build_run_archive(run_dir: Path | str) -> RunArchive:
         trade_ledger_csv=resolve_artifact_path(run_path, "trade_ledger.csv"),
         metadata_json=resolve_artifact_path(run_path, "metadata.json"),
         asset_timeseries_csv=resolve_artifact_path(run_path, "asset_timeseries.csv"),
+        protagonist_timeseries_csv=resolve_artifact_path(run_path, "protagonist_timeseries.csv"),
     )
 
 

@@ -21,10 +21,10 @@ constexpr int kKeyColumnWidth = 44;
 /** Sections in the order the reference and the resolved report present them. */
 [[nodiscard]] const std::vector<ConfigSection>& reportedSections() {
     static const std::vector<ConfigSection> sections{
-        ConfigSection::Assets,         ConfigSection::Population,   ConfigSection::RunControl,
-        ConfigSection::Behavioural,    ConfigSection::Social,       ConfigSection::Microstructure,
-        ConfigSection::Strategy,       ConfigSection::RiskAndCosts, ConfigSection::Output,
-        ConfigSection::PostProcessing,
+        ConfigSection::Assets,         ConfigSection::Population,     ConfigSection::Protagonist,
+        ConfigSection::RunControl,     ConfigSection::Behavioural,    ConfigSection::Social,
+        ConfigSection::Microstructure, ConfigSection::Strategy,       ConfigSection::RiskAndCosts,
+        ConfigSection::Output,         ConfigSection::PostProcessing,
     };
     return sections;
 }

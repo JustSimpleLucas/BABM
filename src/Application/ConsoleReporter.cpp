@@ -2,6 +2,7 @@
 
 #include "Application/ConsoleReporter.h"
 
+#include "Config/SimulationConfigParsing.h"
 #include "Metrics/StylisedFactMetrics.h"
 #include "Results/SimulationRunResult.h"
 
@@ -67,12 +68,19 @@ void printSection(const std::string& title) {
 }
 
 [[nodiscard]] std::string describeAgentMix(const SimulationConfig& config) {
+    const std::size_t protagonistCount = config.protagonist.enabled ? 1U : 0U;
     std::ostringstream described;
     described << (config.numFundamentalists + config.numChartists + config.numNoiseTraders +
-                  config.numBuyAndHoldAgents)
+                  config.numBuyAndHoldAgents + protagonistCount)
               << " (" << config.numFundamentalists << " fundamentalists, " << config.numChartists
               << " chartists, " << config.numNoiseTraders << " noise traders, "
-              << config.numBuyAndHoldAgents << " buy-and-hold agents)";
+              << config.numBuyAndHoldAgents << " buy-and-hold agents";
+    if (config.protagonist.enabled) {
+        described << ", plus the protagonist '" << config.protagonist.name << "' running the "
+                  << config_parsing::protagonistStrategyKindName(config.protagonist.strategy)
+                  << " rule";
+    }
+    described << ")";
     return described.str();
 }
 

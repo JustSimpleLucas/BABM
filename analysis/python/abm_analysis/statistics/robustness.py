@@ -52,7 +52,7 @@ def build_seed_robustness_summary(
 
     Replication across random seeds is a core requirement for simulation-based
     research. This summary groups by modelling controls and population settings
-    so the report can distinguish parameter effects from one-off random draws.
+    so a reader can distinguish parameter effects from one-off random draws.
 
     Each condition is exposed twice: ``condition_id`` is a short identifier
     (``condition_1``, ``condition_2``, ...) suitable for tables and chart

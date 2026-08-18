@@ -5,6 +5,7 @@
 #include "Output/RunArtifactWriter.h"
 #include "Simulation/SimulationEngine.h"
 
+#include <algorithm>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -460,11 +461,109 @@ void testRunArtifactWriterSkipsDisabledTradeLedger(int& failures) {
     fs::remove_all(outputRoot, cleanupError);
 }
 
+/**
+ * The protagonist artefact follows the protagonist, not an output switch.
+ *
+ * Both directions are asserted in one test because the pairing is the contract:
+ * an enabled protagonist must always produce the series, and a disabled one must
+ * never leave an empty file behind for the dashboard to misread as a run whose
+ * protagonist simply never traded.
+ */
+void testProtagonistArtefactFollowsTheProtagonist(int& failures) {
+    namespace fs = std::filesystem;
+
+    const fs::path outputRoot = fs::temp_directory_path() / "abm_run_artifact_writer_protagonist";
+    std::error_code cleanupError;
+
+    const auto writeRun = [&](bool protagonistEnabled,
+                              const fs::path& runRoot) -> abm::RuntimeConfig {
+        fs::remove_all(runRoot, cleanupError);
+        fs::create_directories(runRoot, cleanupError);
+
+        abm::RuntimeConfig runtimeConfig;
+        runtimeConfig.simulation = abm::test::deterministicSmokeConfig();
+        runtimeConfig.simulation.protagonist.enabled = protagonistEnabled;
+        runtimeConfig.simulation.protagonist.name = "Alex";
+        runtimeConfig.simulation.protagonist.initialCash = 12345.0;
+        runtimeConfig.sourcePath = (runRoot / "source.cfg").string();
+        runtimeConfig.output.experimentName = "smoke_experiment";
+        runtimeConfig.output.runLabel = "protagonist";
+        runtimeConfig.output.createdAtLocal = "20260427143012";
+        runtimeConfig.output.runId = "protagonist_run";
+        runtimeConfig.output.simulationCsvPath = (runRoot / "step_timeseries.csv").string();
+        runtimeConfig.output.agentCsvPath = (runRoot / "agents_final.csv").string();
+        runtimeConfig.output.protagonistTimeseriesCsvPath =
+            (runRoot / "protagonist_timeseries.csv").string();
+        runtimeConfig.output.tradeLedgerEnabled = false;
+        runtimeConfig.output.tradeLedgerCsvPath = (runRoot / "trade_ledger.csv").string();
+        runtimeConfig.output.summaryMetricsCsvPath = (runRoot / "summary_metrics.csv").string();
+        runtimeConfig.output.stylisedFactsCsvPath = (runRoot / "stylised_facts.csv").string();
+        runtimeConfig.output.configJsonPath = (runRoot / "config.json").string();
+        runtimeConfig.output.metadataJsonPath = (runRoot / "metadata.json").string();
+        runtimeConfig.output.runLogPath = (runRoot / "logs" / "run.log").string();
+
+        abm::SimulationEngine simulation(runtimeConfig.simulation);
+        const abm::SimulationRunResult simulationResult = simulation.run();
+        const abm::RunMetrics metrics = abm::calculateRunMetrics(simulationResult);
+        abm::RunArtifactWriteResult result;
+        std::string error;
+        abm::test::expect(abm::RunArtifactWriter::writeCompletedRun(runtimeConfig, simulationResult,
+                                                                    metrics, result, error),
+                          "artifact writer should succeed with a protagonist toggle: " + error,
+                          failures);
+        return runtimeConfig;
+    };
+
+    const auto readFile = [](const std::string& path) {
+        std::ifstream input(path);
+        std::string content;
+        std::string line;
+        while (std::getline(input, line)) {
+            content += line;
+            content += '\n';
+        }
+        return content;
+    };
+
+    const abm::RuntimeConfig enabled = writeRun(true, outputRoot / "enabled");
+    abm::test::expect(fs::exists(enabled.output.protagonistTimeseriesCsvPath),
+                      "an enabled protagonist should produce protagonist_timeseries.csv", failures);
+
+    const std::string series = readFile(enabled.output.protagonistTimeseriesCsvPath);
+    abm::test::expect(series.find("wealth_percentile_rank") != std::string::npos,
+                      "the protagonist series should carry his standing in the cross-section",
+                      failures);
+    abm::test::expect(std::count(series.begin(), series.end(), '\n') ==
+                          static_cast<std::ptrdiff_t>(enabled.simulation.timeSteps) + 1,
+                      "the protagonist series should hold a header plus one row per step",
+                      failures);
+
+    const std::string agents = readFile(enabled.output.agentCsvPath);
+    abm::test::expect(agents.find("is_protagonist") != std::string::npos,
+                      "agents_final.csv should carry the protagonist flag column", failures);
+
+    const std::string summary = readFile(enabled.output.summaryMetricsCsvPath);
+    abm::test::expect(summary.find("protagonist_final_wealth_percentile") != std::string::npos,
+                      "summary_metrics.csv should record the protagonist's standing", failures);
+
+    const abm::RuntimeConfig disabled = writeRun(false, outputRoot / "disabled");
+    abm::test::expect(!fs::exists(disabled.output.protagonistTimeseriesCsvPath),
+                      "a disabled protagonist should not create protagonist_timeseries.csv",
+                      failures);
+    abm::test::expect(
+        readFile(disabled.output.metadataJsonPath).find("\"protagonist_timeseries_csv\": null") !=
+            std::string::npos,
+        "metadata JSON should record the absent protagonist artefact", failures);
+
+    fs::remove_all(outputRoot, cleanupError);
+}
+
 } // namespace
 
 namespace abm::test {
 
 void runRunArtifactWriterTests(int& failures) {
+    testProtagonistArtefactFollowsTheProtagonist(failures);
     testRunArtifactWriterProducesRequiredFiles(failures);
     testRunArtifactWriterSkipsDisabledTradeLedger(failures);
     testConsoleSummaryReportsEveryTradedAsset(failures);

@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -32,6 +33,16 @@ struct AgentRecord {
 struct SimulationPopulation {
     std::vector<AgentRecord> records{};
     std::vector<Agent*> agentsById{};
+
+    /**
+     * Position of the protagonist in `records`, empty when none is configured.
+     *
+     * Held as an index rather than a flag on AgentRecord because the diagnostics
+     * layer needs to reach him directly every step; scanning the population for
+     * a flag would turn a constant-time lookup into a linear one on the hot
+     * path.
+     */
+    std::optional<std::size_t> protagonistRecordIndex{};
 };
 
 /** Execution and book-state diagnostics produced by one continuous LOB step. */

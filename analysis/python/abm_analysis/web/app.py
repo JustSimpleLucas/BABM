@@ -8,7 +8,7 @@ running it alongside an active experiment cannot disturb the archive.
 The Plotly bundle is served from the installed ``plotly`` package rather than a
 content-delivery network, so the dashboard works with no network connection and
 its charts are drawn by exactly the library version pinned in
-``requirements.txt`` — the same one that renders the static reports.
+``requirements.txt``.
 """
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ CACHE_KEY_ARTEFACTS = (
     "step_timeseries.csv",
     "asset_timeseries.csv",
     "agents_final.csv",
+    "protagonist_timeseries.csv",
     "summary_metrics.csv",
     "config.json",
     "metadata.json",

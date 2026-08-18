@@ -107,6 +107,11 @@ def schema_migrations() -> tuple[tuple[int, str, tuple[str, ...]], ...]:
             "Per-asset allocative efficiency and stylised-fact screening",
             migration_009_per_asset_screening_sql_statements(),
         ),
+        (
+            10,
+            "Protagonist flag, summary columns, and per-step series",
+            migration_010_protagonist_sql_statements(),
+        ),
     )
 
 def migration_001_initial_sql_statements() -> tuple[str, ...]:
@@ -607,6 +612,65 @@ def migration_009_per_asset_screening_sql_statements() -> tuple[str, ...]:
         """
         ALTER TABLE stylised_facts
         ADD COLUMN IF NOT EXISTS asset TEXT
+        """,
+    )
+
+def migration_010_protagonist_sql_statements() -> tuple[str, ...]:
+    """Add the individually parameterised trader to the schema.
+
+    Three separate things arrive together: the flag that identifies him in the
+    end-of-run agent snapshot, the summary columns that let a sweep compare his
+    outcome across runs without opening each archive, and the per-step series
+    that records his standing in the wealth cross-section as the run unfolds.
+
+    Every column is nullable and the new table is created empty, because runs
+    archived before the protagonist existed carry none of this — and runs made
+    afterwards with ``protagonist_enabled = 0`` legitimately carry none either.
+    """
+
+    return (
+        """
+        ALTER TABLE agent_snapshots
+        ADD COLUMN IF NOT EXISTS is_protagonist BOOLEAN
+        """,
+        """
+        ALTER TABLE summary_metrics
+        ADD COLUMN IF NOT EXISTS protagonist_enabled BOOLEAN
+        """,
+        """
+        ALTER TABLE summary_metrics
+        ADD COLUMN IF NOT EXISTS protagonist_strategy TEXT
+        """,
+        """
+        ALTER TABLE summary_metrics
+        ADD COLUMN IF NOT EXISTS protagonist_agent_id BIGINT
+        """,
+        """
+        ALTER TABLE summary_metrics
+        ADD COLUMN IF NOT EXISTS protagonist_final_wealth DOUBLE PRECISION
+        """,
+        """
+        ALTER TABLE summary_metrics
+        ADD COLUMN IF NOT EXISTS protagonist_final_wealth_percentile DOUBLE PRECISION
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS protagonist_timeseries (
+            run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+            simulation_step BIGINT NOT NULL,
+            agent_id BIGINT,
+            cash DOUBLE PRECISION,
+            primary_asset_stock DOUBLE PRECISION,
+            wealth DOUBLE PRECISION,
+            risky_weight DOUBLE PRECISION,
+            cumulative_trades BIGINT,
+            cumulative_traded_volume DOUBLE PRECISION,
+            cumulative_transaction_costs_paid DOUBLE PRECISION,
+            population_mean_wealth DOUBLE PRECISION,
+            population_median_wealth DOUBLE PRECISION,
+            wealth_percentile_rank DOUBLE PRECISION,
+            population_size BIGINT,
+            PRIMARY KEY (run_id, simulation_step)
+        )
         """,
     )
 

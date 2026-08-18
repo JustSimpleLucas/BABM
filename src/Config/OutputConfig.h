@@ -50,6 +50,14 @@ struct OutputConfig {
     std::string agentCsvPath{"data/latest/agents_final.csv"};
 
     /**
+     * Per-step record of the protagonist against the wealth cross-section.
+     *
+     * There is no separate enable switch: the artefact is written exactly when
+     * a protagonist is configured, because it has no meaning without one.
+     */
+    std::string protagonistTimeseriesCsvPath{"data/latest/protagonist_timeseries.csv"};
+
+    /**
      * Enables the detailed trade ledger when true.
      *
      * The ledger is an audit and microstructure diagnostic artefact, not a
@@ -86,17 +94,8 @@ struct OutputConfig {
     /** Deletes CSV/JSON/log staging artefacts after a successful PostgreSQL import. */
     bool databasePruneAfterImport{false};
 
-    /** Runs the Python Plotly analysis automatically after C++ artefacts finish writing. */
-    bool pythonAnalysisEnabled{true};
-
-    /** Python interpreter used for post-run visualisation, usually the project virtualenv. */
+    /** Python interpreter used for the post-run database import, usually the project virtualenv. */
     std::string pythonAnalysisPythonPath{"python3"};
-
-    /** Refreshes an experiment-level comparison report after each archived run. */
-    bool pythonAnalysisComparisonEnabled{true};
-
-    /** Maximum number of runs shown in dense automatic comparison report panels. */
-    std::size_t pythonAnalysisMaxComparisonRuns{8};
 };
 
 /** Runtime configuration plus provenance of the file used to create it. */

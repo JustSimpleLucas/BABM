@@ -53,6 +53,13 @@ constexpr CsvColumn<Row> kColumns[] = {
      [](std::ostream& out, const Row& r) { out << r.prospectProbabilityDistortionForLoss; }},
     {"prospect_scenario_count",
      [](std::ostream& out, const Row& r) { out << r.prospectScenarioCount; }},
+    /*
+     * Appended last so every column an older tool reads keeps its position. The
+     * flag is what lets the analysis layer pick the protagonist out of a
+     * population of thousands without relying on his agent id, which is an
+     * implementation detail of population construction.
+     */
+    {"is_protagonist", [](std::ostream& out, const Row& r) { out << boolToFlag(r.isProtagonist); }},
 };
 
 } // namespace

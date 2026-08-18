@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 
@@ -15,7 +16,7 @@ from abm_analysis.replication import (
 )
 from abm_analysis.statistics.robustness import build_seed_robustness_summary
 
-from abm_test_helpers import make_synthetic_benchmark_dir, write_synthetic_run
+from abm_test_helpers import write_synthetic_run
 
 
 def test_parse_seed_spec_accepts_ranges_and_lists() -> None:
@@ -43,8 +44,7 @@ def test_replicate_cli_builds_options_without_running_simulator(
             experiment_dir=tmp_path / "experiment",
             replication_runs_csv_path=tmp_path / "experiment" / "replication_runs.csv",
             replication_summary_json_path=tmp_path / "experiment" / "replication_summary.json",
-            robustness_report_path=None,
-            comparison_report_path=None,
+            robustness_tables_dir=None,
             seed_robustness_csv_path=None,
             completed_count=2,
             failed_count=0,
@@ -52,7 +52,6 @@ def test_replicate_cli_builds_options_without_running_simulator(
         )
 
     monkeypatch.setattr("abm_analysis.commands.replicate.run_seed_replication", fake_run_seed_replication)
-    benchmark_dir = make_synthetic_benchmark_dir(tmp_path)
 
     exit_code = cli_main(
         [
@@ -67,10 +66,6 @@ def test_replicate_cli_builds_options_without_running_simulator(
             "pytest_seed_batch",
             "--experiment-root",
             str(tmp_path / "experiments"),
-            "--benchmark-dir",
-            str(benchmark_dir),
-            "--benchmark-series",
-            "SPX",
             "--quiet-simulation-progress",
             "--jobs",
             "3",
@@ -82,10 +77,7 @@ def test_replicate_cli_builds_options_without_running_simulator(
     assert captured["options"].simulator == Path("custom/simulate")
     assert captured["options"].seeds == (55, 66)
     assert captured["options"].experiment_name == "pytest_seed_batch"
-    assert captured["options"].benchmark_dir == benchmark_dir
-    assert captured["options"].benchmark_series == "SPX"
     assert captured["options"].show_simulation_progress is False
-    assert captured["options"].generate_comparison_report is False
     assert captured["options"].jobs == 3
 
 
@@ -101,8 +93,7 @@ def test_replicate_cli_defaults_to_release_simulator_and_auto_jobs(
             experiment_dir=tmp_path / "experiment",
             replication_runs_csv_path=tmp_path / "experiment" / "replication_runs.csv",
             replication_summary_json_path=tmp_path / "experiment" / "replication_summary.json",
-            robustness_report_path=None,
-            comparison_report_path=None,
+            robustness_tables_dir=None,
             seed_robustness_csv_path=None,
             completed_count=2,
             failed_count=0,
@@ -129,8 +120,6 @@ def test_run_seed_replication_patches_only_batch_control_settings(tmp_path: Path
                 "experiment_root = data/experiments",
                 "experiment_name = demo",
                 "run_label = base",
-                "python_analysis_enabled = 1",
-                "python_analysis_generate_comparison = 1",
                 "database_output_enabled = 1",
             ]
         )
@@ -176,12 +165,10 @@ def test_run_seed_replication_patches_only_batch_control_settings(tmp_path: Path
     assert generated["experiment_output_enabled"] == "1"
     assert generated["experiment_name"] == "pytest_replication"
     assert generated["run_label"] == "seed_123"
-    assert generated["python_analysis_enabled"] == "0"
-    assert generated["python_analysis_generate_comparison"] == "0"
     assert generated["database_output_enabled"] == "0"
 
 
-def test_run_seed_replication_creates_run_records_and_robustness_report(tmp_path: Path) -> None:
+def test_run_seed_replication_creates_run_records_and_robustness_tables(tmp_path: Path) -> None:
     base_config = _write_minimal_base_config(tmp_path)
     simulator = tmp_path / "simulate"
     simulator.write_text("# fake simulator\n", encoding="utf-8")
@@ -202,42 +189,37 @@ def test_run_seed_replication_creates_run_records_and_robustness_report(tmp_path
     assert result.failed_count == 0
     assert result.replication_runs_csv_path.is_file()
     assert result.replication_summary_json_path.is_file()
-    assert result.robustness_report_path is not None
-    assert result.robustness_report_path.is_file()
-    assert "robustness_reports" in str(result.robustness_report_path)
-    # The broad comparison report is opt-in for replication batches because
-    # their runs differ only in the random seed.
-    assert result.comparison_report_path is None
+    assert result.robustness_tables_dir is not None
+    assert "robustness_reports" in str(result.robustness_tables_dir)
     assert result.seed_robustness_csv_path is not None
     assert result.seed_robustness_csv_path.is_file()
+
+    # Every cross-seed table a thesis replication needs, not just the headline.
+    for name in (
+        "runs_index.csv",
+        "stylised_fact_diagnostics.csv",
+        "pairwise_ks_log_returns.csv",
+        "seed_robustness_summary.csv",
+        "cross_seed_distribution_tests.csv",
+        "adf_stationarity_by_seed.csv",
+        "seed_convergence.csv",
+        "robustness_verdicts.csv",
+    ):
+        assert (result.robustness_tables_dir / name).is_file(), name
+
+    # Runs are labelled by seed rather than by their long reproducible id, so a
+    # table row can be read without decoding the folder name.
+    diagnostics = pd.read_csv(result.robustness_tables_dir / "stylised_fact_diagnostics.csv")
+    assert sorted(diagnostics["simulation_label"].unique()) == ["Seed 55", "Seed 66"]
+
     run_records = pd.read_csv(result.replication_runs_csv_path)
     assert set(run_records["seed"]) == {55, 66}
     assert set(run_records["status"]) == {"completed"}
 
-
-def test_run_seed_replication_optionally_builds_comparison_report(tmp_path: Path) -> None:
-    base_config = _write_minimal_base_config(tmp_path)
-    simulator = tmp_path / "simulate"
-    simulator.write_text("# fake simulator\n", encoding="utf-8")
-
-    result = run_seed_replication(
-        SeedReplicationOptions(
-            base_config=base_config,
-            simulator=simulator,
-            seeds=(55, 66),
-            experiment_name="pytest_seed_robustness_full",
-            experiment_root=tmp_path / "experiments",
-            show_simulation_progress=False,
-            generate_comparison_report=True,
-        ),
-        runner=_synthetic_run_writer(),
+    summary = json.loads(result.replication_summary_json_path.read_text(encoding="utf-8"))
+    assert summary["outputs"]["robustness_tables_dir"] == str(
+        result.robustness_tables_dir.relative_to(result.experiment_dir)
     )
-
-    assert result.robustness_report_path is not None
-    assert result.robustness_report_path.is_file()
-    assert result.comparison_report_path is not None
-    assert result.comparison_report_path.is_file()
-    assert "comparison_reports" in str(result.comparison_report_path)
 
 
 def test_run_seed_replication_records_failed_seed(tmp_path: Path) -> None:
@@ -267,8 +249,8 @@ def test_run_seed_replication_records_failed_seed(tmp_path: Path) -> None:
 
     assert result.completed_count == 0
     assert result.failed_count == 1
-    assert result.robustness_report_path is None
-    assert result.comparison_report_path is None
+    assert result.robustness_tables_dir is None
+    assert result.seed_robustness_csv_path is None
     run_records = pd.read_csv(result.replication_runs_csv_path)
     assert run_records.iloc[0]["seed"] == 55
     assert run_records.iloc[0]["status"] == "failed"
@@ -457,8 +439,6 @@ def _write_minimal_base_config(tmp_path: Path) -> Path:
                 "experiment_root = data/experiments",
                 "experiment_name = demo",
                 "run_label = base",
-                "python_analysis_enabled = 1",
-                "python_analysis_generate_comparison = 1",
                 "database_output_enabled = 1",
             ]
         )

@@ -83,6 +83,41 @@ std::size_t requiredChartistWarmupSteps(const ChartistConfig& chartist) {
     return requiredWarmup;
 }
 
+/**
+ * Warm-up observations the protagonist's own indicators need before step one.
+ *
+ * His lookback windows are configured independently of the population's, so a
+ * warm-up long enough for the crowd can still be too short for him. Returning
+ * zero for the two rules that read no price history keeps the requirement
+ * honest rather than conservative.
+ */
+std::size_t requiredProtagonistWarmupSteps(const ProtagonistConfig& protagonist) {
+    switch (protagonist.strategy) {
+    case ProtagonistStrategyKind::Fundamentalist:
+        return protagonist.volatilityWindow;
+    case ProtagonistStrategyKind::Chartist:
+        switch (protagonist.chartistRule) {
+        case ChartistStrategyMode::MeanReversion:
+        case ChartistStrategyMode::Momentum:
+            return std::max(protagonist.volatilityWindow,
+                            movingAverageWarmupRequirement(protagonist.longWindow));
+        case ChartistStrategyMode::RelativeStrengthIndex:
+            return std::max(protagonist.volatilityWindow, kRelativeStrengthIndexPeriod);
+        case ChartistStrategyMode::Breakout:
+            return std::max(protagonist.volatilityWindow, protagonist.breakoutWindow);
+        case ChartistStrategyMode::Random:
+            break;
+        }
+        // Unreachable: validation rejects a sampled rule for an identified individual.
+        return protagonist.volatilityWindow;
+    case ProtagonistStrategyKind::NoiseTrader:
+    case ProtagonistStrategyKind::BuyAndHold:
+        return 0;
+    }
+
+    return 0;
+}
+
 void requireWarmupAtLeast(std::size_t configuredWarmup, std::size_t requiredWarmup,
                           const std::string& reason) {
     if (configuredWarmup < requiredWarmup) {
@@ -95,12 +130,19 @@ void requireWarmupAtLeast(std::size_t configuredWarmup, std::size_t requiredWarm
 
 void validatePopulationConfig(const SimulationConfig& config) {
     requirePositiveSize(config.timeSteps, named("Simulation time steps", "time_steps").c_str());
+    /*
+     * The protagonist counts towards the requirement. A market of one named
+     * trader is degenerate but well defined, and refusing to construct it would
+     * make the isolated single-agent diagnostic impossible to run.
+     */
     if (config.numFundamentalists + config.numChartists + config.numNoiseTraders +
-            config.numBuyAndHoldAgents ==
-        0) {
+                config.numBuyAndHoldAgents ==
+            0 &&
+        !config.protagonist.enabled) {
         throw std::invalid_argument(
             "At least one agent is required: num_fundamentalists, num_chartists, "
-            "num_noise_traders and num_buy_and_hold_agents are all zero.");
+            "num_noise_traders and num_buy_and_hold_agents are all zero, and no protagonist is "
+            "enabled.");
     }
 }
 
@@ -350,6 +392,110 @@ void validateBuyAndHoldConfig(const BuyAndHoldConfig& buyAndHold) {
     }
 }
 
+/**
+ * Validates the individually specified participant.
+ *
+ * Every rule parameter is checked, not only the block belonging to the selected
+ * strategy. A protagonist described as a chartist may well carry stop-loss and
+ * mispricing settings from an earlier experiment, and a nonsense value there
+ * should fail the run rather than lie dormant until the strategy is switched.
+ *
+ * The whole group is skipped when the protagonist is disabled, so a
+ * configuration that never intends to use him is not obliged to keep his
+ * parameters meaningful.
+ */
+void validateProtagonistConfig(const ProtagonistConfig& protagonist) {
+    if (!protagonist.enabled) {
+        return;
+    }
+
+    requireNonNegative(protagonist.initialCash,
+                       named("Protagonist initial cash", "protagonist_initial_cash").c_str());
+    requireNonNegative(protagonist.initialStock,
+                       named("Protagonist initial stock", "protagonist_initial_stock").c_str());
+    validateAllocationConfig(protagonist.allocation, "Protagonist", "protagonist");
+
+    requireInHalfOpenUnitInterval(
+        protagonist.mispricingThreshold,
+        named("Protagonist mispricing threshold", "protagonist_mispricing_threshold").c_str());
+    requireInHalfOpenUnitInterval(
+        protagonist.stopLossThreshold,
+        named("Protagonist stop-loss threshold", "protagonist_stop_loss_threshold").c_str());
+    requireInHalfOpenUnitInterval(
+        protagonist.takeProfitThreshold,
+        named("Protagonist take-profit threshold", "protagonist_take_profit_threshold").c_str());
+    requirePositiveSize(
+        protagonist.volatilityWindow,
+        named("Protagonist volatility window", "protagonist_volatility_window").c_str());
+
+    requirePositiveSize(protagonist.shortWindow,
+                        named("Protagonist short window", "protagonist_short_window").c_str());
+    requirePositiveSize(protagonist.longWindow,
+                        named("Protagonist long window", "protagonist_long_window").c_str());
+    if (protagonist.shortWindow > protagonist.longWindow) {
+        throw std::invalid_argument("Protagonist short window (protagonist_short_window) = " +
+                                    std::to_string(protagonist.shortWindow) +
+                                    " cannot exceed long window (protagonist_long_window) = " +
+                                    std::to_string(protagonist.longWindow) + '.');
+    }
+    requireInHalfOpenUnitInterval(
+        protagonist.momentumSignalThreshold,
+        named("Protagonist momentum signal threshold", "protagonist_momentum_signal_threshold")
+            .c_str());
+    requirePositiveSize(
+        protagonist.breakoutWindow,
+        named("Protagonist breakout window", "protagonist_breakout_window").c_str());
+    requireInClosedUnitInterval(
+        protagonist.maxShortWeight,
+        named("Protagonist max short weight", "protagonist_max_short_weight").c_str());
+
+    requireStrictlyPositive(
+        protagonist.noiseBeliefShockStdDev,
+        named("Protagonist noise belief shock stddev", "protagonist_noise_belief_shock_std_dev")
+            .c_str());
+    requireInClosedUnitInterval(
+        protagonist.noiseOrderSizeFraction,
+        named("Protagonist noise order size fraction", "protagonist_noise_order_size_fraction")
+            .c_str());
+    if (protagonist.noiseOrderSizeFraction <= 0.0) {
+        throw std::invalid_argument(
+            "Protagonist noise order size fraction (protagonist_noise_order_size_fraction) = " +
+            describeValue(protagonist.noiseOrderSizeFraction) + " must be greater than 0.");
+    }
+
+    requireInClosedUnitInterval(protagonist.buyHoldTargetRiskyWeight,
+                                named("Protagonist buy-and-hold target risky weight",
+                                      "protagonist_buy_hold_target_risky_weight")
+                                    .c_str());
+    if (protagonist.buyHoldTargetRiskyWeight <= 0.0) {
+        throw std::invalid_argument("Protagonist buy-and-hold target risky weight "
+                                    "(protagonist_buy_hold_target_risky_weight) = " +
+                                    describeValue(protagonist.buyHoldTargetRiskyWeight) +
+                                    " must be greater than 0.");
+    }
+
+    if (!protagonist.prospectTheoryEnabled) {
+        return;
+    }
+    requireStrictlyPositive(
+        protagonist.lossAversion,
+        named("Protagonist loss aversion", "protagonist_loss_aversion").c_str());
+    requireStrictlyPositive(
+        protagonist.curvatureForGain,
+        named("Protagonist curvature for gain", "protagonist_curvature_for_gain").c_str());
+    requireStrictlyPositive(
+        protagonist.curvatureForLoss,
+        named("Protagonist curvature for loss", "protagonist_curvature_for_loss").c_str());
+    requireStrictlyPositive(
+        protagonist.probDistortionForGain,
+        named("Protagonist probability distortion for gain", "protagonist_prob_distortion_for_gain")
+            .c_str());
+    requireStrictlyPositive(
+        protagonist.probDistortionForLoss,
+        named("Protagonist probability distortion for loss", "protagonist_prob_distortion_for_loss")
+            .c_str());
+}
+
 void validateSocialConfig(const SocialInfluenceConfig& social) {
     requireStrictlyPositive(social.spaceWidth,
                             named("Social space width", "social_space_width").c_str());
@@ -511,6 +657,10 @@ void validateWarmupRequirements(const SimulationConfig& config) {
         requireWarmupAtLeast(config.warmupSteps, requiredChartistWarmupSteps(config.chartist),
                              "active chartist lookback indicators");
     }
+    if (config.protagonist.enabled) {
+        requireWarmupAtLeast(config.warmupSteps, requiredProtagonistWarmupSteps(config.protagonist),
+                             "the protagonist's lookback indicators");
+    }
 }
 
 /*
@@ -559,6 +709,9 @@ void runNoiseTraderGroup(const SimulationConfig& config) {
 void runBuyAndHoldGroup(const SimulationConfig& config) {
     validateBuyAndHoldConfig(config.buyAndHold);
 }
+void runProtagonistGroup(const SimulationConfig& config) {
+    validateProtagonistConfig(config.protagonist);
+}
 void runSocialGroup(const SimulationConfig& config) {
     validateSocialConfig(config.social);
 }
@@ -575,7 +728,8 @@ void runWarmupGroup(const SimulationConfig& config) {
         runAssetDefinitionGroup, runAssetCorrelationGroup, runMicrostructureGroup,
         runShortSaleGroup,       runTransactionCostGroup,  runFundamentalistGroup,
         runChartistGroup,        runNoiseTraderGroup,      runBuyAndHoldGroup,
-        runSocialGroup,          runProspectTheoryGroup,   runWarmupGroup,
+        runProtagonistGroup,     runSocialGroup,           runProspectTheoryGroup,
+        runWarmupGroup,
     };
     return groups;
 }
@@ -618,6 +772,7 @@ void normaliseSimulationConfig(SimulationConfig& config) {
     if (!config.shortSellingEnabled) {
         config.chartist.maxShortWeight = 0.0;
         config.noiseTrader.maxShortWeight = 0.0;
+        config.protagonist.maxShortWeight = 0.0;
     }
 
     config.agentActivityRate = std::clamp(config.agentActivityRate, 0.0, 1.0);

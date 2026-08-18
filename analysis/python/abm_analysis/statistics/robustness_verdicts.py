@@ -1,6 +1,6 @@
 """Pass/borderline/fail robustness verdicts for seed-replication experiments.
 
-Every threshold in this module is a fixed, named decision rule so the report
+Every threshold in this module is a fixed, named decision rule so a result
 can state exactly why each verdict was reached. The thresholds follow the
 simulation-methodology literature where such guidance exists and are declared
 as explicit modelling choices where it does not:
@@ -13,7 +13,7 @@ as explicit modelling choices where it does not:
 - Stylised-fact success rates require a strong majority of seeds to
   reproduce each fact from Cont (2001, Quantitative Finance 1); the 80%
   cut-off is an explicit modelling choice, not an empirical constant.
-- Distribution-equality and stationarity rules reuse the report-wide 5%
+- Distribution-equality and stationarity rules reuse the project-wide 5%
   significance convention (see ``abm_analysis.statistics.diagnostics``), with the
   Dickey-Fuller unit-root framework from Dickey & Fuller (1979, JASA 74).
 
@@ -185,8 +185,12 @@ def build_robustness_verdicts(
     return pd.DataFrame(rows)
 
 
-def verdict_rows_for_report(verdicts: pd.DataFrame) -> list[dict[str, str]]:
-    """Map the verdict table onto the report's evidence-card schema."""
+def verdict_rows_for_display(verdicts: pd.DataFrame) -> list[dict[str, str]]:
+    """Map the verdict table onto the evidence-card schema an interface renders.
+
+    The CSV export keeps the raw table; this is the presentation shape, with a
+    display label and a tone per verdict.
+    """
 
     display = {
         "pass": "Pass",

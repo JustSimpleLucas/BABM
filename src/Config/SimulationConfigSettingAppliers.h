@@ -59,6 +59,7 @@ bool applyFundamentalistSetting(RuntimeConfig& config, const ConfigSetting& sett
 bool applyChartistSetting(RuntimeConfig& config, const ConfigSetting& setting);
 bool applyNoiseTraderSetting(RuntimeConfig& config, const ConfigSetting& setting);
 bool applyBuyAndHoldSetting(RuntimeConfig& config, const ConfigSetting& setting);
+bool applyProtagonistSetting(RuntimeConfig& config, const ConfigSetting& setting);
 bool applySocialSetting(RuntimeConfig& config, const ConfigSetting& setting);
 bool applyExperimentOutputSetting(RuntimeConfig& config, const ConfigSetting& setting);
 bool applyPythonOutputSetting(RuntimeConfig& config, const ConfigSetting& setting);

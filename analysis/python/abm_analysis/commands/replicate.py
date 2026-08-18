@@ -5,8 +5,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import sys
-from .shared_arguments import figure_formats_argument
-from abm_analysis.report.static_export import STATIC_EXPORT_FORMATS
 from abm_analysis.replication import SeedReplicationOptions
 from abm_analysis.replication import parse_seed_spec
 from abm_analysis.replication import run_seed_replication
@@ -62,23 +60,6 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         help="Price column used to compute simulated log returns.",
     )
     replicate_parser.add_argument(
-        "--max-runs",
-        type=int,
-        default=8,
-        help="Maximum number of runs shown in high-density report panels.",
-    )
-    replicate_parser.add_argument(
-        "--benchmark-dir",
-        type=Path,
-        default=None,
-        help="Optional directory containing empirical benchmark CSVs.",
-    )
-    replicate_parser.add_argument(
-        "--benchmark-series",
-        default=None,
-        help="Optional comma-separated benchmark IDs to include, for example SPX,NAQ.",
-    )
-    replicate_parser.add_argument(
         "--timeout-seconds",
         type=int,
         default=None,
@@ -95,36 +76,9 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         ),
     )
     replicate_parser.add_argument(
-        "--export-images",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help=(
-            "Export publication-ready PNG, PDF, and SVG figures through "
-            "Kaleido (requires Chrome; disable with --no-export-images)."
-        ),
-    )
-    replicate_parser.add_argument(
-        "--figure-formats",
-        type=figure_formats_argument,
-        default=STATIC_EXPORT_FORMATS,
-        help=(
-            "Comma-separated static figure formats to export, e.g. png,pdf. "
-            f"Supported: {', '.join(STATIC_EXPORT_FORMATS)} (default: all three)."
-        ),
-    )
-    replicate_parser.add_argument(
         "--quiet-simulation-progress",
         action="store_true",
         help="Hide the C++ per-step progress bar for each replication simulation.",
-    )
-    replicate_parser.add_argument(
-        "--with-comparison-report",
-        action="store_true",
-        help=(
-            "Also build the full experiment-comparison report. Replication "
-            "batches build the dedicated seed-robustness report by default "
-            "because their runs differ only in the random seed."
-        ),
     )
     replicate_parser.set_defaults(handler=handle_replicate)
 
@@ -140,24 +94,16 @@ def handle_replicate(args: argparse.Namespace) -> int:
         experiment_root=args.experiment_root,
         phase=args.phase,
         price_column=args.price_column,
-        max_runs=args.max_runs,
-        benchmark_dir=args.benchmark_dir,
-        benchmark_series=args.benchmark_series,
         timeout_seconds=args.timeout_seconds,
-        export_images=args.export_images,
-        figure_formats=args.figure_formats,
         show_simulation_progress=not args.quiet_simulation_progress,
-        generate_comparison_report=args.with_comparison_report,
         jobs=args.jobs,
     )
     result = run_seed_replication(options)
     print(f"Seed replication experiment: {result.experiment_dir}")
     print(f"Replication run ledger: {result.replication_runs_csv_path}")
     print(f"Replication summary: {result.replication_summary_json_path}")
-    if result.robustness_report_path is not None:
-        print(f"Seed robustness report: {result.robustness_report_path}")
-    if result.comparison_report_path is not None:
-        print(f"Comparison report: {result.comparison_report_path}")
+    if result.robustness_tables_dir is not None:
+        print(f"Seed robustness tables: {result.robustness_tables_dir}")
     if result.seed_robustness_csv_path is not None:
         print(f"Seed robustness CSV: {result.seed_robustness_csv_path}")
     if result.failed_count:

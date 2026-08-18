@@ -123,8 +123,6 @@ void testExperimentDataWorkflowWritesArchivedRunsAndManifest(int& failures) {
         runtimeConfig.output.experimentName = "Data Workflow Test";
         runtimeConfig.output.runLabel = "archive smoke";
         runtimeConfig.output.tradeLedgerEnabled = false;
-        runtimeConfig.output.pythonAnalysisEnabled = false;
-        runtimeConfig.output.pythonAnalysisComparisonEnabled = false;
 
         std::string error;
         const bool prepared = abm::ExperimentDataWorkflow::prepareRunArchive(runtimeConfig, error);

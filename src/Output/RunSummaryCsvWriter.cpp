@@ -2,24 +2,44 @@
 
 #include "Output/RunSummaryCsvWriter.h"
 
+#include "Config/SimulationConfigParsing.h"
 #include "Output/CsvSchema.h"
 #include "Output/OutputSerialization.h"
 #include "Results/SimulationRunResult.h"
 
 #include <fstream>
 #include <iomanip>
+#include <vector>
 
 namespace abm::output_detail {
 namespace {
 
-/** The four sources a summary row draws from, bundled so one table can read them. */
+/** The sources a summary row draws from, bundled so one table can read them. */
 struct Row {
     const RuntimeConfig& runtimeConfig;
     const SimulationConfig& config;
     const SimulationStats& stats;
     const RunMetrics& metrics;
     const std::string& configHash;
+
+    /** Whole run output, for the few columns that summarise a per-step series. */
+    const SimulationRunResult& result;
 };
+
+/**
+ * Returns the protagonist's last recorded step, or nullptr when he is absent.
+ *
+ * The final row already carries his closing wealth and his standing in the
+ * cross-section, so the summary does not need to recompute either. Returning a
+ * pointer lets the columns below emit an empty field rather than a zero when
+ * there is no protagonist: an absent measurement and a measured zero are
+ * different facts, and a sweep that averaged them together would be wrong.
+ */
+[[nodiscard]] const ProtagonistStepDetails*
+finalProtagonistStep(const SimulationRunResult& result) {
+    const std::vector<ProtagonistStepDetails>& series = result.protagonistStepDetails();
+    return series.empty() ? nullptr : &series.back();
+}
 
 constexpr CsvColumn<Row> kColumns[] = {
     {"run_id",
@@ -111,6 +131,39 @@ constexpr CsvColumn<Row> kColumns[] = {
      [](std::ostream& out, const Row& r) { out << r.metrics.zeroReturnShare; }},
     {"observation_count",
      [](std::ostream& out, const Row& r) { out << r.metrics.observationCount; }},
+    /*
+     * The protagonist's settings and outcome are recorded here rather than in
+     * the run-id, whose schema is frozen. These five columns are what let a
+     * parameter sweep compare one identified investor's fate across runs
+     * straight from the experiment manifest.
+     */
+    {"protagonist_enabled",
+     [](std::ostream& out, const Row& r) { out << boolToFlag(r.config.protagonist.enabled); }},
+    {"protagonist_strategy",
+     [](std::ostream& out, const Row& r) {
+         if (r.config.protagonist.enabled) {
+             out << csvEscape(
+                 config_parsing::protagonistStrategyKindName(r.config.protagonist.strategy));
+         }
+     }},
+    {"protagonist_agent_id",
+     [](std::ostream& out, const Row& r) {
+         if (const ProtagonistStepDetails* step = finalProtagonistStep(r.result)) {
+             out << step->agentId;
+         }
+     }},
+    {"protagonist_final_wealth",
+     [](std::ostream& out, const Row& r) {
+         if (const ProtagonistStepDetails* step = finalProtagonistStep(r.result)) {
+             out << step->wealth;
+         }
+     }},
+    {"protagonist_final_wealth_percentile",
+     [](std::ostream& out, const Row& r) {
+         if (const ProtagonistStepDetails* step = finalProtagonistStep(r.result)) {
+             out << step->wealthPercentileRank;
+         }
+     }},
 };
 
 } // namespace
@@ -131,7 +184,7 @@ bool exportSummaryMetricsCsv(const std::string& outputPath, const RuntimeConfig&
     writeCsvHeader(out, kColumns);
     out << std::fixed << std::setprecision(10);
     writeCsvRow(out, kColumns,
-                Row{runtimeConfig, result.config(), result.stats(), metrics, configHash});
+                Row{runtimeConfig, result.config(), result.stats(), metrics, configHash, result});
 
     out.flush();
     if (!out.good()) {

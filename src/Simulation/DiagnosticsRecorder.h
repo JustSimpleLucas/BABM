@@ -73,10 +73,14 @@ class DiagnosticsRecorder {
 
     void recordAssetSteps(const StepRecordingRequest& request);
 
+    /** Appends the protagonist's row for one step, or nothing when he is absent. */
+    void recordProtagonistStep(const StepRecordingRequest& request);
+
     SimulationStats stats_{};
     std::vector<StepDetails> stepDetails_;
     std::vector<AssetStepDetails> assetStepDetails_;
     std::vector<AgentSnapshot> agentSnapshots_;
+    std::vector<ProtagonistStepDetails> protagonistStepDetails_;
     std::vector<ExternalTradeLedgerRecord> externalTradeLedger_;
     std::size_t nextTradeId_{1};
 };

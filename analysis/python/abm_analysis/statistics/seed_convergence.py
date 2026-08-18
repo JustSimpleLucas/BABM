@@ -19,7 +19,7 @@ from abm_analysis.statistics.robustness import merge_run_and_diagnostic_metrics
 
 
 # Headline metrics whose ensemble precision justifies the replication count.
-# They mirror the report's summary cards: location, dispersion, tail
+# They mirror the dashboard's summary cards: location, dispersion, tail
 # thickness, and worst-case loss of the simulated market.
 CONVERGENCE_METRICS = (
     "mean_log_return",

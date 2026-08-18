@@ -21,7 +21,7 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from abm_analysis.plots.agents import build_agent_summary_statistics
+from abm_analysis.statistics.agents import build_agent_summary_statistics
 from abm_analysis.statistics.diagnostics import (
     run_asset_stylised_fact_diagnostics,
     run_stylised_fact_diagnostics,
@@ -33,6 +33,7 @@ from abm_analysis.web.run_view import build_run_view
 from abm_test_helpers import (
     make_synthetic_experiment,
     write_synthetic_asset_timeseries,
+    write_synthetic_protagonist,
     write_synthetic_run,
 )
 
@@ -498,7 +499,7 @@ def test_agent_panel_summarises_each_strategy(data_root: Path) -> None:
     assert counts == {"chartist": 7, "fundamentalist": 5}
 
 
-def test_agent_summary_matches_the_plots_module(data_root: Path) -> None:
+def test_agent_summary_matches_the_statistics_module(data_root: Path) -> None:
     run_dir = single_asset_run(data_root)
     agents = build_run_view(run_dir)["agents"]
     expected = build_agent_summary_statistics(run_dir.parent, [run_dir.name])
@@ -546,6 +547,82 @@ def test_agent_panel_reports_absence_without_failing(data_root: Path) -> None:
     assert agents["wealth_distribution"]["available"] is False
     # The Gini is a simulator scalar, so it survives the snapshot's absence.
     assert any(metric["label"] == "Wealth Gini (final)" for metric in agents["metrics"])
+
+
+def test_protagonist_panel_locates_him_in_the_wealth_distribution(data_root: Path) -> None:
+    """His standing must be recomputed from the snapshot, not taken on trust."""
+
+    run_dir = single_asset_run(data_root)
+    expected = write_synthetic_protagonist(run_dir)
+
+    panel = build_run_view(run_dir)["protagonist"]
+
+    assert panel["available"] is True
+    assert panel["message"] is None
+    assert panel["identity"]["agent_id"] == expected["agent_id"]
+    assert panel["standing"]["percentile"] == pytest.approx(expected["percentile"])
+    assert panel["standing"]["rank"] == expected["rank"]
+    assert panel["standing"]["population"] == expected["population"]
+    assert panel["wealth_marker"] == pytest.approx(expected["final_wealth"])
+
+
+def test_protagonist_rank_matches_a_rank_computed_from_the_snapshot(data_root: Path) -> None:
+    """The panel and a direct count over agents_final.csv must not disagree."""
+
+    run_dir = single_asset_run(data_root)
+    write_synthetic_protagonist(run_dir)
+
+    panel = build_run_view(run_dir)["protagonist"]
+    agents = pd.read_csv(run_dir / "agents_final.csv")
+    protagonist_wealth = float(agents.loc[agents["is_protagonist"] == 1, "final_wealth"].iloc[0])
+    poorer = int((agents["final_wealth"] < protagonist_wealth).sum())
+
+    assert panel["standing"]["percentile"] == pytest.approx(poorer / len(agents))
+    assert panel["standing"]["rank"] == len(agents) - poorer
+
+
+def test_protagonist_trajectory_series_stay_index_aligned(data_root: Path) -> None:
+    run_dir = single_asset_run(data_root)
+    expected = write_synthetic_protagonist(run_dir)
+
+    trajectory = build_run_view(run_dir)["protagonist"]["trajectory"]
+
+    assert trajectory["available"] is True
+    assert len(trajectory["step"]) == expected["steps"]
+    for values in trajectory["series"].values():
+        assert len(values) == len(trajectory["step"])
+
+
+def test_protagonist_panel_reports_absence_without_failing(data_root: Path) -> None:
+    """No protagonist is a modelling choice, so the panel says which absence it is."""
+
+    panel = build_run_view(single_asset_run(data_root))["protagonist"]
+
+    assert panel["available"] is False
+    assert panel["message"]
+    assert panel["standing"] is None
+    assert panel["wealth_marker"] is None
+    assert panel["trajectory"]["available"] is False
+
+
+def test_protagonist_is_counted_in_his_own_strategy_group(data_root: Path) -> None:
+    """He is an ordinary trader, so the agent panel must not treat him apart."""
+
+    run_dir = single_asset_run(data_root)
+    write_synthetic_protagonist(run_dir)
+
+    agents = build_run_view(run_dir)["agents"]
+
+    counts = {row["strategy"]: row["agent_count"] for row in agents["rows"]}
+    assert counts == {"chartist": 7, "fundamentalist": 6}
+    assert agents["agent_count"] == 13
+
+
+def test_protagonist_payload_is_json_serialisable(data_root: Path) -> None:
+    run_dir = single_asset_run(data_root)
+    write_synthetic_protagonist(run_dir)
+
+    json.dumps(build_run_view(run_dir)["protagonist"])
 
 
 def test_single_strategy_population_still_renders(data_root: Path) -> None:

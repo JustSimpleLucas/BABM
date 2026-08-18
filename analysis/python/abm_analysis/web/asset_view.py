@@ -15,8 +15,8 @@ there for the archive it protects.
 
 Nothing here computes a statistic of its own: the diagnostics come from
 ``abm_analysis.statistics.diagnostics`` and the panels from
-``abm_analysis.statistics.multi_asset``, which are the same functions the static
-reports use.
+``abm_analysis.statistics.multi_asset``, the same functions behind the exported
+CSV tables.
 """
 
 from __future__ import annotations
@@ -216,10 +216,9 @@ def resolve_asset_context(
 def build_configuration_rows(configuration: Any) -> tuple[dict[str, Any], ...]:
     """Return the resolved per-asset generating parameters as JSON rows.
 
-    The dataclasses from ``load_multi_asset_configuration`` are used directly
-    rather than ``plots.multi_asset.build_asset_configuration_table``, whose
-    cells are display strings (``"yes"``/``"no"``) built for a static HTML
-    table. The interface needs typed values.
+    The dataclasses from ``load_multi_asset_configuration`` are used directly,
+    with the values left typed: the interface formats numbers and booleans
+    itself, so a row must not arrive pre-rendered as display strings.
     """
 
     rows: list[dict[str, Any]] = []
@@ -253,7 +252,7 @@ def build_diagnostic_rows(
     """Return the stylised-fact diagnostics for each reported asset.
 
     Multi-asset runs go through ``run_asset_stylised_fact_diagnostics``, the
-    same entry point the static reports use, which already merges each asset's
+    same entry point the exported tables use, which already merges each asset's
     maximum drawdown and traded volume into its row. Single-asset runs keep
     today's path exactly: ``diagnose_return_series`` over the phase-filtered
     step series.
@@ -333,7 +332,7 @@ def build_market_metrics(
             "final_fundamental": final_fundamental,
             "mispricing_percent": _mispricing(final_price, final_fundamental),
             # Drawdown and volume come from the diagnostics row so the dashboard
-            # and the report's stylised_fact_diagnostics.csv cannot disagree.
+            # and the exported stylised_fact_diagnostics.csv cannot disagree.
             "max_drawdown": _finite_or_none(diagnostics.get("max_drawdown")),
             "total_traded_volume": _finite_or_none(diagnostics.get("total_traded_volume")),
             "mean_traded_volume": _panel_mean(panels["volume"], name),

@@ -2,7 +2,7 @@
 
 The seed-robustness report evaluates one experiment directory at a time; a
 calibration study instead validates several candidates inside one shared
-``simulation_runs/validation`` directory. This module reuses the report's
+``simulation_runs/validation`` directory. This module reuses the export's
 computation layer verbatim on a per-candidate subset of that directory so the
 final candidate ranking can combine benchmark fit with seed stability.
 """
@@ -75,9 +75,9 @@ def evaluate_candidate_robustness(
 ) -> CandidateRobustness:
     """Compute seed-robustness verdicts for one candidate's validation runs.
 
-    Mirrors the computation layer of ``build_seed_robustness_report`` without
-    the figures and HTML. Recomputing the diagnostics from the archived runs
-    keeps a single tested code path; the cost is seconds per run against
+    Mirrors ``exports.write_seed_robustness_tables`` in memory, without writing
+    a candidate's tables to disk. Recomputing the diagnostics from the archived
+    runs keeps a single tested code path; the cost is seconds per run against
     minutes for the simulations themselves.
     """
 

@@ -1,9 +1,9 @@
 """Assembly of the statistics payload the dashboard renders for one run.
 
 Every number served here is recomputed from the run's own artefacts using the
-same functions the static HTML reports use, so the dashboard and the citable
-report cannot disagree. Where a figure is instead read straight from the
-simulator's ``summary_metrics.csv``, the payload says so in the metric's
+same ``statistics`` functions the exported CSV tables use, so the dashboard and
+the citable file cannot disagree. Where a figure is instead read straight from
+the simulator's ``summary_metrics.csv``, the payload says so in the metric's
 ``source`` field — a reader should always be able to tell which layer produced
 a number they might quote.
 
@@ -57,7 +57,9 @@ from abm_analysis.web.metrics import (
     SIMULATOR_SUMMARY_SOURCE,
     asset_metric,
     evidence,
+    read_agent_snapshot,
 )
+from abm_analysis.web.protagonist_view import build_protagonist_view
 from abm_analysis.web.serialisation import json_safe, numeric_or_none
 
 
@@ -120,6 +122,10 @@ def build_run_view(
     )
     primary = diagnostics_by_asset.get(context.names[0], {})
 
+    # Read once and share: the agent panel and the protagonist panel must be
+    # describing the same population, and the file is not small.
+    agents = read_agent_snapshot(archive)
+
     return json_safe(
         {
             "run_id": archive.run_id,
@@ -143,13 +149,14 @@ def build_run_view(
             "return_distribution": build_return_distributions(returns_by_asset),
             "autocorrelation": build_autocorrelations(returns_by_asset),
             "cross_asset": build_cross_asset_view(run_path, phase=phase, context=context),
-            "agents": build_agent_view(archive, summary_metrics),
+            "agents": build_agent_view(archive, agents, summary_metrics),
+            "protagonist": build_protagonist_view(archive, agents, summary_metrics),
         }
     )
 
 
 def _select_phase(time_series: pd.DataFrame, phase: str) -> pd.DataFrame:
-    """Restrict the frame to one step phase, mirroring the report commands.
+    """Restrict the frame to one step phase, mirroring the analysis commands.
 
     This is a hard filter that may return nothing, unlike the soft filter in
     ``statistics.multi_asset.load_asset_panel``, which falls back to every row

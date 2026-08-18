@@ -14,9 +14,10 @@ flowchart LR
         metadata["metadata.json with portable provenance"]
         timeSeries["step_timeseries.csv with market, microstructure, allocative-efficiency, and wealth-Gini diagnostics"]
         assetTimeSeries["asset_timeseries.csv long-format per (step, asset) with per-asset prices, microstructure, allocative efficiency, and mean agent portfolio weights"]
-        agents["agents_final.csv"]
+        agents["agents_final.csv with the is_protagonist flag"]
+        optionalProtagonist["protagonist_timeseries.csv when a protagonist is configured"]
         optionalLedger["trade_ledger.csv when enabled"]
-        metrics["summary_metrics.csv with final-wealth Gini and mean allocative efficiency, and stylised_facts.csv screened per asset"]
+        metrics["summary_metrics.csv with final-wealth Gini, mean allocative efficiency, and the protagonist's standing, and stylised_facts.csv screened per asset"]
     end
 
     subgraph postgres["PostgreSQL Primary Research Store"]
@@ -25,6 +26,7 @@ flowchart LR
         sqlTimeSeries["step_timeseries with market, microstructure, allocative-efficiency, and wealth-Gini diagnostics"]
         sqlAssetTimeSeries["asset_timeseries per (step, asset) including allocative efficiency and mean agent portfolio weights"]
         sqlAgents["agent_snapshots"]
+        sqlProtagonist["protagonist_timeseries"]
         sqlLedger["trade_ledger"]
         sqlMetrics["summary_metrics with final-wealth Gini and mean allocative efficiency, and per-asset stylised_facts"]
         sqlMechanisms["mechanism and agent-step diagnostics"]
@@ -37,11 +39,8 @@ flowchart LR
         compressCli["abm_analysis compress in-place gzip of large run CSVs"]
         seedReplication["abm_analysis replicate seed runner"]
         calibrateCli["abm_analysis calibrate Optuna search with seed-averaged scoring and seed-robust candidate validation"]
-        robustnessCli["abm_analysis robustness report regenerator"]
-        sqlReports["SQL-backed run and comparison reports"]
-        staticFigures["figures/ publication PNG, PDF, and SVG exports via Kaleido"]
-        fileFallback["--source files legacy fallback"]
-        seedRobustnessReport["robustness_reports/latest_seed_robustness report with cross-seed tests, convergence, verdicts, and CSV exports"]
+        seedRobustnessTables["robustness_reports/latest_seed_robustness CSV tables: cross-seed tests, ADF, convergence, and verdicts"]
+        holdoutTables["holdout_validation out-of-sample comparison against held-back benchmark series"]
         benchmarkImport["empirical benchmark CSV and manifest import"]
         inspectRun["db inspect-run provenance summary"]
         webDashboard["abm_analysis web read-only local dashboard over data/ with per-asset statistics and agent outcomes"]
@@ -51,7 +50,7 @@ flowchart LR
         calibrationDir["data/calibration/<study>/ with trial_configs and simulation_runs"]
         calibrationTrials["calibration_trials.csv appended per trial"]
         calibrationBest["best_config.cfg, candidate ranking, holdout validation, and summary"]
-        calibrationReports["calibration report and best-runs robustness report"]
+        calibrationTables["calibration_report ranking and best_runs_robustness_report CSV tables"]
     end
 
     runtimeConfig --> dataWorkflow
@@ -67,14 +66,14 @@ flowchart LR
     artifactWriter --> metrics
 
     pythonRunner --> dbCli
-    pythonRunner --> sqlReports
+    pythonRunner --> dbCli
     seedReplication --> runtimeConfig
     seedReplication --> runFolder
     calibrateCli --> runtimeConfig
     calibrateCli --> calibrationDir
     calibrateCli --> calibrationTrials
     calibrateCli --> calibrationBest
-    calibrateCli --> calibrationReports
+    calibrateCli --> calibrationTables
     runFolder --> dbCli
     configSnapshot --> dbCli
     metadata --> dbCli
@@ -95,16 +94,10 @@ flowchart LR
     dbCli --> audit
     benchmarkImport --> sqlBenchmarks
 
-    postgres --> sqlReports
+    postgres --> webDashboard
     postgres --> inspectRun
-    staging --> fileFallback
-    seedReplication --> seedRobustnessReport
-    runFolder --> robustnessCli
-    robustnessCli --> seedRobustnessReport
-    seedRobustnessReport --> fileFallback
-    sqlReports --> dbCli
-    sqlReports --> staticFigures
-    seedRobustnessReport --> staticFigures
+    seedReplication --> seedRobustnessTables
+    calibrateCli --> holdoutTables
 
     noteNoPaths["Database records do not store local filesystem paths"]
     runs --> noteNoPaths
@@ -147,7 +140,7 @@ flowchart LR
 
     class runtimeConfig,dataWorkflow,runManager,artifactWriter,pythonRunner producer
     class runFolder,configSnapshot,metadata,timeSeries,assetTimeSeries,agents,optionalLedger,metrics staging
-    class calibrationDir,calibrationTrials,calibrationBest,calibrationReports staging
+    class calibrationDir,calibrationTrials,calibrationBest,calibrationTables staging
     class experiments,runs,sqlTimeSeries,sqlAssetTimeSeries,sqlAgents,sqlLedger,sqlMetrics,sqlMechanisms,sqlBenchmarks,audit database
-    class dbCli,compressCli,seedReplication,calibrateCli,robustnessCli,sqlReports,staticFigures,fileFallback,seedRobustnessReport,benchmarkImport,inspectRun,webDashboard analysis
+    class dbCli,compressCli,seedReplication,calibrateCli,seedRobustnessTables,holdoutTables,benchmarkImport,inspectRun,webDashboard analysis
     class noteNoPaths,notePrune,noteHashes,noteCompress,noteGuard,noteJobs,noteWebReadOnly,noteWebAssetGate policy

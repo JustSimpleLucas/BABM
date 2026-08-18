@@ -18,6 +18,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from abm_analysis.archive.archives import RunArchive
+from abm_analysis.archive.data import read_csv_if_exists
 from abm_analysis.web.serialisation import numeric_or_none
 
 
@@ -33,6 +35,28 @@ PYTHON_DIAGNOSTICS_SOURCE = "python diagnostics"
 
 #: Provenance label for scalars the C++ simulator wrote.
 SIMULATOR_SUMMARY_SOURCE = "simulator summary"
+
+
+def read_agent_snapshot(archive: RunArchive) -> pd.DataFrame:
+    """Read one run's end-of-run agent snapshot, with the derived wealth change.
+
+    ``wealth_change`` is derived the same way ``statistics.agents`` derives it,
+    so the dashboard's column and the exported column mean the same thing.
+
+    Lives here rather than in either view because the agent panel and the
+    protagonist panel both need it: reading the file twice would be wasteful,
+    and deriving ``wealth_change`` twice would let the two panels disagree about
+    what an agent gained.
+    """
+
+    agents = read_csv_if_exists(archive.agents_final_csv)
+    if agents.empty:
+        return agents
+    if "initial_wealth" in agents.columns and "final_wealth" in agents.columns:
+        agents["wealth_change"] = pd.to_numeric(
+            agents["final_wealth"], errors="coerce"
+        ) - pd.to_numeric(agents["initial_wealth"], errors="coerce")
+    return agents
 
 
 def metric(

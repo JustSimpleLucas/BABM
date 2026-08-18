@@ -33,23 +33,6 @@ void printPythonAnalysisStatus(const PythonAnalysisRunResult& result) {
     if (result.databaseImportAttempted && !result.databaseImportSucceeded) {
         std::cerr << "PostgreSQL import warning: " << result.databaseImportMessage << '\n';
     }
-    if (result.runReportAttempted && result.runReportSucceeded) {
-        std::cout << "Python run analysis report: " << result.runReportPath << '\n';
-    }
-    if (result.comparisonReportAttempted && result.comparisonReportSucceeded) {
-        std::cout << "Python comparison report: " << result.comparisonReportPath << '\n';
-    }
-    if (result.runReportOpenAttempted && result.runReportOpenSucceeded) {
-        std::cout << "Opened Python run analysis report in default browser: "
-                  << result.runReportPath << '\n';
-    }
-    if ((result.runReportAttempted && !result.runReportSucceeded) ||
-        (result.comparisonReportAttempted && !result.comparisonReportSucceeded)) {
-        std::cerr << "Python analysis warning: " << result.message << '\n';
-    }
-    if (result.runReportOpenAttempted && !result.runReportOpenSucceeded) {
-        std::cerr << "Python report browser warning: " << result.runReportOpenMessage << '\n';
-    }
 }
 
 } // namespace
@@ -133,7 +116,7 @@ int runSimulationApplication(int argc, char** argv) {
         std::cout.flush();
 
         const PythonAnalysisRunResult pythonAnalysisResult =
-            PythonAnalysisRunner::generatePostRunReports(runtimeConfig);
+            PythonAnalysisRunner::runPostRunProcessing(runtimeConfig);
         printPythonAnalysisStatus(pythonAnalysisResult);
     } catch (const std::exception& ex) {
         std::cerr << "Simulation failed: " << ex.what() << '\n';

@@ -12,7 +12,7 @@ The repository holds two halves of one pipeline:
 | Half | Language | Responsibility |
 | --- | --- | --- |
 | `src/`, `app/` | C++17 | **The model engine.** Reads one config file, runs the simulation, writes a reproducible folder of CSV/JSON artefacts. |
-| `analysis/python/abm_analysis/` | Python 3.11+ | **The analysis layer.** Reads those artefacts and produces econometric diagnostics, HTML reports, publication figures, calibration studies, seed-robustness verdicts, and an optional PostgreSQL store. |
+| `analysis/python/abm_analysis/` | Python 3.11+ | **The analysis layer.** Reads those artefacts and produces econometric diagnostics, a local browsing dashboard, calibration studies, seed-robustness verdicts, and an optional PostgreSQL store. |
 
 The boundary is strict and deliberate: only the C++ side generates model data, and the Python side
 never simulates — it launches the C++ binary and consumes its files.
@@ -25,7 +25,7 @@ You do not need to know how to code to run a simulation. Follow the steps below.
 
 On macOS or Linux:
 
-- **Python 3.11 or newer** — runs the analysis and reports
+- **Python 3.11 or newer** — runs the analysis layer and its dashboard
 - **CMake 3.25 or newer** and a **C++17 compiler** — build the simulator
 
 On a Mac, open the **Terminal** app and run:
@@ -40,10 +40,9 @@ brew install cmake python@3.11
 
 (Homebrew: https://brew.sh)
 
-Optional extras, needed only for specific features:
+Optional extras, needed only for one feature:
 
-- **Google Chrome** — for exporting figures as PNG/PDF/SVG (see [§8](#8-publication-ready-figures))
-- **PostgreSQL** — for the optional database store (see [§9](#9-optional-postgresql-store))
+- **PostgreSQL** — for the optional database store (see [§8](#8-optional-postgresql-store))
 
 ---
 
@@ -93,8 +92,8 @@ build/debug/simulate --config config/simulation.cfg
 ```
 
 The simulator states what it is about to run, prints a progress bar with an estimated finish time,
-then a grouped summary — and because `python_analysis_enabled = 1` in the config, builds an HTML
-report and opens it in your browser.
+then a grouped summary and the paths of everything it archived. To look at the results, open the
+dashboard ([§5.1](#51-the-market-statistics-dashboard)).
 
 The executable also accepts a bare path (`build/debug/simulate config/simulation.cfg`) and can run
 with no argument at all when it finds `config/simulation.cfg` on its own. Other options:
@@ -112,13 +111,13 @@ Every run is archived in its own folder under `data/experiments/<experiment_name
 | `step_timeseries.csv` | One row per step phase for the primary asset (single-asset view). |
 | `asset_timeseries.csv` | Long format: one row per step phase **and** asset. The authoritative multi-asset series. |
 | `trade_ledger.csv` | Counterparty-level execution audit rows (when `trade_ledger_enabled = 1`). |
-| `agents_final.csv` | End-of-run wealth, holdings, strategy, and behavioural parameters per agent. |
+| `agents_final.csv` | End-of-run wealth, holdings, strategy, and behavioural parameters per agent. `is_protagonist` marks the one individually configured trader. |
+| `protagonist_timeseries.csv` | The protagonist's position and his standing in the wealth cross-section, per step (when `protagonist_enabled = 1`). |
 | `summary_metrics.csv` | The run's headline scalars. |
 | `stylised_facts.csv` | In-simulator screening block per traded asset. |
 | `config.json`, `config_used.cfg` | The exact parameters that produced this run. |
 | `metadata.json` | Build metadata: model version, git commit, dirty flag, compiler. |
 | `logs/run.log` | The run log. |
-| `python_analysis/index.html` | The generated report, plus `figures/`. |
 
 `experiment_manifest.csv` at the experiment level is an append-only index of every run, joinable by
 `run_id`.
@@ -166,12 +165,18 @@ config/simulation.cfg:201: error: Unknown config key 'social_hold_tolerence'.
 When the file is valid it prints the resolved settings grouped by section, plus any keys the file did
 not mention (those take their built-in defaults, and are also recorded in the run's `logs/run.log`).
 
-**[docs/config_reference.md](docs/config_reference.md)** lists every key with its units, valid range,
-and meaning. It is generated from the code, so it cannot drift:
+The config file itself holds settings and section banners only. Two documents carry the explanation:
 
-```bash
-build/debug/simulate --config-reference > docs/config_reference.md
-```
+- **[docs/config_reference.md](docs/config_reference.md)** — every key with its units, valid range,
+  and meaning. Generated from the code, so it cannot drift:
+
+  ```bash
+  build/debug/simulate --config-reference > docs/config_reference.md
+  ```
+
+- **[docs/config_guide.md](docs/config_guide.md)** — what each section is modelling and why the
+  shipped values are what they are. Written by hand, and deliberately holds only what the generated
+  reference structurally cannot.
 
 One ordering rule: `assets = ...` must appear before any `asset.<name>.*` key, because per-asset
 settings are resolved against an already-declared universe.
@@ -182,6 +187,7 @@ The main groups of settings, in the order they appear in the file:
 | --- | --- | --- |
 | Assets | `assets`, `asset.alpha.*`, `asset_fundamental_correlation` | Per-asset fundamental process (GBM or random walk), initial price, tick size, endowment, volatility, drift, and cross-asset correlation. Both assets share the same functional form; neither is analytically privileged. |
 | Population | `num_fundamentalists`, `num_chartists`, `num_noise_traders`, `num_buy_and_hold_agents` | The strategy mix. |
+| Protagonist | `protagonist_enabled`, `protagonist_strategy`, `protagonist_initial_cash`, `protagonist_loss_aversion` | One identified trader, added to the counts above rather than taken out of them. He runs an ordinary strategy; only his endowment, allocation bounds, rule parameters, and CPT preferences are set individually. Nothing about him is sampled, so `protagonist_enabled = 0` reproduces a pre-protagonist run byte-for-byte. |
 | Run control | `time_steps`, `warmup_steps`, `seed`, `agent_activity_rate` | Length, warm-up, reproducibility, activation rate. |
 | Behavioural finance | `control_prospect_theory_enabled`, `control_loss_aversion`, `control_reference_point_mode`, `control_prospect_heterogeneity_enabled` | Cumulative Prospect Theory: loss aversion, value-function curvature, probability weighting, reference-point rule, and per-agent heterogeneity. |
 | Social influence | `social_enabled`, `social_interaction_radius`, `social_opinion_kappa`, `social_gamma_*` | The herding mechanism and the spatial network agents talk through. |
@@ -189,14 +195,14 @@ The main groups of settings, in the order they appear in the file:
 | Trading rules | `fundamentalist_*`, `chartist_*`, `noise_trader_*`, `buy_hold_*` | Per-strategy thresholds, windows, risk aversion, and weight bounds. `chartist_strategy_mode` selects momentum / mean-reversion / breakout / RSI, or `random` to sample all four. |
 | Risk and costs | `short_selling_enabled`, `short_sale_*`, `transaction_cost_rate`, `risk_free_rate` | Short-sale margin and borrow limits, proportional trading costs. |
 | Output | `experiment_output_enabled`, `experiment_name`, `run_label`, `trade_ledger_enabled` | Archiving behaviour and which artefacts get written. |
-| Post-processing | `python_analysis_enabled`, `python_analysis_python`, `database_output_enabled` | Whether the HTML report and the database import run automatically after a simulation. |
+| Post-processing | `database_output_enabled`, `database_url_env`, `python_analysis_python` | Whether each finished run is imported into PostgreSQL, and the interpreter that does it. |
 
 Everything below the `Pipeline settings (not model parameters)` banner in the file — artefact paths,
 archiving, post-processing, database — controls where output goes rather than what the model does,
 so it can be left alone while experimenting.
 
 Setting `asset.beta.enabled = 0` collapses the configuration onto the single-asset model; every
-report view then renders exactly as it did before multi-asset support.
+view then renders exactly as it did before multi-asset support.
 
 ---
 
@@ -207,31 +213,23 @@ With the virtual environment active, the analysis layer runs as `python -m abm_a
 
 | Command | What it does |
 | --- | --- |
-| `run <run_dir>` | Diagnostics and a single-run HTML report. |
-| `compare <experiment_dir>` | Cross-run comparison report for a whole experiment. |
-| `replicate` | Runs one fixed config across a list of seeds, then builds the seed-robustness report. |
-| `robustness <experiment_dir>` | Rebuilds the seed-robustness report for an already-archived experiment. |
-| `calibrate` | Searches the parameter space against empirical benchmark returns. |
-| `compress <experiment_dir>` | Gzips completed archives (the big per-row CSVs shrink ~5–10×; loaders read `.gz` transparently). |
-| `db …` | Optional PostgreSQL: `init`, `import-run`, `import-experiment`, `import-benchmarks`, `import-all`, `validate`, `inspect-run`. |
 | `web` | Opens the local dashboard for browsing every archived run and its market statistics ([§5.1](#51-the-market-statistics-dashboard)). |
+| `replicate` | Runs one fixed config across a list of seeds, then exports the cross-seed robustness tables ([§7](#7-checking-robustness-across-seeds)). |
+| `calibrate` | Searches the parameter space against empirical benchmark returns ([§6](#6-calibrating-against-real-market-data)). |
+| `compress <experiment_dir>` | Gzips completed archives (the big per-row CSVs shrink ~5–10×; loaders read `.gz` transparently). |
+| `convert-benchmarks <dir>` | Converts empirical `.xlsx` workbooks into the CSVs the benchmark loader reads. |
+| `db …` | Optional PostgreSQL: `init`, `import-run`, `import-experiment`, `import-benchmarks`, `import-all`, `validate`, `inspect-run`. |
 
-Every command supports `--help`. Report-producing commands share `--phase`, `--price-column`,
-`--output-dir`, `--export-images` / `--no-export-images`, and `--figure-formats`.
+Every command supports `--help`. The two that analyse archives share `--phase` and `--price-column`.
 
-```bash
-.venv/bin/python -m abm_analysis run data/experiments/demo/<run_id>
-```
-
-```bash
-.venv/bin/python -m abm_analysis compare data/experiments/demo
-```
+There is one way to read a run's statistics — the dashboard — and one place the numbers are kept as
+files: the CSV tables `replicate` and `calibrate` write beside the experiment they describe. Both are
+computed by the same `abm_analysis.statistics` functions, so a figure on screen and the same figure
+in a CSV cannot disagree.
 
 ### 5.1 The market-statistics dashboard
 
-The commands above write reports to disk — that is what makes them citable, but it also means
-answering "what did that run actually look like?" costs a report build. The dashboard is the quick
-way in: one command, and every archived run is browsable in your browser.
+One command, and every archived run is browsable in your browser.
 
 ```bash
 .venv/bin/python -m abm_analysis web
@@ -265,14 +263,14 @@ For the selected run the page shows:
   share one axis, and the autocorrelation panel switches between raw, |r|, and r².
 
 The `Phase` and `Price column` selectors at the top re-run the diagnostics on a different window or a
-different price series, the same way `--phase` and `--price-column` do for the report commands.
+different price series, the same way `--phase` and `--price-column` do on the command line.
 
 Four things are worth knowing:
 
 - **It is read-only.** The dashboard never simulates and never writes to `data/`, so it is safe to
   leave open while a long experiment is running.
-- **The numbers are the report's numbers.** Every statistic is recomputed by the same
-  `abm_analysis.statistics` functions the static reports use, so the two cannot disagree. Where a
+- **The numbers are the exported numbers.** Every statistic is recomputed by the same
+  `abm_analysis.statistics` functions that write the CSV tables, so the two cannot disagree. Where a
   figure comes straight from the simulator's `summary_metrics.csv` instead, it is labelled.
 - **It finds runs wherever they are.** Anything under `data/` holding a `step_timeseries.csv` is
   listed, so experiments, calibration studies, and `data/latest` all appear without configuration.
@@ -324,9 +322,9 @@ Defaults for trials, seeds, and scoring live in `config/calibration/calibration_
 | --- | --- |
 | `best_config.cfg` | The winning parameters, saved as a ready-to-run config file. |
 | `calibration_trials.csv` | Every combination tried and its score. |
-| `calibration_report/` | HTML ranking report explaining *why* the winner won. |
-| `best_runs_robustness_report/` | Seed-stability report for the top candidates. |
-| `holdout_validation/` | Out-of-sample checks. |
+| `calibration_report/` | The candidate ranking and every robustness verdict, as CSV — *why* the winner won. |
+| `best_runs_robustness_report/` | Cross-seed robustness tables for the winner's validation runs. |
+| `holdout_validation/` | Out-of-sample check against benchmark series held back from the search. |
 
 **4. Run the tuned model:**
 
@@ -351,39 +349,25 @@ the same configuration across many seeds:
 Seeds run in parallel across CPU cores; pass `--jobs 1` for sequential execution with the live
 progress bar, or `--jobs N` to cap the worker count.
 
-This creates a `seed_robustness_<timestamp>` folder under `data/experiments/` with one run per seed
-plus a report at `robustness_reports/latest_seed_robustness/index.html` containing cross-seed
-distribution tests, stylised-fact success rates, seed-convergence curves, and a pass / borderline /
-fail verdict table with fixed, literature-anchored thresholds.
+This creates a `seed_robustness_<timestamp>` folder under `data/experiments/` with one run per seed,
+plus the cross-seed tables in `robustness_reports/latest_seed_robustness/`:
 
-The report can be regenerated for any archived experiment without re-running the simulations:
+| File | Contents |
+| --- | --- |
+| `robustness_verdicts.csv` | Pass / borderline / fail per criterion, against fixed, literature-anchored thresholds. |
+| `seed_robustness_summary.csv` | Stylised-fact success rates and metric dispersion across seeds. |
+| `cross_seed_distribution_tests.csv` | k-sample tests that every seed drew from one return distribution. |
+| `pairwise_ks_log_returns.csv` | Kolmogorov–Smirnov comparison of each seed pair. |
+| `adf_stationarity_by_seed.csv` | Augmented Dickey–Fuller stationarity, per seed. |
+| `seed_convergence.csv` | Running statistics against seed count — how many seeds were enough. |
+| `stylised_fact_diagnostics.csv`, `runs_index.csv` | The per-run diagnostics and run inventory the rest is built from. |
 
-```bash
-.venv/bin/python -m abm_analysis robustness data/experiments/<experiment_name>
-```
-
----
-
-## 8. Publication-ready figures
-
-Every report also saves each chart as standalone files in a `figures/` folder next to `index.html`:
-a 300 DPI PNG plus vector PDF and SVG, styled for print (serif fonts, white background, sized to a
-full LaTeX text width). `figure_index.csv` lists every exported file. In a thesis or paper, include
-the PDF directly:
-
-```latex
-\includegraphics[width=\textwidth]{.../python_analysis/figures/price_timeseries.pdf}
-```
-
-Static export uses Kaleido, which needs Google Chrome. If Chrome is missing, the command stops with
-instructions — install Chrome, download a private copy with
-`.venv/bin/python -c "import kaleido; kaleido.get_chrome_sync()"`, or pass `--no-export-images` (the
-interactive HTML report is always produced either way). To export only what you need, pass
-`--figure-formats pdf` for LaTeX-only output or `--figure-formats png,pdf` to drop the SVG copies.
+Rows are labelled by seed rather than by the long reproducible run id, so a table can be read
+without decoding folder names. Every run in the batch is also browsable in the dashboard.
 
 ---
 
-## 9. Optional: PostgreSQL store
+## 8. Optional: PostgreSQL store
 
 The CSV/JSON artefacts are treated as staging output; the database is the queryable research store.
 It is entirely optional and disabled by default.
@@ -408,7 +392,7 @@ import with `db validate` (compares source CSV row counts against the database) 
 
 ---
 
-## 10. Repository layout
+## 9. Repository layout
 
 ```text
 app/simulate/main.cpp   Executable entry point (forwards argc/argv only)
@@ -428,7 +412,7 @@ analysis/python/abm_analysis/
   archive/                 Reading run archives, run-ids, manifests, benchmarks, compression
   statistics/              Stylised-fact tests, stress diagnostics, robustness verdicts, convergence
   calibration/             Optuna study, scoring, execution, seed validation, trial worker
-  plots/ report/           Figures and the HTML/PDF report builders
+  exports/                 The CSV tables written beside an experiment: robustness, ranking, holdout
   database/                Optional PostgreSQL schema, imports, exports, validation
   web/                     Read-only local dashboard: run catalogue, statistics API, single page
 config/                 simulation.cfg, calibration search space, benchmark manifest
@@ -440,7 +424,7 @@ tests/python/           Python pytest suite, mirroring analysis/python/
 
 ---
 
-## 11. Tests and CI
+## 10. Tests and CI
 
 GitHub Actions runs three jobs on every push and pull request; reproduce them locally before
 committing.
@@ -474,7 +458,7 @@ cmake --preset sanitizers && cmake --build --preset sanitizers && ctest --preset
 
 ---
 
-## 12. Reproducibility
+## 11. Reproducibility
 
 - Every stochastic draw goes through a seeded RNG wrapper, so a config plus its `seed` reproduces a
   run exactly. The fundamental-value process uses `seed` and the agent side uses `seed + 1`, so
@@ -488,7 +472,7 @@ cmake --preset sanitizers && cmake --build --preset sanitizers && ctest --preset
 
 ---
 
-## 13. Troubleshooting
+## 12. Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
@@ -496,16 +480,16 @@ cmake --preset sanitizers && cmake --build --preset sanitizers && ctest --preset
 | "command not found" | Make sure you are in the repository root (`cd path/to/BABM`). |
 | Changed C++ code, results unchanged | Rebuild: `cmake --build --preset debug` |
 | Config error mentioning a key | Run `build/debug/simulate --validate --config <file>` — it lists every problem at once with the line to edit, and suggests corrections for misspelled keys. |
-| Figure export fails | Chrome is missing; see [§8](#8-publication-ready-figures) or pass `--no-export-images`. |
 | Disk filling up | Compress finished experiments: `.venv/bin/python -m abm_analysis compress data/experiments/<name>` |
 
 ---
 
-## 14. Further documentation
+## 13. Further documentation
 
 | Document | Contents |
 | --- | --- |
 | [docs/config_reference.md](docs/config_reference.md) | Every configuration key with its units, valid range, and meaning. Generated from the code. |
+| [docs/config_guide.md](docs/config_guide.md) | What each config section models and why the shipped values were chosen. The hand-written companion to the reference. |
 | [docs/code_map.md](docs/code_map.md) | File-by-file guide: what every source file does and how they connect. |
 | [docs/baselines.md](docs/baselines.md) | Recorded baseline results, used to detect unintended behavioural drift. |
 | `docs/*.mmd` | Mermaid diagrams: class architecture, build structure, data management, simulation flow, agent decision flow, sequence diagram. |

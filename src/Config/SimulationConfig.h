@@ -15,6 +15,7 @@
 #include "Config/MarketConfig.h"
 #include "Config/ModelConfig.h"
 #include "Config/OutputConfig.h"
+#include "Config/ProtagonistConfig.h"
 #include "Config/StrategyConfig.h"
 
 #endif // ABM_CONFIG_SIMULATION_CONFIG_H

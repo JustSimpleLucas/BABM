@@ -319,6 +319,76 @@ def write_synthetic_asset_timeseries(
     (run_dir / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
 
 
+def write_synthetic_protagonist(
+    run_dir: Path,
+    *,
+    agent_id: int | None = None,
+    final_wealth: float = 1400.0,
+    steps: int = 60,
+) -> dict[str, float]:
+    """Promote one agent of an existing synthetic run to protagonist.
+
+    Applied on top of ``write_synthetic_run`` rather than folded into it, so the
+    default fixture keeps exercising the far more common archive — one with no
+    protagonist at all — and the panel's absence path stays under test.
+
+    The agent is appended with the highest id and a ``final_wealth`` above the
+    rest of the population, matching the real simulator: he is an additional
+    participant, not a relabelled one.
+
+    Returns the expected standing, so a test can assert the dashboard's rank
+    against a number derived here rather than against the dashboard's own
+    arithmetic.
+    """
+
+    agents = pd.read_csv(run_dir / "agents_final.csv")
+    protagonist_id = int(agents["agent_id"].max()) + 1 if agent_id is None else agent_id
+
+    agents["is_protagonist"] = 0
+    protagonist = agents.iloc[[0]].copy()
+    protagonist["agent_id"] = protagonist_id
+    protagonist["is_protagonist"] = 1
+    protagonist["current_strategy_type"] = "fundamentalist"
+    protagonist["initial_strategy_type"] = "fundamentalist"
+    protagonist["initial_wealth"] = 1000.0
+    protagonist["final_wealth"] = final_wealth
+    agents = pd.concat([agents, protagonist], ignore_index=True)
+    agents.to_csv(run_dir / "agents_final.csv", index=False)
+
+    population = len(agents)
+    poorer = int((agents["final_wealth"] < final_wealth).sum())
+    percentile = poorer / population
+
+    wealth_path = np.linspace(1000.0, final_wealth, steps)
+    median_path = np.full(steps, float(agents["final_wealth"].median()))
+    pd.DataFrame(
+        {
+            "simulation_step": np.arange(1, steps + 1),
+            "agent_id": protagonist_id,
+            "cash": wealth_path * 0.4,
+            "primary_asset_stock": np.linspace(4.0, 6.0, steps),
+            "wealth": wealth_path,
+            "risky_weight": np.full(steps, 0.6),
+            "cumulative_trades": np.arange(1, steps + 1),
+            "cumulative_traded_volume": np.linspace(0.0, 90.0, steps),
+            "cumulative_transaction_costs_paid": np.linspace(0.0, 4.0, steps),
+            "population_mean_wealth": median_path,
+            "population_median_wealth": median_path,
+            "wealth_percentile_rank": np.full(steps, percentile),
+            "population_size": population,
+        }
+    ).to_csv(run_dir / "protagonist_timeseries.csv", index=False)
+
+    return {
+        "agent_id": float(protagonist_id),
+        "final_wealth": final_wealth,
+        "percentile": percentile,
+        "rank": float(population - poorer),
+        "population": float(population),
+        "steps": float(steps),
+    }
+
+
 _make_synthetic_experiment = make_synthetic_experiment
 _make_synthetic_benchmark_dir = make_synthetic_benchmark_dir
 _write_synthetic_run = write_synthetic_run

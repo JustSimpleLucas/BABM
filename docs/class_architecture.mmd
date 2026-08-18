@@ -45,12 +45,12 @@ class OutputConfig {
   +string runId
   +string simulationCsvPath
   +string agentCsvPath
+  +string protagonistTimeseriesCsvPath
   +bool tradeLedgerEnabled
   +string tradeLedgerCsvPath
   +bool databaseOutputEnabled
   +bool databasePruneAfterImport
-  +bool pythonAnalysisEnabled
-  +bool pythonAnalysisComparisonEnabled
+  +string pythonAnalysisPythonPath
 }
 
 class SimulationConfigFacade {
@@ -60,6 +60,7 @@ class SimulationConfigFacade {
   +includes MarketConfig
   +includes ModelConfig
   +includes OutputConfig
+  +includes ProtagonistConfig
 }
 
 class BehaviouralConfig {
@@ -76,6 +77,26 @@ class StrategyConfig {
   +ChartistConfig
   +NoiseTraderConfig
   +BuyAndHoldConfig
+}
+
+class ProtagonistConfig {
+  <<header>>
+  +ProtagonistStrategyKind
+  +ProtagonistConfig
+}
+
+class ProtagonistSettings {
+  +bool enabled
+  +string name
+  +ProtagonistStrategyKind strategy
+  +ChartistStrategyMode chartistRule
+  +double initialCash
+  +double initialStock
+  +AllocationConfig allocation
+  +double mispricingThreshold
+  +size_t volatilityWindow
+  +bool prospectTheoryEnabled
+  +double lossAversion
 }
 
 class MarketConfig {
@@ -121,6 +142,7 @@ class SimulationConfig {
   +ChartistConfig chartist
   +NoiseTraderConfig noiseTrader
   +BuyAndHoldConfig buyAndHold
+  +ProtagonistSettings protagonist
   +TransactionCostConfig transactionCosts
   +SocialInfluenceConfig social
   +MicrostructureConfig microstructure
@@ -169,6 +191,7 @@ class SimulationEngine {
 class SimulationPopulation {
   +Vector~AgentRecord~ records
   +Vector~AgentPointer~ agentsById
+  +Optional~size_t~ protagonistRecordIndex
 }
 
 class AgentRecord {
@@ -404,9 +427,11 @@ class DiagnosticsRecorder {
   -SimulationStats stats_
   -Vector~StepDetails~ stepDetails_
   -Vector~AgentSnapshot~ agentSnapshots_
+  -Vector~ProtagonistStepDetails~ protagonistStepDetails_
   -Vector~ExternalTradeLedgerRecord~ externalTradeLedger_
   +resetForRun(config_populationSize_market_recordLedger)
   +recordStep(request)
+  +recordProtagonistStep(request)
   +completeRun(population)
   +buildResult(config_market) SimulationRunResult
 }
@@ -477,6 +502,7 @@ class SimulationRunResult {
   -SimulationStats stats_
   -Vector~StepDetails~ stepDetails_
   -Vector~AgentSnapshot~ agentSnapshots_
+  -Vector~ProtagonistStepDetails~ protagonistStepDetails_
   -Vector~ExternalTradeLedgerRecord~ externalTradeLedger_
 }
 
@@ -495,6 +521,18 @@ class StepDetails {
 
 class AgentSnapshot {
   +double cumulativeTransactionCostsPaid
+  +bool isProtagonist
+}
+
+class ProtagonistStepDetails {
+  +size_t step
+  +uint32_t agentId
+  +double wealth
+  +double riskyWeight
+  +double populationMeanWealth
+  +double populationMedianWealth
+  +double wealthPercentileRank
+  +size_t populationSize
 }
 
 class ExternalTradeLedgerRecord {
@@ -513,6 +551,10 @@ class StepTimeseriesCsvWriter {
 
 class AgentSnapshotCsvWriter {
   +exportAgentDetailsCsv(path_result_error)$ bool
+}
+
+class ProtagonistTimeseriesCsvWriter {
+  +exportProtagonistTimeseriesCsv(path_result_error)$ bool
 }
 
 class TradeLedgerCsvWriter {
@@ -543,7 +585,7 @@ class ExperimentRunManager {
 }
 
 class PythonAnalysisRunner {
-  +generatePostRunReports(runtimeConfig) PythonAnalysisRunResult
+  +runPostRunProcessing(runtimeConfig) PythonAnalysisRunResult
 }
 
 class RunMetrics {
@@ -579,11 +621,13 @@ MarketConfig ..> SocialInfluenceConfig
 MarketConfig ..> MicrostructureConfig
 MarketConfig ..> WarmupPriceProcessConfig
 ModelConfig ..> SimulationConfig
+ProtagonistConfig ..> ProtagonistSettings
 SimulationConfig *-- ControlParameters
 SimulationConfig *-- FundamentalistConfig
 SimulationConfig *-- ChartistConfig
 SimulationConfig *-- NoiseTraderConfig
 SimulationConfig *-- BuyAndHoldConfig
+SimulationConfig *-- ProtagonistSettings
 SimulationConfig *-- ShortSaleConfig
 SimulationConfig *-- TransactionCostConfig
 SimulationConfig *-- SocialInfluenceConfig
@@ -666,6 +710,7 @@ SimulationRunResult *-- SimulationConfig
 SimulationRunResult *-- SimulationStats
 SimulationRunResult *-- StepDetails
 SimulationRunResult *-- AgentSnapshot
+SimulationRunResult *-- ProtagonistStepDetails
 SimulationRunResult *-- ExternalTradeLedgerRecord
 ExperimentDataWorkflow ..> ExperimentRunManager
 ExperimentDataWorkflow ..> RunArchiveSchema
@@ -674,6 +719,7 @@ RunArtifactWriter ..> SimulationRunResult
 RunArtifactWriter ..> RunMetrics
 RunArtifactWriter ..> StepTimeseriesCsvWriter
 RunArtifactWriter ..> AgentSnapshotCsvWriter
+RunArtifactWriter ..> ProtagonistTimeseriesCsvWriter
 RunArtifactWriter ..> TradeLedgerCsvWriter
 RunArtifactWriter ..> RunSummaryCsvWriter
 RunArtifactWriter ..> StylisedFactCsvWriter
@@ -749,9 +795,11 @@ class SimulationRunResult output
 class SimulationStats output
 class StepDetails output
 class AgentSnapshot output
+class ProtagonistStepDetails output
 class ExternalTradeLedgerRecord output
 class StepTimeseriesCsvWriter output
 class AgentSnapshotCsvWriter output
+class ProtagonistTimeseriesCsvWriter output
 class TradeLedgerCsvWriter output
 class RunSummaryCsvWriter output
 class StylisedFactCsvWriter output

@@ -40,21 +40,132 @@ std::vector<ConfigKeyDescriptor> buildConfigKeyRegistry() {
 
         // --- Population ------------------------------------------------------
         {"num_fundamentalists", ConfigSection::Population, kCanonical, "agents",
-         ">= 0, and the four population counts must not all be zero",
+         ">= 0; the four counts must not all be zero unless a protagonist is enabled",
          "Number of agents trading on deviations between price and fundamental value.",
          applyCoreSimulationSetting},
         {"num_chartists", ConfigSection::Population, kCanonical, "agents",
-         ">= 0, and the four population counts must not all be zero",
+         ">= 0; the four counts must not all be zero unless a protagonist is enabled",
          "Number of agents trading on technical rules selected by chartist_strategy_mode.",
          applyCoreSimulationSetting},
         {"num_noise_traders", ConfigSection::Population, kCanonical, "agents",
-         ">= 0, and the four population counts must not all be zero",
+         ">= 0; the four counts must not all be zero unless a protagonist is enabled",
          "Number of agents submitting random-liquidity orders from zero-mean stochastic beliefs.",
          applyCoreSimulationSetting},
         {"num_buy_and_hold_agents", ConfigSection::Population, kCanonical, "agents",
-         ">= 0, and the four population counts must not all be zero",
+         ">= 0; the four counts must not all be zero unless a protagonist is enabled",
          "Number of passive long-only investors that accumulate to a target weight and then hold.",
          applyCoreSimulationSetting},
+
+        // --- Protagonist -----------------------------------------------------
+        /*
+         * One identified individual, added to the population counts above
+         * rather than taken out of them. He runs an ordinary strategy; only his
+         * parameters are set individually, which is what makes him a traceable
+         * case study rather than a new market mechanism.
+         */
+        {"protagonist_enabled", ConfigSection::Protagonist, kCanonical, "boolean",
+         "true/false, on/off, yes/no, 1/0",
+         "Adds one individually parameterised trader alongside the anonymous population. Disabled "
+         "runs are byte-for-byte identical to runs made before the protagonist existed.",
+         applyProtagonistSetting},
+        {"protagonist_name", ConfigSection::Protagonist, kCanonical, "", "free text",
+         "Label carried into the agent snapshot and the dashboard panel. Does not affect the run.",
+         applyProtagonistSetting},
+        {"protagonist_strategy", ConfigSection::Protagonist, kCanonical, "",
+         "fundamentalist, chartist, noise_trader, buy_and_hold",
+         "Trading rule he follows for the whole run. The rule itself is the population's; only its "
+         "parameters are set individually below.",
+         applyProtagonistSetting},
+        {"protagonist_chartist_rule", ConfigSection::Protagonist, kCanonical, "",
+         "momentum, mean_reversion, rsi, breakout",
+         "Concrete technical rule used when protagonist_strategy = chartist. random is rejected: "
+         "an "
+         "identified individual's rule must be stated rather than sampled.",
+         applyProtagonistSetting},
+        {"protagonist_initial_cash", ConfigSection::Protagonist, kCanonical, "currency", ">= 0",
+         "His cash endowment at initialisation, independent of initial_cash.",
+         applyProtagonistSetting},
+        {"protagonist_initial_stock", ConfigSection::Protagonist, kCanonical, "shares per asset",
+         ">= 0", "His share endowment, applied to every asset in the universe.",
+         applyProtagonistSetting},
+        {"protagonist_risk_aversion", ConfigSection::Protagonist, kCanonical, "", "> 0",
+         "Markowitz risk-aversion coefficient used when sizing his risky allocation.",
+         applyProtagonistSetting},
+        {"protagonist_min_risky_weight", ConfigSection::Protagonist, kCanonical, "weight",
+         "finite and <= protagonist_max_risky_weight",
+         "Lower bound on the portfolio weight he allocates to risky assets.",
+         applyProtagonistSetting},
+        {"protagonist_max_risky_weight", ConfigSection::Protagonist, kCanonical, "weight",
+         "finite and >= protagonist_min_risky_weight",
+         "Upper bound on the portfolio weight he allocates to risky assets.",
+         applyProtagonistSetting},
+        {"protagonist_max_gross_exposure", ConfigSection::Protagonist, kCanonical, "weight", "> 0",
+         "Cap on his multi-asset gross exposure sum_j |w_j|.", applyProtagonistSetting},
+        {"protagonist_mispricing_threshold", ConfigSection::Protagonist, kCanonical,
+         "relative deviation", "[0, 1)",
+         "Minimum relative deviation from fundamental value before he trades, under the "
+         "fundamentalist rule.",
+         applyProtagonistSetting},
+        {"protagonist_stop_loss_threshold", ConfigSection::Protagonist, kCanonical, "relative loss",
+         "[0, 1)", "Relative loss from his entry price at which he closes a position.",
+         applyProtagonistSetting},
+        {"protagonist_take_profit_threshold", ConfigSection::Protagonist, kCanonical,
+         "relative gain", "[0, 1)", "Relative gain from his entry price at which he takes profit.",
+         applyProtagonistSetting},
+        {"protagonist_volatility_window", ConfigSection::Protagonist, kCanonical, "observations",
+         "> 0", "Recent one-period log returns he uses for realised volatility.",
+         applyProtagonistSetting},
+        {"protagonist_short_window", ConfigSection::Protagonist, kCanonical, "steps",
+         "> 0 and <= protagonist_long_window",
+         "Short moving-average window used by his momentum rule.", applyProtagonistSetting},
+        {"protagonist_long_window", ConfigSection::Protagonist, kCanonical, "steps",
+         "> 0 and >= protagonist_short_window",
+         "Long moving-average window used by his momentum and mean-reversion rules.",
+         applyProtagonistSetting},
+        {"protagonist_momentum_signal_threshold", ConfigSection::Protagonist, kCanonical,
+         "relative gap", "[0, 1)", "Deadband applied to weak short-minus-long moving-average gaps.",
+         applyProtagonistSetting},
+        {"protagonist_breakout_window", ConfigSection::Protagonist, kCanonical, "steps", "> 0",
+         "Donchian-style window whose previous high and low define a breakout for him.",
+         applyProtagonistSetting},
+        {"protagonist_max_short_weight", ConfigSection::Protagonist, kCanonical, "weight", "[0, 1]",
+         "His maximum short exposure. Forced to 0 when short_selling_enabled is false.",
+         applyProtagonistSetting},
+        {"protagonist_noise_belief_shock_std_dev", ConfigSection::Protagonist, kCanonical,
+         "log return", "> 0",
+         "Standard deviation of the zero-mean shock driving his beliefs, under the noise rule.",
+         applyProtagonistSetting},
+        {"protagonist_noise_order_size_fraction", ConfigSection::Protagonist, kCanonical,
+         "fraction", "(0, 1]", "Fraction of investable wealth he commits to one noise order.",
+         applyProtagonistSetting},
+        {"protagonist_buy_hold_target_risky_weight", ConfigSection::Protagonist, kCanonical,
+         "weight", "(0, 1]",
+         "Risky-asset share he accumulates to and then holds, under the passive rule.",
+         applyProtagonistSetting},
+        {"protagonist_prospect_theory_enabled", ConfigSection::Protagonist, kCanonical, "boolean",
+         "true/false, on/off, yes/no, 1/0",
+         "Applies Cumulative Prospect Theory valuation to his decisions. Set directly rather than "
+         "through control_prospect_theory_agent_fraction, whose seeded draw must not decide what "
+         "an "
+         "identified individual believes.",
+         applyProtagonistSetting},
+        {"protagonist_loss_aversion", ConfigSection::Protagonist, kCanonical, "ratio",
+         "> 0 when protagonist_prospect_theory_enabled", "His loss-aversion coefficient lambda.",
+         applyProtagonistSetting},
+        {"protagonist_curvature_for_gain", ConfigSection::Protagonist, kCanonical, "exponent",
+         "> 0 when protagonist_prospect_theory_enabled", "His value-function curvature over gains.",
+         applyProtagonistSetting},
+        {"protagonist_curvature_for_loss", ConfigSection::Protagonist, kCanonical, "exponent",
+         "> 0 when protagonist_prospect_theory_enabled",
+         "His value-function curvature over losses.", applyProtagonistSetting},
+        {"protagonist_prob_distortion_for_gain", ConfigSection::Protagonist, kCanonical, "exponent",
+         "> 0 when protagonist_prospect_theory_enabled",
+         "His probability-weighting parameter over gain-side cumulative probabilities.",
+         applyProtagonistSetting},
+        {"protagonist_prob_distortion_for_loss", ConfigSection::Protagonist, kCanonical, "exponent",
+         "> 0 when protagonist_prospect_theory_enabled",
+         "His probability-weighting parameter over loss-side cumulative probabilities.",
+         applyProtagonistSetting},
 
         // --- Run control -----------------------------------------------------
         {"time_steps", ConfigSection::RunControl, kCanonical, "steps", "> 0",
@@ -357,6 +468,12 @@ std::vector<ConfigKeyDescriptor> buildConfigKeyRegistry() {
          "relative paths resolve from the config file's directory",
          "End-of-run wealth, holdings, strategy and behavioural parameters per agent.",
          applyArtifactOutputSetting},
+        {"protagonist_timeseries_csv_output", ConfigSection::Output, kCanonical, "path",
+         "relative paths resolve from the config file's directory",
+         "Per-step record of the protagonist's position and his standing in the wealth "
+         "cross-section. Written only when protagonist_enabled is set, because it is meaningless "
+         "without him.",
+         applyArtifactOutputSetting},
         {"trade_ledger_enabled", ConfigSection::Output, kCanonical, "boolean",
          "true/false, on/off, yes/no, 1/0",
          "Writes the counterparty-level execution audit. Keep disabled for large calibration "
@@ -385,20 +502,9 @@ std::vector<ConfigKeyDescriptor> buildConfigKeyRegistry() {
          applyArtifactOutputSetting},
 
         // --- Post-processing --------------------------------------------------
-        {"python_analysis_enabled", ConfigSection::PostProcessing, kCanonical, "boolean",
-         "true/false, on/off, yes/no, 1/0",
-         "Builds the single-run HTML report after the run and opens it in the browser.",
-         applyPythonOutputSetting},
         {"python_analysis_python", ConfigSection::PostProcessing, kCanonical, "path or command",
          "an interpreter path, or a bare command resolved on PATH",
-         "Interpreter used for the analysis layer; normally the project virtual environment.",
-         applyPythonOutputSetting},
-        {"python_analysis_generate_comparison", ConfigSection::PostProcessing, kCanonical,
-         "boolean", "true/false, on/off, yes/no, 1/0",
-         "Refreshes the cross-run comparison report after each archived run.",
-         applyPythonOutputSetting},
-        {"python_analysis_max_comparison_runs", ConfigSection::PostProcessing, kCanonical, "runs",
-         ">= 0", "Most recent runs included in the refreshed comparison report.",
+         "Interpreter running the PostgreSQL import; normally the project virtual environment.",
          applyPythonOutputSetting},
         {"database_output_enabled", ConfigSection::PostProcessing, kCanonical, "boolean",
          "true/false, on/off, yes/no, 1/0",
@@ -539,6 +645,8 @@ std::string_view configSectionName(ConfigSection section) {
         return "Assets";
     case ConfigSection::Population:
         return "Population";
+    case ConfigSection::Protagonist:
+        return "Protagonist";
     case ConfigSection::RunControl:
         return "Run control";
     case ConfigSection::Behavioural:

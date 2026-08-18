@@ -18,7 +18,7 @@ from abm_analysis.calibration import (
 )
 from abm_analysis.calibration.execution import _run_simulator_subprocess
 from abm_analysis.parallel import map_in_order, resolve_job_count
-from abm_analysis.report import build_comparison_report, build_seed_robustness_report
+from abm_analysis.exports import write_seed_robustness_tables
 from abm_analysis.archive.run_discovery import discover_new_run_directory, run_directory_names
 
 
@@ -38,21 +38,11 @@ class SeedReplicationOptions:
     experiment_root: Path | None = None
     phase: str = "simulation"
     price_column: str = "market_price"
-    max_runs: int = 8
-    benchmark_dir: Path | None = None
-    benchmark_series: str | None = None
     timeout_seconds: int | None = None
-    export_images: bool = False
-    figure_formats: tuple[str, ...] = ("png", "pdf", "svg")
     show_simulation_progress: bool = True
     # Concurrent simulator subprocesses; 0 means one per CPU core (capped at
     # the seed count) and 1 restores strictly sequential execution.
     jobs: int = 0
-    # The dedicated seed-robustness report is always built; the broad
-    # comparison report (market dynamics, microstructure, agent panels) is
-    # opt-in because replicated runs differ only in the random seed and the
-    # extra ~20 figures are costly for 30-seed batches.
-    generate_comparison_report: bool = False
 
 
 @dataclass(frozen=True)
@@ -62,8 +52,7 @@ class SeedReplicationResult:
     experiment_dir: Path
     replication_runs_csv_path: Path
     replication_summary_json_path: Path
-    robustness_report_path: Path | None
-    comparison_report_path: Path | None
+    robustness_tables_dir: Path | None
     seed_robustness_csv_path: Path | None
     completed_count: int
     failed_count: int
@@ -129,8 +118,7 @@ def run_seed_replication(
     )
     experiment_dir = experiment_root / experiment_name
     config_dir = experiment_dir / "replication_configs"
-    robustness_report_dir = experiment_dir / "robustness_reports" / "latest_seed_robustness"
-    comparison_report_dir = experiment_dir / "comparison_reports" / "latest_seed_robustness"
+    robustness_tables_target = experiment_dir / "robustness_reports" / "latest_seed_robustness"
     experiment_dir.mkdir(parents=True, exist_ok=True)
     config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -177,35 +165,17 @@ def run_seed_replication(
 
     completed_count = sum(1 for record in records if record["status"] == "completed")
     failed_count = len(records) - completed_count
-    robustness_report_path: Path | None = None
-    comparison_report_path: Path | None = None
+    robustness_tables_dir: Path | None = None
     seed_robustness_csv_path: Path | None = None
     if completed_count > 0:
-        robustness_result = build_seed_robustness_report(
+        robustness_tables = write_seed_robustness_tables(
             experiment_dir,
-            output_dir=robustness_report_dir,
+            output_dir=robustness_tables_target,
             phase=options.phase,
             price_column=options.price_column,
-            max_runs=options.max_runs,
-            export_images=options.export_images,
-            figure_formats=options.figure_formats,
         )
-        robustness_report_path = robustness_result.report_path
-        seed_robustness_csv_path = robustness_result.seed_robustness_csv_path
-        if options.generate_comparison_report:
-            comparison_result = build_comparison_report(
-                experiment_dir,
-                output_dir=comparison_report_dir,
-                phase=options.phase,
-                price_column=options.price_column,
-                max_runs=options.max_runs,
-                benchmark_dir=options.benchmark_dir,
-                benchmark_series=options.benchmark_series,
-                export_images=options.export_images,
-                figure_formats=options.figure_formats,
-                source="files",
-            )
-            comparison_report_path = comparison_result.report_path
+        robustness_tables_dir = robustness_tables.output_dir
+        seed_robustness_csv_path = robustness_tables.seed_robustness_csv_path
 
     summary_path = experiment_dir / "replication_summary.json"
     _write_replication_runs_csv(runs_csv_path, records)
@@ -217,8 +187,7 @@ def run_seed_replication(
         simulator_path=simulator_path,
         completed_count=completed_count,
         failed_count=failed_count,
-        robustness_report_path=robustness_report_path,
-        comparison_report_path=comparison_report_path,
+        robustness_tables_dir=robustness_tables_dir,
         seed_robustness_csv_path=seed_robustness_csv_path,
     )
 
@@ -226,8 +195,7 @@ def run_seed_replication(
         experiment_dir=experiment_dir,
         replication_runs_csv_path=runs_csv_path,
         replication_summary_json_path=summary_path,
-        robustness_report_path=robustness_report_path,
-        comparison_report_path=comparison_report_path,
+        robustness_tables_dir=robustness_tables_dir,
         seed_robustness_csv_path=seed_robustness_csv_path,
         completed_count=completed_count,
         failed_count=failed_count,
@@ -272,8 +240,6 @@ def _run_one_seed(
             "experiment_root": experiment_root,
             "experiment_name": experiment_name,
             "run_label": f"seed_{seed}",
-            "python_analysis_enabled": False,
-            "python_analysis_generate_comparison": False,
             "database_output_enabled": False,
         },
     )
@@ -356,8 +322,7 @@ def _write_replication_summary_json(
     simulator_path: Path,
     completed_count: int,
     failed_count: int,
-    robustness_report_path: Path | None,
-    comparison_report_path: Path | None,
+    robustness_tables_dir: Path | None,
     seed_robustness_csv_path: Path | None,
 ) -> None:
     summary = {
@@ -372,14 +337,9 @@ def _write_replication_summary_json(
         "failed_seed_count": failed_count,
         "phase": options.phase,
         "price_column": options.price_column,
-        "benchmark_dir": str(options.benchmark_dir.expanduser().resolve())
-        if options.benchmark_dir is not None
-        else None,
-        "benchmark_series": options.benchmark_series,
         "outputs": {
             "replication_runs_csv": "replication_runs.csv",
-            "robustness_report": _relative_or_none(experiment_dir, robustness_report_path),
-            "comparison_report": _relative_or_none(experiment_dir, comparison_report_path),
+            "robustness_tables_dir": _relative_or_none(experiment_dir, robustness_tables_dir),
             "seed_robustness_csv": _relative_or_none(experiment_dir, seed_robustness_csv_path),
         },
     }

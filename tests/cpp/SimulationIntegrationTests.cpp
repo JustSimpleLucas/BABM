@@ -686,11 +686,170 @@ void testLimitOrderBookExecutionRespectsPortfolioConstraints(int& failures) {
                       failures);
 }
 
+/**
+ * The protagonist must be free to switch on: a disabled one changes nothing.
+ *
+ * This is the property the whole construct rests on. If enabling him were the
+ * only way to get his diagnostics, but disabling him also perturbed the market,
+ * then no baseline run made before he existed would still be comparable — and
+ * the comparison is the point of having him.
+ */
+void testDisabledProtagonistLeavesTheRunUnchanged(int& failures) {
+    abm::SimulationConfig baseline = abm::test::deterministicSmokeConfig();
+    baseline.timeSteps = 20;
+    baseline.numFundamentalists = 10;
+    baseline.numChartists = 10;
+
+    abm::SimulationConfig withDisabledProtagonist = baseline;
+    withDisabledProtagonist.protagonist.enabled = false;
+    withDisabledProtagonist.protagonist.initialCash = 999999.0;
+    withDisabledProtagonist.protagonist.strategy = abm::ProtagonistStrategyKind::NoiseTrader;
+
+    abm::SimulationEngine baselineEngine(baseline);
+    abm::SimulationEngine disabledEngine(withDisabledProtagonist);
+    const abm::SimulationRunResult baselineResult = baselineEngine.run();
+    const abm::SimulationRunResult disabledResult = disabledEngine.run();
+
+    abm::test::expect(baselineResult.agentSnapshots().size() ==
+                          disabledResult.agentSnapshots().size(),
+                      "a disabled protagonist should not change the population size", failures);
+    abm::test::expect(disabledResult.protagonistStepDetails().empty(),
+                      "a disabled protagonist should record no per-step series", failures);
+
+    const std::vector<double>& baselinePrices = baselineResult.marketPriceHistory();
+    const std::vector<double>& disabledPrices = disabledResult.marketPriceHistory();
+    abm::test::expect(baselinePrices.size() == disabledPrices.size(),
+                      "a disabled protagonist should not change the price-history length",
+                      failures);
+    for (std::size_t index = 0; index < std::min(baselinePrices.size(), disabledPrices.size());
+         ++index) {
+        abm::test::expect(abm::test::nearlyEqual(baselinePrices[index], disabledPrices[index]),
+                          "a disabled protagonist should not change the simulated price path",
+                          failures);
+    }
+    for (const abm::AgentSnapshot& snapshot : disabledResult.agentSnapshots()) {
+        abm::test::expect(!snapshot.isProtagonist,
+                          "a disabled protagonist should leave no agent flagged", failures);
+    }
+}
+
+/** An enabled protagonist is one extra agent carrying exactly his own parameters. */
+void testEnabledProtagonistJoinsAsOneExtraAgent(int& failures) {
+    abm::SimulationConfig config = abm::test::deterministicSmokeConfig();
+    config.timeSteps = 20;
+    config.numFundamentalists = 10;
+    config.numChartists = 10;
+    config.protagonist.enabled = true;
+    config.protagonist.strategy = abm::ProtagonistStrategyKind::BuyAndHold;
+    config.protagonist.initialCash = 7777.0;
+    config.protagonist.initialStock = 3.0;
+    config.protagonist.prospectTheoryEnabled = true;
+    config.protagonist.lossAversion = 4.5;
+
+    abm::SimulationEngine engine(config);
+    const abm::SimulationRunResult result = engine.run();
+
+    const std::size_t populationCount = config.numFundamentalists + config.numChartists;
+    abm::test::expect(result.agentSnapshots().size() == populationCount + 1,
+                      "an enabled protagonist should add exactly one agent", failures);
+
+    std::size_t flagged = 0;
+    const abm::AgentSnapshot* protagonist = nullptr;
+    for (const abm::AgentSnapshot& snapshot : result.agentSnapshots()) {
+        if (snapshot.isProtagonist) {
+            ++flagged;
+            protagonist = &snapshot;
+        }
+    }
+    abm::test::expect(flagged == 1, "exactly one agent should carry the protagonist flag",
+                      failures);
+    if (protagonist == nullptr) {
+        return;
+    }
+
+    abm::test::expect(protagonist->agentId == static_cast<std::uint32_t>(populationCount + 1),
+                      "the protagonist should take the highest agent id", failures);
+    abm::test::expect(abm::test::nearlyEqual(protagonist->initialCash, 7777.0),
+                      "the protagonist should carry his own cash endowment", failures);
+    abm::test::expect(abm::test::nearlyEqual(protagonist->initialStock, 3.0),
+                      "the protagonist should carry his own share endowment", failures);
+    abm::test::expect(protagonist->initialStrategyType == "buy_and_hold",
+                      "the protagonist should run the configured strategy", failures);
+    abm::test::expect(protagonist->prospectTheoryEnabled,
+                      "the protagonist's CPT switch should be his own", failures);
+    /*
+     * Configured, not sampled. Drawing his preferences from the population's
+     * dispersion would make his psychology depend on the seed, which is exactly
+     * what an identified individual must not do.
+     */
+    abm::test::expect(abm::test::nearlyEqual(protagonist->prospectLossAversion, 4.5),
+                      "the protagonist's loss aversion should be configured, not drawn", failures);
+}
+
+/** His per-step series must place him in the cross-section, step by step. */
+void testProtagonistSeriesTracksHisStandingEachStep(int& failures) {
+    abm::SimulationConfig config = abm::test::deterministicSmokeConfig();
+    config.timeSteps = 15;
+    config.numFundamentalists = 10;
+    config.numChartists = 10;
+    config.protagonist.enabled = true;
+    // A far larger endowment than anyone else, so his rank is unambiguous.
+    config.protagonist.initialCash = config.initialCash * 50.0;
+
+    abm::SimulationEngine engine(config);
+    const abm::SimulationRunResult result = engine.run();
+    const std::vector<abm::ProtagonistStepDetails>& series = result.protagonistStepDetails();
+
+    abm::test::expect(series.size() == config.timeSteps,
+                      "the protagonist series should carry one row per simulated step", failures);
+    if (series.empty()) {
+        return;
+    }
+
+    const std::size_t expectedPopulation = config.numFundamentalists + config.numChartists + 1;
+    for (std::size_t index = 0; index < series.size(); ++index) {
+        const abm::ProtagonistStepDetails& row = series[index];
+        abm::test::expect(row.step == index + 1,
+                          "the protagonist series should be ordered by simulation step", failures);
+        abm::test::expect(row.agentId == static_cast<std::uint32_t>(expectedPopulation),
+                          "every protagonist row should name the same agent", failures);
+        abm::test::expect(row.populationSize == expectedPopulation,
+                          "the protagonist's rank should be taken over the whole population",
+                          failures);
+        abm::test::expect(row.wealthPercentileRank >= 0.0 && row.wealthPercentileRank <= 1.0,
+                          "the protagonist's percentile rank should lie in [0, 1]", failures);
+        abm::test::expect(row.wealth >= row.populationMedianWealth,
+                          "a protagonist endowed far above the crowd should sit above the median",
+                          failures);
+        if (index > 0) {
+            /*
+             * Trade counters are cumulative by construction, so a decrease would
+             * mean the series is reading a stale agent rather than tracking one.
+             */
+            abm::test::expect(row.cumulativeTradeCount >= series[index - 1].cumulativeTradeCount,
+                              "the protagonist's cumulative trade count should never fall",
+                              failures);
+            abm::test::expect(row.cumulativeTransactionCostsPaid >=
+                                  series[index - 1].cumulativeTransactionCostsPaid - 1e-12,
+                              "the protagonist's cumulative costs should never fall", failures);
+        }
+    }
+
+    // Endowed fifty times above the crowd, he can only be the wealthiest agent.
+    const double topRank = 1.0 - (1.0 / static_cast<double>(expectedPopulation));
+    abm::test::expect(series.back().wealthPercentileRank >= topRank - 1e-12,
+                      "the richest agent's percentile should place him above everyone else",
+                      failures);
+}
+
 } // namespace
 
 namespace abm::test {
 
 void runSimulationIntegrationTests(int& failures) {
+    testDisabledProtagonistLeavesTheRunUnchanged(failures);
+    testEnabledProtagonistJoinsAsOneExtraAgent(failures);
+    testProtagonistSeriesTracksHisStandingEachStep(failures);
     testTwoAssetRunProducesIndependentPerAssetOutput(failures);
     testTwoAssetRunConservesCashAndShares(failures);
     testMultiAssetDeclarationPreservesLegacyTrajectory(failures);

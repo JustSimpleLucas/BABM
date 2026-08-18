@@ -9,6 +9,7 @@
 
 #include "Config/BehaviouralConfig.h"
 #include "Config/MarketConfig.h"
+#include "Config/ProtagonistConfig.h"
 #include "Config/StrategyConfig.h"
 
 namespace abm {
@@ -157,6 +158,14 @@ struct SimulationConfig {
 
     /** Passive buy-and-hold allocation controls. */
     BuyAndHoldConfig buyAndHold{};
+
+    /**
+     * The one individually specified participant, when enabled.
+     *
+     * He is an addition to the four population counts above rather than a share
+     * of them, so the counts keep describing exactly the anonymous population.
+     */
+    ProtagonistConfig protagonist{};
 
     /** Spatial social-influence controls. */
     SocialInfluenceConfig social{};

@@ -274,11 +274,111 @@ void testSimulationConfigAcceptsBuyAndHoldOnlyPopulation(int& failures) {
     }
 }
 
+void testSimulationConfigRejectsInvalidProtagonistControls(int& failures) {
+    abm::SimulationConfig baseline = abm::test::deterministicSmokeConfig();
+    baseline.protagonist.enabled = true;
+
+    abm::SimulationConfig negativeCash = baseline;
+    negativeCash.protagonist.initialCash = -1.0;
+    abm::test::expectInvalidConfigContaining(negativeCash, "protagonist_initial_cash",
+                                             "negative protagonist cash should be rejected",
+                                             failures);
+
+    abm::SimulationConfig invalidWeights = baseline;
+    invalidWeights.protagonist.allocation.minRiskyWeight = 0.9;
+    invalidWeights.protagonist.allocation.maxRiskyWeight = 0.1;
+    abm::test::expectInvalidConfigContaining(
+        invalidWeights, "protagonist_min_risky_weight",
+        "inverted protagonist allocation bounds should be rejected", failures);
+
+    abm::SimulationConfig invalidWindows = baseline;
+    invalidWindows.protagonist.shortWindow = 30;
+    invalidWindows.protagonist.longWindow = 10;
+    abm::test::expectInvalidConfigContaining(
+        invalidWindows, "protagonist_short_window",
+        "a protagonist short window above his long window should be rejected", failures);
+
+    abm::SimulationConfig invalidThreshold = baseline;
+    invalidThreshold.protagonist.mispricingThreshold = 1.5;
+    abm::test::expectInvalidConfigContaining(
+        invalidThreshold, "protagonist_mispricing_threshold",
+        "an out-of-range protagonist mispricing threshold should be rejected", failures);
+
+    abm::SimulationConfig invalidOrderSize = baseline;
+    invalidOrderSize.protagonist.noiseOrderSizeFraction = 0.0;
+    abm::test::expectInvalidConfigContaining(
+        invalidOrderSize, "protagonist_noise_order_size_fraction",
+        "a zero protagonist noise order size should be rejected", failures);
+
+    abm::SimulationConfig invalidLossAversion = baseline;
+    invalidLossAversion.protagonist.prospectTheoryEnabled = true;
+    invalidLossAversion.protagonist.lossAversion = 0.0;
+    abm::test::expectInvalidConfigContaining(
+        invalidLossAversion, "protagonist_loss_aversion",
+        "a non-positive protagonist loss aversion should be rejected when CPT is on", failures);
+}
+
+/**
+ * His own lookbacks must be covered by the warm-up, not just the population's.
+ *
+ * The population here runs windows that the configured warm-up already covers,
+ * so a failure can only come from his longer breakout window: this pins the
+ * check to the protagonist rather than to a strategy that happens to share it.
+ */
+void testSimulationConfigRejectsWarmupTooShortForTheProtagonist(int& failures) {
+    abm::SimulationConfig config = abm::test::deterministicSmokeConfig();
+    config.warmupSteps = 25;
+    config.protagonist.enabled = true;
+    config.protagonist.strategy = abm::ProtagonistStrategyKind::Chartist;
+    config.protagonist.chartistRule = abm::ChartistStrategyMode::Breakout;
+    config.protagonist.breakoutWindow = 400;
+
+    abm::test::expectInvalidConfigContaining(
+        config, "protagonist",
+        "a warm-up too short for the protagonist's own lookback should be rejected", failures);
+}
+
+/**
+ * A protagonist alone is a legitimate, if degenerate, market.
+ *
+ * Refusing it would make the isolated single-agent diagnostic impossible to
+ * run, which is a useful thing to be able to do when a strategy misbehaves.
+ */
+void testSimulationConfigAcceptsProtagonistOnlyPopulation(int& failures) {
+    abm::SimulationConfig config = abm::test::deterministicSmokeConfig();
+    config.timeSteps = 5;
+    config.numFundamentalists = 0;
+    config.numChartists = 0;
+    config.numNoiseTraders = 0;
+    config.numBuyAndHoldAgents = 0;
+    config.protagonist.enabled = true;
+    config.social.enabled = false;
+
+    try {
+        abm::SimulationEngine simulation(config);
+        const abm::SimulationRunResult simulationResult = simulation.run();
+
+        abm::test::expect(simulationResult.agentSnapshots().size() == 1,
+                          "a protagonist-only population should hold exactly one agent", failures);
+        abm::test::expect(!simulationResult.agentSnapshots().empty() &&
+                              simulationResult.agentSnapshots().front().isProtagonist,
+                          "the sole agent of a protagonist-only run should carry the flag",
+                          failures);
+    } catch (const std::exception& error) {
+        std::cerr << "FAIL: protagonist-only population should be accepted: " << error.what()
+                  << '\n';
+        ++failures;
+    }
+}
+
 } // namespace
 
 namespace abm::test {
 
 void runConfigValidationTests(int& failures) {
+    testSimulationConfigRejectsInvalidProtagonistControls(failures);
+    testSimulationConfigRejectsWarmupTooShortForTheProtagonist(failures);
+    testSimulationConfigAcceptsProtagonistOnlyPopulation(failures);
     testSimulationConfigRejectsInvalidAllocationBounds(failures);
     testSimulationConfigRejectsInsufficientWarmupHistory(failures);
     testSimulationConfigRejectsInvalidReferenceMovingAverageWindow(failures);

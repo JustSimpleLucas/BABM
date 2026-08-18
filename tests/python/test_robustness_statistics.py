@@ -14,7 +14,7 @@ from abm_analysis.statistics.robustness_verdicts import (
     MINIMUM_SEEDS_FOR_VERDICTS,
     VerdictThresholds,
     build_robustness_verdicts,
-    verdict_rows_for_report,
+    verdict_rows_for_display,
 )
 from abm_analysis.statistics.seed_convergence import (
     build_seed_convergence_table,
@@ -332,7 +332,7 @@ def test_verdicts_tolerate_missing_inputs() -> None:
     assert set(verdicts["verdict"]) == {"not_available"}
 
 
-def test_verdict_rows_for_report_match_evidence_schema() -> None:
+def test_verdict_rows_for_display_match_evidence_schema() -> None:
     verdicts = build_robustness_verdicts(
         **_verdict_inputs(
             cov_value=0.05,
@@ -343,7 +343,7 @@ def test_verdict_rows_for_report_match_evidence_schema() -> None:
         seed_count=10,
     )
 
-    cards = verdict_rows_for_report(verdicts)
+    cards = verdict_rows_for_display(verdicts)
 
     assert len(cards) == len(verdicts)
     for card in cards:

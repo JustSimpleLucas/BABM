@@ -16,6 +16,7 @@ target_sources(abm_config
         SimulationConfigSettingAppliers.cpp
         SimulationConfigSettingAppliersBehavioural.cpp
         SimulationConfigSettingAppliersOutput.cpp
+        SimulationConfigSettingAppliersProtagonist.cpp
         SimulationConfigSettingAppliersSimulation.cpp
         SimulationConfigSettingAppliersStrategy.cpp
         SimulationConfigValidation.cpp

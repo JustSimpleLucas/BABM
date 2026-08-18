@@ -11,8 +11,6 @@ requires-python = ">=3.11"
 dependencies = [
     "arch>=8.0",
     "fastapi>=0.115",
-    "jinja2>=3.1",
-    "kaleido>=1.3",
     "numpy>=1.26",
     "optuna>=4.0",
     "pandas>=2.3",
@@ -38,7 +36,7 @@ where = ["analysis/python"]
 include = ["abm_analysis*"]
 
 [tool.setuptools.package-data]
-abm_analysis = ["templates/*.j2", "web/static/*"]
+abm_analysis = ["web/static/*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["analysis/python"]

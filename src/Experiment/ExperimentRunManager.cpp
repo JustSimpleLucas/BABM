@@ -151,6 +151,8 @@ bool ExperimentRunManager::prepareOutputLayout(RuntimeConfig& runtimeConfig, std
     runtimeConfig.output.simulationCsvPath = (runDirectory / "step_timeseries.csv").string();
     runtimeConfig.output.assetTimeseriesCsvPath = (runDirectory / "asset_timeseries.csv").string();
     runtimeConfig.output.agentCsvPath = (runDirectory / "agents_final.csv").string();
+    runtimeConfig.output.protagonistTimeseriesCsvPath =
+        (runDirectory / "protagonist_timeseries.csv").string();
     runtimeConfig.output.tradeLedgerCsvPath = (runDirectory / "trade_ledger.csv").string();
     runtimeConfig.output.summaryMetricsCsvPath = (runDirectory / "summary_metrics.csv").string();
     runtimeConfig.output.stylisedFactsCsvPath = (runDirectory / "stylised_facts.csv").string();

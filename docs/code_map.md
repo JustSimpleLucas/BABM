@@ -11,9 +11,9 @@ Two languages, one pipeline:
   agent-based simulation, and writes a folder of reproducible CSV/JSON
   artefacts.
 - **Python (`analysis/python/abm_analysis/`)** — the analysis layer. It reads
-  those artefacts and produces diagnostics, HTML reports, publication figures,
-  calibration studies, seed-robustness verdicts, and an optional PostgreSQL
-  database.
+  those artefacts and produces diagnostics, a local browsing dashboard, exported
+  CSV tables, calibration studies, seed-robustness verdicts, and an optional
+  PostgreSQL database.
 
 The boundary between the two is deliberate and strict: **the C++ side is the
 only thing that generates model data; the Python side never simulates**, it only
@@ -39,21 +39,22 @@ launches the C++ binary and consumes its files.
 | `.clang-tidy` | Static-analysis rules for editors and local runs (`bugprone`, `cppcoreguidelines`, `modernize`, `performance`, `readability`, with the noisiest checks disabled). Advisory — `WarningsAsErrors` is empty and CI does not run it. |
 | `docs/formalism.tex` | The LaTeX write-up of the model's mathematics — the paper-side counterpart of the code. The only `.tex` source tracked; build products (`.toc`, `.aux`, …) and scratch drafts stay local. |
 | `docs/*.mmd` | Mermaid diagrams: class architecture, build structure, data management, simulation flow, agent decision flow, sequence diagram. |
+| `docs/config_guide.md` | What each `config/simulation.cfg` section models and why the shipped values were chosen. Hand-written; the per-key facts live in the generated `docs/config_reference.md` instead. |
 | `docs/baselines.md` | Recorded baseline results used to detect unintended behavioural drift. |
 
 ### Directories that hold data, not code
 
 | Path | What it is |
 | --- | --- |
-| `config/simulation.cfg` | **The** central parameter file. Every model assumption a user can change lives here. |
+| `config/simulation.cfg` | **The** central parameter file. Every model assumption a user can change lives here. Settings and section banners only — the prose lives in `docs/config_guide.md`. |
 | `config/calibration/search_space.json` | Which parameters calibration may vary and over what ranges. |
 | `config/calibration/calibration_settings.json` | Default calibration run settings (trials, seeds, scoring options). |
 | `config/benchmarks/manifest.csv` | Registry of empirical benchmark series (e.g. SPX) used for validation and calibration targets. |
 | `config/smoke/sql_import_smoke.cfg` | Tiny config used to smoke-test the database import path. |
-| `data/experiments/<name>/<run_id>/` | One folder per simulation run, holding `step_timeseries.csv`, `asset_timeseries.csv`, `trade_ledger.csv`, `agents_final.csv`, `summary_metrics.csv`, `stylised_facts.csv`, `config.json`, `metadata.json`, `run.log`, plus generated `python_analysis/`. |
+| `data/experiments/<name>/<run_id>/` | One folder per simulation run, holding `step_timeseries.csv`, `asset_timeseries.csv`, `trade_ledger.csv`, `agents_final.csv`, `protagonist_timeseries.csv`, `summary_metrics.csv`, `stylised_facts.csv`, `config.json`, `metadata.json`, and `run.log`. |
 | `data/experiments/<name>/experiment_manifest.csv` | Append-only index of every run in that experiment, joinable by `run_id`. |
 | `data/latest/` | Convenience copy of the most recent run. |
-| `data/calibration/<study>/` | Calibration outputs: `best_config.cfg`, `calibration_trials.csv`, robustness report. |
+| `data/calibration/<study>/` | Calibration outputs: `best_config.cfg`, `calibration_trials.csv`, and the exported ranking, robustness and holdout tables. |
 | `data/stock_data/` | Empirical market data (`.xlsx` + converted `candle_chart` CSVs) used as calibration and validation targets. |
 
 `data/` is git-ignored — results exist only on the local machine.
@@ -96,7 +97,7 @@ and glues it together.
 | `src/Application/CliOptions.{h,cpp}` | Parses the command line into a result object; represents `--help` and usage errors as early exits so config loading stays separate from execution. Accepts `--config <path>`, a bare path, or nothing. | Used by `SimulationApplication` |
 | `src/Application/SimulationApplication.{h,cpp}` | The run coordinator: parse CLI → load and validate config → construct `SimulationEngine` → run with a progress bar → hand the result to the archive workflow → print a console summary → optionally invoke Python. | `CliOptions`, `SimulationEngine`, `ExperimentDataWorkflow`, `ConsoleReporter`, `PythonAnalysisRunner`, `StylisedFactMetrics`, `ConsoleProgressBar`, `ProcessMemoryUsage` |
 | `src/Application/ConsoleReporter.{h,cpp}` | Prints the compact terminal summary of a finished run. Kept separate from artefact export: console output is for humans, files are the research record. | Reads `SimulationRunResult` |
-| `src/Application/PythonAnalysisRunner.{h,cpp}` | Optional post-processing step: shells out to the Python package to import artefacts into PostgreSQL (when enabled) and build the HTML report that opens in the browser. | Bridge to `analysis/python/` |
+| `src/Application/PythonAnalysisRunner.{h,cpp}` | Optional post-processing step: shells out to the Python package to import a finished run's artefacts into PostgreSQL when `database_output_enabled = 1`. Reading the results is the dashboard's job and is never started by the simulator. | Bridge to `analysis/python/` |
 
 ### 2.3 Configuration (`abm_config`)
 
@@ -270,9 +271,9 @@ the `abm-analysis` script.
 | `__main__.py` | Makes `python -m abm_analysis` work; forwards to `cli.main`. |
 | `cli.py` | The `main()` entry point named in `pyproject.toml`: builds the parser, dispatches to a handler. The only CLI module outside `commands/`. |
 | `commands/__init__.py` | `build_parser()` — the top-level parser — and `COMMAND_MODULES`, whose order fixes the order subcommands appear in `--help`. Each module registers its own subcommand. |
-| `commands/` | One module per subcommand (`run`, `compare`, `replicate`, `robustness`, `compress`, `calibrate`, `convert-benchmarks`, `db`, `web`), each pairing its parser with its handler. |
-| `commands/shared_arguments.py` | Option groups shared by more than one command (`--benchmark-*`, `--source`, database URL, `--figure-formats`). |
-| `commands/shared_helpers.py` | Helpers shared by more than one command handler: benchmark-directory resolution and the import/optional-output printers. |
+| `commands/` | One module per subcommand (`web`, `replicate`, `calibrate`, `compress`, `convert-benchmarks`, `db`), each pairing its parser with its handler. |
+| `commands/shared_arguments.py` | Option groups shared by more than one command: the calibration benchmark options and the database URL. |
+| `commands/shared_helpers.py` | Helpers shared by more than one command handler: benchmark-directory resolution, the study-name default, and the import summary printer. |
 | `environment.py` | Local environment setup for reproducible analysis runs. |
 
 ### 3.2 Reading simulator output (`archive/`)
@@ -285,7 +286,7 @@ here computes results.
 | `archive/archives.py` | Discovery and validation of run archives on disk; resolves artefact paths (including `.gz` variants) and checks required columns. Every other module gets its data through here. |
 | `archive/run_ids.py` | Parses the frozen run-id folder name back into parameters. Supports three historical variants — and, per `AGENTS.md`, must never need a fourth. |
 | `archive/run_discovery.py` | Finds the run directory a simulator subprocess just created, by parsing the simulator's stdout rather than diffing the directory — which would mis-attribute runs under parallel seeds. |
-| `archive/manifests.py` | Reads `experiment_manifest.csv` and builds the run index used by comparison reports. |
+| `archive/manifests.py` | Reads `experiment_manifest.csv` and builds the run index the exports and the dashboard join against. |
 | `archive/timeseries.py` | Loads time-series artefacts and prepares return series (log returns, warm-up trimming). |
 | `archive/data.py` | Compatibility facade re-exporting the loading/normalisation helpers under their older names. |
 | `archive/compression.py` | In-place gzip of completed archives; the three big per-row CSVs compress ~5–10× and both pandas and the loaders read `.gz` transparently. |
@@ -293,9 +294,10 @@ here computes results.
 
 ### 3.3 Statistics and diagnostics (`statistics/`)
 
-These compute the numbers; the matching modules under `plots/` render them.
-That separation is why `statistics/stress.py` and `plots/stress.py` can share
-a name without ambiguity.
+These compute the numbers, and they are the only place that does: `exports/`
+writes them to CSV and `web/` renders them, but neither computes a statistic of
+its own. That is what makes a figure on screen and the same figure in a file the
+same number by construction rather than by review.
 
 | File | Function |
 | --- | --- |
@@ -307,7 +309,7 @@ a name without ambiguity.
 | `statistics/robustness_verdicts.py` | Turns those tests into pass / borderline / fail verdicts using fixed, named, literature-anchored thresholds so every verdict can be explained. |
 | `statistics/seed_convergence.py` | Tracks how the ensemble mean and its 95% CI stabilise as seeds accumulate, following the sequential-precision argument in Law (2015, ch. 9) — this is what justifies the chosen replication count. |
 | `parallel.py` | Ordered thread-pool execution of independent simulator subprocesses (the GIL is released inside `subprocess`, so threads give real parallelism). Backs `--jobs`. |
-| `replication.py` | The `replicate` command: runs one fixed configuration across a seed list, then builds the seed-robustness report. |
+| `replication.py` | The `replicate` command: runs one fixed configuration across a seed list, then writes the cross-seed robustness tables. |
 
 ### 3.4 Calibration (`calibration/`)
 
@@ -321,51 +323,32 @@ Optuna searches the parameter space; the C++ binary remains the simulator.
 | `config.py` | Patches a base `.cfg` with trial parameters and translates `search_space.json` into Optuna distributions. |
 | `scoring.py` | The minimum-distance objective: distance between simulated and empirical return moments/statistics. |
 | `execution.py` | Launches simulator subprocesses per trial and handles the isolated-worker payload protocol. |
-| `robustness.py` | Re-runs top candidates across validation seeds inside a shared `simulation_runs/validation` directory, reusing the report's computations. |
+| `robustness.py` | Re-runs top candidates across validation seeds inside a shared `simulation_runs/validation` directory, mirroring the seed-robustness export in memory. |
 | `study.py` | Orchestrates the whole study and writes `best_config.cfg`, `calibration_trials.csv`, and `settings.json`. |
 | `worker.py` | The isolated worker process for one trial, launched as `python -m abm_analysis.calibration.worker`. It exists so pandas/NumPy/statsmodels allocations are reclaimed by process exit — a hard memory reset every trial. |
 
 Candidates are ranked by **fit × seed-robustness pass rate**, not fit alone.
 
-### 3.5 Figures (`plots/`)
+### 3.5 Exported tables (`exports/`)
+
+Where results are *kept*. Nothing here computes a statistic: every table comes
+from `statistics/`, and this package decides only the file layout and how runs
+are labelled, so an exported CSV and the dashboard panel showing the same
+statistic are the same number.
+
+There is no rendering layer. The static HTML/Plotly report path (`report/`,
+`plots/`, `templates/report.html.j2`, Jinja2, Kaleido) was removed: results are
+read in the dashboard and archived as CSV.
 
 | File | Function |
 | --- | --- |
-| `__init__.py` | Public figure API; the registry reports pull from. |
-| `common.py` | Shared Plotly theme, colour scheme, and layout helpers. |
-| `publication.py` | Print styling for static export: serif fonts, white background, LaTeX text-width sizing. |
-| `market.py` | Price, volume, and return-path figures. |
-| `returns.py` | Compatibility facade over the two modules below. |
-| `return_distributions.py` | Histograms, QQ plots, tail plots of simulated returns. |
-| `return_benchmarks.py` | Simulated-versus-empirical return comparison figures. |
-| `return_attribution.py` | Decomposes return distributions by agent strategy. |
-| `agents.py` | Agent wealth, portfolio, behaviour, and trading-activity figures. |
-| `microstructure.py` | Order-book depth, spread, and order-flow figures. |
-| `robustness.py` | Per-seed metric spread, convergence curves, and test-result figures. |
-| `stress.py` | Stress-regime and crisis-window figures. |
+| `__init__.py` | Public API: the three writers and their result dataclasses. |
+| `labels.py` | Inserts the human `simulation_label` column ("Seed 66") beside the raw `run_id`, so a table is readable without decoding folder names. |
+| `seed_robustness.py` | The eight cross-seed tables for a replicated experiment: diagnostics, pairwise K-S, k-sample distribution tests, per-seed ADF, seed convergence, and the verdict table. Written by `replicate` and by `calibrate` for the winner's `best_runs`. |
+| `calibration.py` | The candidate ranking and every per-candidate robustness verdict — the audit trail for *why* the winner won. |
+| `holdout.py` | The out-of-sample check: the winner's returns measured against benchmark series held back from the search. Records `status: "not_run"` when no holdout series was supplied, so a skipped check is visible rather than inferred from a missing folder. |
 
-### 3.6 Reports (`report/`)
-
-| File | Function |
-| --- | --- |
-| `__init__.py`, `builders.py` | Public API and a compatibility facade. |
-| `models.py` | Return objects describing generated report artefacts. |
-| `paths.py` | Output path resolution and benchmark loading for a report. |
-| `labels.py` | Human-readable simulation labels for tables and chart notes. |
-| `rendering.py` | HTML rendering and table-preview helpers. |
-| `sections.py` | Assembles numbered, manuscript-style sections from figures and tables. |
-| `figures.py` | Figure assembly and `figure_index.csv` export. |
-| `static_export.py` | Kaleido-backed PNG (300 DPI) / PDF / SVG export; handles the Chrome dependency and `--no-export-images`. |
-| `evidence.py` | Quantitative stylised-fact evidence tables — the inferential content of the report. |
-| `summaries.py` | Key-metric summary rows. |
-| `run.py` | The single-run report (`abm_analysis run <run_dir>`). |
-| `comparison.py` | The cross-run experiment comparison report (`abm_analysis compare <experiment_dir>`). |
-| `seed_robustness.py` | The dedicated seed-robustness report: one question in depth — are headline results robust to the seed? |
-| `calibration.py` | The cross-candidate calibration ranking report explaining *why* the winner won; writes CSV exports before rendering HTML. |
-| `database_reports.py` | Wrappers that materialise a temporary file archive from the database so the file-based report builders can run unchanged. |
-| `templates/report.html.j2` | The Jinja2 template every static report renders into. |
-
-### 3.7 PostgreSQL layer (`database/`)
+### 3.6 PostgreSQL layer (`database/`)
 
 Optional. Simulator CSV/JSON are treated as staging artefacts; the database is
 the queryable research store.
@@ -388,12 +371,12 @@ the queryable research store.
 | `audit.py` | Records the import audit trail. |
 | `validation.py` | Thesis-scale validation checks over imported data. |
 
-### 3.8 Local dashboard (`web/`)
+### 3.7 Local dashboard (`web/`)
 
-A read-only FastAPI application for browsing the archive without generating a
-report first. It never simulates and never writes to `data/`; every statistic it
-serves is recomputed by `statistics/diagnostics.py` and `statistics/multi_asset.py`,
-so the dashboard and the citable static reports cannot disagree.
+A read-only FastAPI application, and the only way the project renders results.
+It never simulates and never writes to `data/`; every statistic it serves is
+recomputed by `statistics/diagnostics.py` and `statistics/multi_asset.py`, so the
+dashboard and the exported CSV tables cannot disagree.
 
 Statistics are reported **per traded asset**: a run configured with two assets
 gets one column per market in every table and one line per market in every chart.
@@ -405,37 +388,35 @@ gets one column per market in every table and one line per market in every chart
 | `web/catalogue.py` | Walks the data root and treats any directory holding `step_timeseries.csv` as a run, grouping runs by their parent. This is why `data/experiments/<name>/`, `data/calibration/<study>/simulation_runs/`, and `data/latest` are all found without hard-coding the three layouts. Also performs the containment check on client-supplied run paths. |
 | `web/run_view.py` | Assembles one run's payload: identity, parameters, the three metric tables (return moments, serial dependence, market outcomes) with a value per asset, and the stylised-fact verdicts with their evidence per asset. Delegates the asset and agent dimensions to the two modules below. |
 | `web/asset_view.py` | The per-asset half. `resolve_asset_context()` is the **only** place that decides whether a run is read from `asset_timeseries.csv` or `step_timeseries.csv`, gating on `len(list_assets(run_dir)) >= 2` rather than on the artefact's presence — see its docstring for the inconsistent-archive case that distinction protects. Also builds the per-asset series, distributions, autocorrelations, and the cross-asset panel. |
-| `web/agent_view.py` | The agent panel: the per-strategy table (via `plots.agents.build_agent_summary_statistics`, the same function behind the report's table) and the shared-bin final-wealth density per strategy. Reads the wealth Gini from `summary_metrics.csv`; the authoritative implementation is the simulator's. |
+| `web/agent_view.py` | The agent panel: the per-strategy table (via `statistics.agents.build_agent_summary_statistics`) and the shared-bin final-wealth density per strategy. Reads the wealth Gini from `summary_metrics.csv`; the authoritative implementation is the simulator's. |
 | `web/metrics.py` | Cell builders and column helpers shared by the two view modules. Keeping them here rather than in either view is what stops the three modules importing each other in a circle. |
 | `web/serialisation.py` | Converts pandas/NumPy values to JSON primitives, mapping every non-finite value to `null` so an uncomputable diagnostic reads as absent rather than as a number. |
 | `web/static/` | The single-page interface: `index.html`, `styles.css` (light and dark, with the asset colour key), `app.js` (formatting, run selection, the metric tables, and the Plotly charts). Holds no analysis logic; the price-scale and autocorrelation switches redraw from the payload already in memory and never refetch. |
 
-### 3.9 Python tests (`tests/python/`)
+### 3.8 Python tests (`tests/python/`)
 
 | File | Covers |
 | --- | --- |
 | `abm_test_helpers.py` | Shared fixtures: synthetic run archives, fake simulator binaries, temp experiment trees. |
 | `test_analysis_data.py` | Archive loading, normalisation, return preparation. |
 | `test_analysis_diagnostics.py` | The econometric diagnostics. |
-| `test_analysis_plots.py` | Figure construction. |
-| `test_analysis_reports.py` | Report assembly and rendering. |
-| `test_analysis_cli.py` | Argument parsing and command dispatch. |
+| `test_analysis_cli.py` | Parser wiring: every registered command is reachable and binds a handler. |
 | `test_analysis_benchmarks.py` | Benchmark loading. |
 | `test_calibration.py` | The full calibration workflow — the largest suite. |
-| `test_replication.py` | Seed replication and its report. |
+| `test_replication.py` | Seed replication and the cross-seed tables it writes. |
+| `test_exports.py` | The holdout validation export, including the skipped case. |
 | `test_robustness_statistics.py` | Cross-seed tests and verdict thresholds. |
-| `test_seed_robustness_report.py` | The seed-robustness report end to end. |
+| `test_multi_asset.py` | Per-asset and cross-asset analytics, and the guarantee that a declared-but-idle second asset is screened as a single-asset run. |
 | `test_run_discovery.py` | Race-free run discovery under parallel seeds. |
 | `test_parallel.py` | The ordered thread pool. |
 | `test_database.py` | Schema, imports, exports. |
 | `test_archive_storage.py` | Drift guard, caching, compression, chunked inserts. |
-| `test_static_export.py` | Kaleido figure export. |
 | `test_schema_sync.py` | **Cross-language guard** — asserts the C++ writer header literals, the Python required-column sets, and the PostgreSQL column tuples all still agree. This is the test that fails when a C++ CSV column changes without a Python update. |
 | `test_repository_hygiene.py` | **Structural guard** — asserts the conventions this document describes: every `src/*.cpp` is named in its directory's `target_sources()` (so a new file cannot silently go uncompiled), every domain with sources has a `CMakeLists.txt` and is `add_subdirectory`'d, every source shares a prefix with a header in its directory, and no `*.egg-info` is tracked. |
 | `test_xlsx_conversion.py` | Builds minimal SpreadsheetML workbooks in-process and checks the benchmark conversion: shared/inline strings, booleans, date serials, padded gap rows, lock-file skipping, and the `convert-benchmarks` subcommand end to end. |
-| `test_web_app.py` | Dashboard run discovery across all three archive layouts, the data-root containment check, per-asset reporting for multi-asset runs, the agent panel, and the guarantee that the served metrics equal `statistics/diagnostics.py`'s and `plots/agents.py`'s. Also pins the awkward archives: the warm-up phase falling back to the primary market, and an `asset_timeseries.csv` that disagrees with its own run. |
+| `test_web_app.py` | Dashboard run discovery across all three archive layouts, the data-root containment check, per-asset reporting for multi-asset runs, the agent panel, and the guarantee that the served metrics equal `statistics/diagnostics.py`'s and `statistics/agents.py`'s. Also pins the awkward archives: the warm-up phase falling back to the primary market, and an `asset_timeseries.csv` that disagrees with its own run. |
 
-### 3.10 Empirical data ingestion
+### 3.9 Empirical data ingestion
 
 | File | Function |
 | --- | --- |
@@ -472,8 +453,11 @@ ExperimentDataWorkflow (ExperimentRunManager + RunArchiveSchema)
 RunArtifactWriter → *.csv, config.json, metadata.json, experiment_manifest.csv
    │
    ▼
-PythonAnalysisRunner → abm_analysis run → HTML report + figures
+PythonAnalysisRunner → abm_analysis db import-run → PostgreSQL (optional)
 ```
+
+Reading the run is a separate, manual step: `abm_analysis web` serves the archive
+at `http://127.0.0.1:8000/`.
 
 **A calibration study:**
 
@@ -487,7 +471,7 @@ search_space.json ─→ calibration/config.py ─→ Optuna (calibration/study.
         ▼
 top candidates → calibration/robustness.py → validation seeds → robustness_verdicts.py
         ▼
-best_config.cfg + calibration_trials.csv + calibration ranking report
+best_config.cfg + calibration_trials.csv + exports/ (ranking, robustness, holdout)
 ```
 
 **A seed-robustness study:**
@@ -495,7 +479,7 @@ best_config.cfg + calibration_trials.csv + calibration ranking report
 ```
 replication.py → parallel.py → N × simulate (one per seed) → run_discovery.py
       → robustness.py (summaries) → robustness_tests.py → robustness_verdicts.py
-      → seed_convergence.py → report/seed_robustness.py → HTML + figures
+      → seed_convergence.py → exports/seed_robustness.py → 8 CSV tables
 ```
 
 ---

@@ -150,6 +150,64 @@ struct MultiAssetRunData {
     std::vector<AssetStepDetails> assetStepDetails{};
 };
 
+/**
+ * Per-step record locating the protagonist inside the wealth cross-section.
+ *
+ * The end-of-run agent snapshot already says where he finished. This series says
+ * how he got there, and — more usefully for a case study — whether the path was
+ * his own doing or the market's: his wealth alone cannot distinguish an investor
+ * who traded well from one who simply held a rising asset. Carrying the
+ * population mean and median beside his wealth, and his rank within it, makes
+ * that distinction readable directly off the chart.
+ *
+ * Recorded only when a protagonist is configured; the vector is empty otherwise.
+ */
+struct ProtagonistStepDetails {
+    std::size_t step{0};
+
+    /** Stable agent identifier, repeated on every row so the series is self-describing. */
+    std::uint32_t agentId{0};
+
+    double cash{0.0};
+
+    /**
+     * Inventory in the primary asset only.
+     *
+     * Named for what it is because riskyWeight sits beside it and covers every
+     * asset: in a two-asset run he can hold nothing in the primary market and
+     * still carry half his wealth in risk, and a column called `stock` would
+     * make that look like an accounting error.
+     */
+    double primaryAssetStock{0.0};
+
+    /** Mark-to-market wealth after the step's clearing and any forced buy-in. */
+    double wealth{0.0};
+
+    /** Share of his wealth held across all risky assets: (W - cash) / W, zero when insolvent. */
+    double riskyWeight{0.0};
+
+    std::size_t cumulativeTradeCount{0};
+    double cumulativeTradedVolume{0.0};
+    double cumulativeTransactionCostsPaid{0.0};
+
+    /** Cross-sectional mean wealth over the whole population, including him. */
+    double populationMeanWealth{0.0};
+
+    /** Cross-sectional median wealth, which a skewed wealth distribution needs. */
+    double populationMedianWealth{0.0};
+
+    /**
+     * Share of the population strictly poorer than he is, in [0, 1].
+     *
+     * A rank rather than a wealth difference, because it is the quantity that
+     * stays comparable across runs with different price levels and endowments.
+     */
+    double wealthPercentileRank{0.0};
+
+    /** Population size the rank was computed over, including the protagonist. */
+    std::size_t populationSize{0};
+};
+
 /** Final agent-level state exported after a simulation run. */
 struct AgentSnapshot {
     std::uint32_t agentId{0};
@@ -179,6 +237,9 @@ struct AgentSnapshot {
     double prospectProbabilityDistortionForGain{0.0};
     double prospectProbabilityDistortionForLoss{0.0};
     std::size_t prospectScenarioCount{0};
+
+    /** True for the one individually parameterised participant, when configured. */
+    bool isProtagonist{false};
 };
 
 /** Optional agent-facing trade ledger record exported for order-flow analysis. */
@@ -211,11 +272,13 @@ class SimulationRunResult {
                         std::vector<StepDetails> stepDetails,
                         std::vector<AgentSnapshot> agentSnapshots,
                         std::vector<ExternalTradeLedgerRecord> externalTradeLedger,
-                        MultiAssetRunData multiAssetData)
+                        MultiAssetRunData multiAssetData,
+                        std::vector<ProtagonistStepDetails> protagonistStepDetails = {})
         : config_(std::move(config)), stats_(stats), stepDetails_(std::move(stepDetails)),
           agentSnapshots_(std::move(agentSnapshots)),
           externalTradeLedger_(std::move(externalTradeLedger)),
-          multiAssetData_(std::move(multiAssetData)) {}
+          multiAssetData_(std::move(multiAssetData)),
+          protagonistStepDetails_(std::move(protagonistStepDetails)) {}
 
     /** Returns the effective simulation configuration after validation/clamping. */
     [[nodiscard]] const SimulationConfig& config() const {
@@ -265,6 +328,11 @@ class SimulationRunResult {
         return multiAssetData_;
     }
 
+    /** Returns the protagonist's per-step series, empty when none was configured. */
+    [[nodiscard]] const std::vector<ProtagonistStepDetails>& protagonistStepDetails() const {
+        return protagonistStepDetails_;
+    }
+
   private:
     SimulationConfig config_{};
     SimulationStats stats_{};
@@ -272,6 +340,7 @@ class SimulationRunResult {
     std::vector<AgentSnapshot> agentSnapshots_;
     std::vector<ExternalTradeLedgerRecord> externalTradeLedger_;
     MultiAssetRunData multiAssetData_{};
+    std::vector<ProtagonistStepDetails> protagonistStepDetails_;
 };
 
 } // namespace abm

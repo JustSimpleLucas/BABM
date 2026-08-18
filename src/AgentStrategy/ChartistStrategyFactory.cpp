@@ -33,76 +33,92 @@ ChartistStrategyMode selectConcreteChartistMode(ChartistStrategyMode mode, Rando
     }
 }
 
-ChartistStrategyParameters makeCommonChartistParameters(const SimulationConfig& config,
-                                                        const AssetAllocationLine& allocationLine) {
+ChartistStrategyParameters makeCommonChartistParameters(const ChartistRuleSettings& settings) {
     ChartistStrategyParameters parameters;
-    parameters.assetIndex = config.assets.primaryIndex();
-    parameters.allocationLine = allocationLine;
-    parameters.volatilityWindow = config.chartist.volatilityWindow;
-    parameters.riskFreeRate = config.riskFreeRate;
-    parameters.maxShortWeight = config.chartist.maxShortWeight;
-    parameters.referencePointMode = config.control.referencePointMode;
-    parameters.referenceMovingAverageWindow = config.control.referenceMovingAverageWindow;
-    parameters.maxGrossExposure = config.chartist.allocation.maxGrossExposure;
+    parameters.assetIndex = settings.assetIndex;
+    parameters.allocationLine = settings.allocationLine;
+    parameters.volatilityWindow = settings.volatilityWindow;
+    parameters.riskFreeRate = settings.riskFreeRate;
+    parameters.maxShortWeight = settings.maxShortWeight;
+    parameters.referencePointMode = settings.referencePointMode;
+    parameters.referenceMovingAverageWindow = settings.referenceMovingAverageWindow;
+    parameters.maxGrossExposure = settings.maxGrossExposure;
     return parameters;
 }
 
 MomentumChartistStrategyParameters
-makeMomentumChartistParameters(const SimulationConfig& config,
-                               const AssetAllocationLine& allocationLine) {
+makeMomentumChartistParameters(const ChartistRuleSettings& settings) {
     MomentumChartistStrategyParameters parameters;
-    parameters.commonParameters = makeCommonChartistParameters(config, allocationLine);
-    parameters.shortWindow = config.chartist.shortWindow;
-    parameters.longWindow = config.chartist.longWindow;
-    parameters.momentumSignalThreshold = config.chartist.momentumSignalThreshold;
+    parameters.commonParameters = makeCommonChartistParameters(settings);
+    parameters.shortWindow = settings.shortWindow;
+    parameters.longWindow = settings.longWindow;
+    parameters.momentumSignalThreshold = settings.momentumSignalThreshold;
     return parameters;
 }
 
 MeanReversionChartistStrategyParameters
-makeMeanReversionChartistParameters(const SimulationConfig& config,
-                                    const AssetAllocationLine& allocationLine) {
+makeMeanReversionChartistParameters(const ChartistRuleSettings& settings) {
     MeanReversionChartistStrategyParameters parameters;
-    parameters.commonParameters = makeCommonChartistParameters(config, allocationLine);
-    parameters.longWindow = config.chartist.longWindow;
+    parameters.commonParameters = makeCommonChartistParameters(settings);
+    parameters.longWindow = settings.longWindow;
     return parameters;
 }
 
 BreakoutChartistStrategyParameters
-makeBreakoutChartistParameters(const SimulationConfig& config,
-                               const AssetAllocationLine& allocationLine) {
+makeBreakoutChartistParameters(const ChartistRuleSettings& settings) {
     BreakoutChartistStrategyParameters parameters;
-    parameters.commonParameters = makeCommonChartistParameters(config, allocationLine);
-    parameters.breakoutWindow = config.chartist.breakoutWindow;
+    parameters.commonParameters = makeCommonChartistParameters(settings);
+    parameters.breakoutWindow = settings.breakoutWindow;
     return parameters;
 }
 
+/** Gathers the population-wide chartist settings from the simulation config. */
+ChartistRuleSettings populationChartistSettings(const SimulationConfig& config,
+                                                const AssetAllocationLine& allocationLine) {
+    ChartistRuleSettings settings;
+    settings.assetIndex = config.assets.primaryIndex();
+    settings.allocationLine = allocationLine;
+    settings.shortWindow = config.chartist.shortWindow;
+    settings.longWindow = config.chartist.longWindow;
+    settings.momentumSignalThreshold = config.chartist.momentumSignalThreshold;
+    settings.breakoutWindow = config.chartist.breakoutWindow;
+    settings.volatilityWindow = config.chartist.volatilityWindow;
+    settings.maxShortWeight = config.chartist.maxShortWeight;
+    settings.maxGrossExposure = config.chartist.allocation.maxGrossExposure;
+    settings.riskFreeRate = config.riskFreeRate;
+    settings.referencePointMode = config.control.referencePointMode;
+    settings.referenceMovingAverageWindow = config.control.referenceMovingAverageWindow;
+    return settings;
+}
+
 } // namespace
+
+std::unique_ptr<TradingStrategy> createChartistStrategy(ChartistStrategyMode mode,
+                                                        const ChartistRuleSettings& settings) {
+    switch (mode) {
+    case ChartistStrategyMode::Momentum:
+        return std::make_unique<MomentumChartistStrategy>(makeMomentumChartistParameters(settings));
+    case ChartistStrategyMode::MeanReversion:
+        return std::make_unique<MeanReversionChartistStrategy>(
+            makeMeanReversionChartistParameters(settings));
+    case ChartistStrategyMode::RelativeStrengthIndex:
+        return std::make_unique<RelativeStrengthIndexChartistStrategy>(
+            makeCommonChartistParameters(settings));
+    case ChartistStrategyMode::Breakout:
+        return std::make_unique<BreakoutChartistStrategy>(makeBreakoutChartistParameters(settings));
+    case ChartistStrategyMode::Random:
+        break;
+    }
+
+    return std::make_unique<MomentumChartistStrategy>(makeMomentumChartistParameters(settings));
+}
 
 std::unique_ptr<TradingStrategy> createChartistStrategy(const SimulationConfig& config,
                                                         const AssetAllocationLine& allocationLine,
                                                         RandomEngine& random) {
     const ChartistStrategyMode selectedMode =
         selectConcreteChartistMode(config.chartist.strategyMode, random);
-
-    switch (selectedMode) {
-    case ChartistStrategyMode::Momentum:
-        return std::make_unique<MomentumChartistStrategy>(
-            makeMomentumChartistParameters(config, allocationLine));
-    case ChartistStrategyMode::MeanReversion:
-        return std::make_unique<MeanReversionChartistStrategy>(
-            makeMeanReversionChartistParameters(config, allocationLine));
-    case ChartistStrategyMode::RelativeStrengthIndex:
-        return std::make_unique<RelativeStrengthIndexChartistStrategy>(
-            makeCommonChartistParameters(config, allocationLine));
-    case ChartistStrategyMode::Breakout:
-        return std::make_unique<BreakoutChartistStrategy>(
-            makeBreakoutChartistParameters(config, allocationLine));
-    case ChartistStrategyMode::Random:
-        break;
-    }
-
-    return std::make_unique<MomentumChartistStrategy>(
-        makeMomentumChartistParameters(config, allocationLine));
+    return createChartistStrategy(selectedMode, populationChartistSettings(config, allocationLine));
 }
 
 } // namespace abm

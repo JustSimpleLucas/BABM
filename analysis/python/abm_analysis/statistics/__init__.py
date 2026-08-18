@@ -1,7 +1,8 @@
 """Statistical analysis of simulation output.
 
 These modules compute the numbers — stylised-fact diagnostics, robustness
-verdicts, seed convergence, stress-regime and multi-asset statistics. The
-matching modules under ``plots`` render them; keeping the two apart is why
-``statistics.stress`` and ``plots.stress`` can share a name unambiguously.
+verdicts, seed convergence, stress-regime, multi-asset and agent-level
+statistics. They are the single source for every figure the project reports:
+``abm_analysis.exports`` writes them to CSV and ``abm_analysis.web`` renders
+them, but neither computes anything of its own.
 """

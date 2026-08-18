@@ -44,6 +44,9 @@ const elements = {
   agentMetrics: document.getElementById('agent-metrics'),
   agentTable: document.getElementById('agent-table'),
   agentMessage: document.getElementById('agent-message'),
+  protagonistIdentity: document.getElementById('protagonist-identity'),
+  protagonistMetrics: document.getElementById('protagonist-metrics'),
+  protagonistMessage: document.getElementById('protagonist-message'),
   priceScale: document.getElementById('price-scale'),
   acfSeries: document.getElementById('acf-series'),
   runFooter: document.getElementById('run-footer'),
@@ -406,7 +409,7 @@ function renderCrossAsset(crossAsset) {
   drawCrossAssetCharts(crossAsset);
 }
 
-function renderAgents(agents) {
+function renderAgents(agents, protagonist) {
   renderTiles(elements.agentMetrics, agents.metrics);
   elements.agentMessage.hidden = !agents.message;
   elements.agentMessage.textContent = agents.message || '';
@@ -440,7 +443,42 @@ function renderAgents(agents) {
   elements.agentTable.innerHTML =
     `<table class="agent-table"><thead><tr><th>Strategy</th>${headers}</tr></thead>` +
     `<tbody>${rows}</tbody></table>`;
-  drawAgentWealthChart(agents);
+  drawAgentWealthChart(agents, protagonist);
+}
+
+function renderProtagonist(protagonist) {
+  elements.protagonistMessage.hidden = !protagonist.message;
+  elements.protagonistMessage.textContent = protagonist.message || '';
+
+  if (!protagonist.available) {
+    elements.protagonistIdentity.innerHTML = '';
+    elements.protagonistMetrics.innerHTML = '';
+    Plotly.purge('chart-protagonist-wealth');
+    document.getElementById('chart-protagonist-wealth').innerHTML = '';
+    return;
+  }
+
+  renderTiles(elements.protagonistMetrics, protagonist.metrics);
+  elements.protagonistIdentity.innerHTML = protagonistChips(protagonist.identity);
+  drawProtagonistWealthChart(protagonist.trajectory);
+}
+
+/** Describe who the protagonist is, beside the panel heading. */
+function protagonistChips(identity) {
+  if (!identity) return '';
+  const chips = [
+    identity.agent_id === null ? null : `agent #${formatValue(identity.agent_id, 'integer')}`,
+    identity.strategy ? identity.strategy.replace(/_/g, ' ') : null,
+    identity.initial_wealth === null
+      ? null
+      : `started ${formatValue(identity.initial_wealth, 'amount')}`,
+    identity.prospect_theory_enabled
+      ? `CPT λ ${formatValue(identity.loss_aversion, 'decimal')}`
+      : 'expected utility',
+  ].filter(Boolean);
+  return chips
+    .map((chip) => `<span class="parameter-chip">${escapeHtml(chip)}</span>`)
+    .join('');
 }
 
 function renderFooter(view) {
@@ -466,6 +504,12 @@ function renderFooter(view) {
   }
   if (view.agents.message) {
     notes.push(escapeHtml(view.agents.message));
+  }
+  if (view.protagonist.available && view.protagonist.trajectory.downsampled) {
+    notes.push(
+      `The protagonist's path is thinned to every ${view.protagonist.trajectory.stride}th ` +
+        `step for rendering; his reported rank uses the full agent snapshot.`
+    );
   }
   notes.push('Verdicts are screening diagnostics, not causal claims.');
   elements.runFooter.innerHTML = notes.join('<br>');
@@ -762,7 +806,7 @@ function drawCrossAssetCharts(crossAsset) {
   );
 }
 
-function drawAgentWealthChart(agents) {
+function drawAgentWealthChart(agents, protagonist) {
   const distribution = agents.wealth_distribution;
   const target = document.getElementById('chart-agent-wealth');
   if (!distribution.available) {
@@ -783,12 +827,130 @@ function drawAgentWealthChart(agents) {
     line: { color: assetColour(index), width: 1.6 },
   }));
 
-  Plotly.react(
-    'chart-agent-wealth',
-    traces,
-    chartLayout('Final wealth', 'Density', { height: 300, hovermode: 'closest' }),
-    PLOT_CONFIG
-  );
+  const layout = chartLayout('Final wealth', 'Density', {
+    height: 300,
+    hovermode: 'closest',
+  });
+
+  /*
+   * The protagonist's marker is drawn on this chart rather than on one of his
+   * own: his wealth only means something against the distribution it sits in,
+   * and a second axis would invite the reader to compare two different scales.
+   */
+  const marker = protagonist && protagonist.available ? protagonist.wealth_marker : null;
+  if (marker !== null && marker !== undefined) {
+    const percentile = protagonist.standing ? protagonist.standing.percentile : null;
+    layout.shapes = [
+      {
+        type: 'line',
+        xref: 'x',
+        yref: 'paper',
+        x0: marker,
+        x1: marker,
+        y0: 0,
+        y1: 1,
+        line: { color: cssValue('--protagonist'), width: 2, dash: 'dash' },
+      },
+    ];
+    layout.annotations = [
+      {
+        x: marker,
+        xref: 'x',
+        y: 1,
+        yref: 'paper',
+        yanchor: 'bottom',
+        showarrow: false,
+        font: { size: 11, color: cssValue('--protagonist') },
+        text:
+          percentile === null || percentile === undefined
+            ? 'protagonist'
+            : `protagonist · ${formatValue(percentile, 'percent_fraction')}`,
+      },
+    ];
+  }
+
+  Plotly.react('chart-agent-wealth', traces, layout, PLOT_CONFIG);
+}
+
+/**
+ * Draw the protagonist's wealth path against the population he traded in.
+ *
+ * His wealth alone cannot separate an investor who traded well from one who
+ * held a rising asset, so the median and mean are drawn beside it and his
+ * percentile rank runs on a second axis: a flat rank under a rising wealth line
+ * means the whole market rose, and a rising rank means he gained on it.
+ */
+function drawProtagonistWealthChart(trajectory) {
+  const target = document.getElementById('chart-protagonist-wealth');
+  if (!trajectory || !trajectory.available) {
+    Plotly.purge('chart-protagonist-wealth');
+    target.textContent = '';
+    return;
+  }
+
+  const series = trajectory.series || {};
+  const traces = [];
+  if (series.wealth) {
+    traces.push({
+      x: trajectory.step,
+      y: series.wealth,
+      name: 'Protagonist wealth',
+      type: 'scatter',
+      mode: 'lines',
+      line: { color: cssValue('--protagonist'), width: 2 },
+    });
+  }
+  if (series.population_median_wealth) {
+    traces.push({
+      x: trajectory.step,
+      y: series.population_median_wealth,
+      name: 'Population median',
+      type: 'scatter',
+      mode: 'lines',
+      line: { color: assetColour(0), width: 1.6 },
+    });
+  }
+  if (series.population_mean_wealth) {
+    traces.push({
+      x: trajectory.step,
+      y: series.population_mean_wealth,
+      name: 'Population mean',
+      type: 'scatter',
+      mode: 'lines',
+      line: { color: assetColour(1), width: 1.2, dash: 'dot' },
+    });
+  }
+  if (series.wealth_percentile_rank) {
+    traces.push({
+      x: trajectory.step,
+      y: series.wealth_percentile_rank,
+      name: 'Percentile rank',
+      type: 'scatter',
+      mode: 'lines',
+      yaxis: 'y2',
+      line: { color: cssValue('--text-faint'), width: 1.2 },
+    });
+  }
+
+  if (!traces.length) {
+    Plotly.purge('chart-protagonist-wealth');
+    target.textContent = '';
+    return;
+  }
+
+  const layout = chartLayout('Step', 'Wealth', { height: 340 });
+  layout.yaxis2 = {
+    title: { text: 'Percentile rank', standoff: 8 },
+    overlaying: 'y',
+    side: 'right',
+    range: [0, 1],
+    gridcolor: 'rgba(0,0,0,0)',
+    zerolinecolor: cssValue('--border'),
+    linecolor: cssValue('--border'),
+  };
+  layout.margin = { l: 62, r: 62, t: 10, b: 44 };
+
+  Plotly.react('chart-protagonist-wealth', traces, layout, PLOT_CONFIG);
 }
 
 /* --------------------------------------------------------------- toggles */
@@ -835,7 +997,8 @@ function renderRun(view) {
   drawDistributionChart(view.return_distribution, view.assets);
   drawAutocorrelationChart(view.autocorrelation, view.assets, state.acfSeries);
   renderCrossAsset(view.cross_asset);
-  renderAgents(view.agents);
+  renderProtagonist(view.protagonist);
+  renderAgents(view.agents, view.protagonist);
 }
 
 async function selectRun(path) {

@@ -2,7 +2,7 @@
 
 The simulator writes one long-format row per (step, asset) to
 ``asset_timeseries.csv``. This module reshapes that artefact into the wide
-per-asset panels the report figures consume, and derives the cross-asset
+per-asset panels the dashboard consumes, and derives the cross-asset
 quantities that only exist once a second risky asset is present: rolling return
 correlation, the relative price ratio, and the cross-sectional portfolio
 composition of the agent population.
@@ -64,7 +64,7 @@ class AssetConfiguration:
         """Return the units of the drift and shock parameters.
 
         The units differ by process, and conflating them is the most likely
-        configuration error, so the report always states them explicitly.
+        configuration error, so the resolved configuration states them explicitly.
         """
 
         if self.fundamental_process == "gbm":

@@ -23,6 +23,10 @@ void DiagnosticsRecorder::resetForRun(const SimulationConfig& config, std::size_
     assetStepDetails_.clear();
     assetStepDetails_.reserve(config.timeSteps * std::max<std::size_t>(1, config.assets.size()));
     agentSnapshots_.clear();
+    protagonistStepDetails_.clear();
+    if (config.protagonist.enabled) {
+        protagonistStepDetails_.reserve(config.timeSteps);
+    }
     externalTradeLedger_.clear();
     if (recordTradeLedger) {
         externalTradeLedger_.reserve(config.timeSteps * std::max<std::size_t>(2, populationSize));
@@ -131,6 +135,71 @@ void DiagnosticsRecorder::recordStep(const StepRecordingRequest& request) {
     stats_.averageAbsoluteOrderImbalance += std::abs(notionalImbalance);
 
     recordAssetSteps(request);
+    recordProtagonistStep(request);
+}
+
+void DiagnosticsRecorder::recordProtagonistStep(const StepRecordingRequest& request) {
+    if (request.population == nullptr || !request.population->protagonistRecordIndex.has_value()) {
+        return;
+    }
+
+    const SimulationPopulation& population = *request.population;
+    const Agent& protagonist = population.records.at(*population.protagonistRecordIndex).agent;
+    const double protagonistWealth = protagonist.getWealth();
+
+    /*
+     * Rank and median are computed here rather than derived downstream because
+     * they describe the cross-section at this step, which no later artefact
+     * retains: agents_final.csv holds only the end state. The count-below pass
+     * is linear and the median is an nth_element, so the whole block is cheaper
+     * than the wealth-Gini sort already performed for every step.
+     *
+     * Ties count as "not poorer", so identical wealth never inflates his rank.
+     */
+    std::vector<double> wealthValues;
+    wealthValues.reserve(population.records.size());
+    std::size_t poorerAgents = 0;
+    double wealthTotal = 0.0;
+    for (const AgentRecord& record : population.records) {
+        const double wealth = record.agent.getWealth();
+        wealthValues.push_back(wealth);
+        wealthTotal += wealth;
+        if (wealth < protagonistWealth) {
+            ++poorerAgents;
+        }
+    }
+
+    const auto populationSize = wealthValues.size();
+    double medianWealth = 0.0;
+    if (!wealthValues.empty()) {
+        const auto middle = wealthValues.begin() + static_cast<std::ptrdiff_t>(populationSize / 2);
+        std::nth_element(wealthValues.begin(), middle, wealthValues.end());
+        medianWealth = *middle;
+        if (populationSize % 2 == 0) {
+            const auto lower = std::max_element(wealthValues.begin(), middle);
+            medianWealth = 0.5 * (medianWealth + *lower);
+        }
+    }
+
+    ProtagonistStepDetails record{};
+    record.step = request.step;
+    record.agentId = protagonist.getNumericalId();
+    record.cash = protagonist.getCash();
+    record.primaryAssetStock = protagonist.getStock(request.config->assets.primaryIndex());
+    record.wealth = protagonistWealth;
+    record.riskyWeight =
+        protagonistWealth > 0.0 ? (protagonistWealth - record.cash) / protagonistWealth : 0.0;
+    record.cumulativeTradeCount = protagonist.getExecutedTradeCount();
+    record.cumulativeTradedVolume = protagonist.getExecutedTradeVolume();
+    record.cumulativeTransactionCostsPaid = protagonist.getCumulativeTransactionCostsPaid();
+    record.populationMeanWealth =
+        populationSize == 0 ? 0.0 : wealthTotal / static_cast<double>(populationSize);
+    record.populationMedianWealth = medianWealth;
+    record.wealthPercentileRank = populationSize == 0 ? 0.0
+                                                      : static_cast<double>(poorerAgents) /
+                                                            static_cast<double>(populationSize);
+    record.populationSize = populationSize;
+    protagonistStepDetails_.push_back(record);
 }
 
 void DiagnosticsRecorder::recordAssetSteps(const StepRecordingRequest& request) {
@@ -211,7 +280,8 @@ SimulationRunResult DiagnosticsRecorder::buildResult(const SimulationConfig& con
             std::move(stepDetails_),
             std::move(agentSnapshots_),
             std::move(externalTradeLedger_),
-            std::move(multiAssetData)};
+            std::move(multiAssetData),
+            std::move(protagonistStepDetails_)};
 }
 
 const SimulationStats& DiagnosticsRecorder::stats() const {
@@ -231,9 +301,13 @@ void DiagnosticsRecorder::refreshAgentSnapshots(const SimulationPopulation& popu
      * struct holds many adjacent doubles; positional initialization would make
      * silent field-order mistakes possible when the snapshot schema evolves.
      */
+    std::size_t recordIndex = 0;
     for (const AgentRecord& record : population.records) {
         const Agent& agent = record.agent;
         AgentSnapshot snapshot{};
+        snapshot.isProtagonist = population.protagonistRecordIndex.has_value() &&
+                                 *population.protagonistRecordIndex == recordIndex;
+        ++recordIndex;
         snapshot.agentId = agent.getNumericalId();
         snapshot.initialStrategyType = record.initialStrategyType;
         snapshot.currentStrategyType =

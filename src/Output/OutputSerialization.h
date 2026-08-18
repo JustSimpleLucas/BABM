@@ -20,8 +20,6 @@ namespace abm::output_detail {
 
 [[nodiscard]] std::string jsonEscape(const std::string& value);
 
-[[nodiscard]] std::string chartistStrategyModeLabel(ChartistStrategyMode mode);
-
 [[nodiscard]] std::string jsonBool(bool value);
 
 [[nodiscard]] std::string buildNormalizedConfigJson(const SimulationConfig& config);
