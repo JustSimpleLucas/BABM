@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import pandas as pd
@@ -79,8 +80,37 @@ def build_runs_index(experiment_dir: Path | str) -> pd.DataFrame:
     """Build the experiment-level index used by reports and CSV exports."""
 
     experiment_path = Path(experiment_dir).expanduser().resolve()
-    run_archives = [build_run_archive(run_dir) for run_dir in discover_run_directories(experiment_path)]
-    manifest = read_experiment_manifest(experiment_path)
+    return build_runs_index_from_run_dirs(
+        discover_run_directories(experiment_path),
+        manifest_dir=experiment_path,
+    )
+
+
+def build_runs_index_from_run_dirs(
+    run_dirs: Sequence[Path | str],
+    *,
+    manifest_dir: Path | str | None = None,
+) -> pd.DataFrame:
+    """Build a runs index for an explicit set of run directories.
+
+    ``build_runs_index`` covers the common case of one experiment folder. This
+    variant exists because a comparison cohort is chosen run by run and may span
+    several folders — an experiment alongside a calibration study's
+    ``best_runs`` — so there is no single directory to discover from.
+
+    Args:
+        run_dirs: Archived run directories, in the order they should be indexed.
+        manifest_dir: Directory whose ``experiment_manifest.csv`` supplements the
+            per-run summaries. ``None`` when the runs span folders and no single
+            manifest describes them all; the index is then built from each run's
+            own ``summary_metrics.csv`` and its parsed run-id.
+    """
+
+    run_archives = [build_run_archive(run_dir) for run_dir in run_dirs]
+    manifest = pd.DataFrame() if manifest_dir is None else read_experiment_manifest(manifest_dir)
+
+    if not run_archives:
+        return pd.DataFrame()
 
     summary_rows: list[pd.Series] = []
     for archive in run_archives:

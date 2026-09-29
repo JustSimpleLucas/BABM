@@ -225,7 +225,9 @@ Every command supports `--help`. The two that analyse archives share `--phase` a
 There is one way to read a run's statistics — the dashboard — and one place the numbers are kept as
 files: the CSV tables `replicate` and `calibrate` write beside the experiment they describe. Both are
 computed by the same `abm_analysis.statistics` functions, so a figure on screen and the same figure
-in a CSV cannot disagree.
+in a CSV cannot disagree. The dashboard reads one run at a time
+([§5.1](#51-the-market-statistics-dashboard)) or a selected cohort of them, across seeds and across
+experimental conditions ([§5.2](#52-comparing-runs-and-reading-across-seeds)).
 
 ### 5.1 The market-statistics dashboard
 
@@ -283,6 +285,59 @@ Four things are worth knowing:
 Useful options: `--data-root <dir>` to browse a different archive, `--port <n>` if 8000 is taken, and
 `--no-browser` to leave the browser alone. The server binds to `127.0.0.1`, so unpublished results
 are not exposed on the network.
+
+### 5.2 Comparing runs and reading across seeds
+
+A single run answers "what happened in this draw". The two questions a result actually rests on need
+more than one run: does the finding survive the random seed, and does it differ between conditions?
+Tick two or more runs in the sidebar and press **Compare**.
+
+The runs are grouped into **conditions** by their modelling controls — population, prospect theory,
+social influence, short selling, loss aversion — with the seed deliberately excluded, because the
+seed is the replication device rather than a setting. That one rule gives both readings:
+
+- **Same config, several seeds** → one condition, and the page reads as a replication study.
+- **A control changed** → one condition per setting, side by side, each already aggregated over its
+  own seeds. A prospect-theory contrast reads as `Prospect theory on` against `Prospect theory off`,
+  labelled by the setting that actually varies rather than by all fifteen controls.
+
+For the selected cohort the page shows:
+
+- **Robustness verdicts** — a table of pass / borderline / fail against named decision rules:
+  coefficient of variation against the relative-error target, stylised-fact success rates against a
+  strong-majority cut-off, cross-seed distribution equality, per-seed stationarity, and
+  confidence-interval precision. Each row prints the statistic, its value, and the pass and
+  borderline cut-offs that judged it (`CoV 0.083 · ≤ 0.100 · ≤ 0.250 · Pass`), grouped by category,
+  with a count of verdicts and the seed count on top; the hypothesis and the interpretation are on
+  hover. A reader who disagrees with a threshold can see the number. Below the minimum replication
+  count every verdict reads `N/A` and the strip says how many more seeds are needed — a dispersion
+  estimate from three draws would be spurious.
+- **Stylised facts across seeds** — each fact as a reproduction rate with its denominator
+  (`2 of 3 runs`), per condition and per market. This is what replaces a single run's verdict.
+- **Condition comparison** — one column per condition, each cell the cross-seed mean with its 95%
+  confidence interval, coefficient of variation, and seed count.
+- **Seed convergence** — the running mean and CI half-width as seeds accumulate, per condition. This
+  is the figure that justifies a replication count. Conditions are never pooled into one path: that
+  would show the contrast between them as if it were dispersion within them.
+- **Per-seed spread** — every individual draw plotted, not just the summary shape. With a handful of
+  seeds a box plot's quartiles are themselves noise, and you need to see whether one seed carried
+  the result.
+- **Return distribution** — one density per condition on shared bins.
+
+Multi-asset cohorts keep the run view's rule that every traded market is reported separately: the
+market switch in the panel heading moves the whole page, and seeds are never pooled across markets.
+
+Three things are worth knowing:
+
+- **The numbers are the exported numbers.** The cohort panels are built from the same frames
+  `abm_analysis replicate` writes into `robustness_reports/`, so a figure quoted from a CSV and the
+  same figure read on screen are the same computation, not two implementations that agree today.
+- **It is bounded.** A cohort is capped at 64 runs, because every run costs a GARCH(1,1) fit. Each
+  run's diagnostics are cached, so adding one run to a selection costs that run alone, and a run
+  already opened on its own has usually paid for itself.
+- **Verdicts over several conditions are cohort-wide.** A dispersion criterion evaluated across a
+  two-condition selection reflects the contrast between conditions as well as the spread within
+  them. The footer says so on every such page.
 
 ---
 
@@ -493,5 +548,4 @@ cmake --preset sanitizers && cmake --build --preset sanitizers && ctest --preset
 | [docs/code_map.md](docs/code_map.md) | File-by-file guide: what every source file does and how they connect. |
 | [docs/baselines.md](docs/baselines.md) | Recorded baseline results, used to detect unintended behavioural drift. |
 | `docs/*.mmd` | Mermaid diagrams: class architecture, build structure, data management, simulation flow, agent decision flow, sequence diagram. |
-| [AGENTS.md](AGENTS.md) | Research context and the working rules for contributors (naming, reproducibility, required commands). |
 | `docs/formalism.tex` | The model's mathematics — the paper-side counterpart of the code. |

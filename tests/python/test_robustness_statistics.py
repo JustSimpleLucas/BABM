@@ -11,7 +11,10 @@ from abm_analysis.statistics.robustness_tests import (
     summarise_pairwise_ks,
 )
 from abm_analysis.statistics.robustness_verdicts import (
+    COV_BORDERLINE_THRESHOLD,
+    COV_PASS_THRESHOLD,
     MINIMUM_SEEDS_FOR_VERDICTS,
+    STRONG_REJECTION_P_VALUE,
     VerdictThresholds,
     build_robustness_verdicts,
     verdict_rows_for_display,
@@ -293,6 +296,10 @@ def test_build_robustness_verdicts_accepts_custom_thresholds() -> None:
         "threshold_description"
     ]
     assert all("0.01" in description for description in cov_descriptions)
+    # ...and in the structured rule, which is what the dashboard prints.
+    strict_cov = strict[strict["category"] == "metric_stability"]
+    assert set(strict_cov["pass_threshold"]) == {0.01}
+    assert set(strict_cov["borderline_threshold"]) == {0.02}
     # Untouched criteria keep their default verdicts.
     assert set(strict[strict["category"] == "stationarity"]["verdict"]) == {"pass"}
 
@@ -330,6 +337,72 @@ def test_verdicts_tolerate_missing_inputs() -> None:
 
     assert not verdicts.empty
     assert set(verdicts["verdict"]) == {"not_available"}
+
+
+def test_verdict_rows_carry_the_rule_as_numbers() -> None:
+    """The cut-offs must be readable without parsing the prose description."""
+
+    verdicts = build_robustness_verdicts(
+        **_verdict_inputs(
+            cov_value=0.15,
+            success_rate=0.7,
+            insignificant_share=0.9,
+            rejection_rate=1.0,
+        ),
+        seed_count=10,
+    )
+
+    structured = {
+        "statistic",
+        "value_format",
+        "comparison",
+        "pass_threshold",
+        "borderline_threshold",
+        "sample_size",
+        "sample_unit",
+    }
+    assert structured <= set(verdicts.columns)
+    assert set(verdicts["comparison"]) == {"<=", ">="}
+    assert set(verdicts["value_format"]) <= {"ratio", "share", "p_value"}
+    assert (verdicts["statistic"] != "").all()
+
+    cov_rows = verdicts[verdicts["category"] == "metric_stability"]
+    assert set(cov_rows["comparison"]) == {"<="}
+    assert set(cov_rows["pass_threshold"]) == {COV_PASS_THRESHOLD}
+    assert set(cov_rows["borderline_threshold"]) == {COV_BORDERLINE_THRESHOLD}
+    assert set(cov_rows["verdict"]) == {"borderline"}
+
+    k_sample = verdicts[verdicts["criterion"].str.startswith("Cross-seed equality")]
+    assert set(k_sample["value_format"]) == {"p_value"}
+    assert set(k_sample["borderline_threshold"]) == {STRONG_REJECTION_P_VALUE}
+
+    ks_share = verdicts[verdicts["criterion"].str.contains("pairwise K-S")].iloc[0]
+    assert ks_share["sample_size"] == 10
+    assert ks_share["sample_unit"] == "pairs"
+
+    # The structured rule must reproduce the verdict the prose rule reached.
+    for _, row in verdicts.iterrows():
+        value = row["metric_value"]
+        if pd.isna(value):
+            assert row["verdict"] == "not_available"
+            continue
+        if row["comparison"] == "<=":
+            expected = (
+                "pass"
+                if value <= row["pass_threshold"]
+                else "borderline"
+                if value <= row["borderline_threshold"]
+                else "fail"
+            )
+        else:
+            expected = (
+                "pass"
+                if value >= row["pass_threshold"]
+                else "borderline"
+                if value >= row["borderline_threshold"]
+                else "fail"
+            )
+        assert row["verdict"] == expected, row["criterion"]
 
 
 def test_verdict_rows_for_display_match_evidence_schema() -> None:

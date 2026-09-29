@@ -42,6 +42,11 @@
         <div class="sidebar-count" id="sidebar-count"></div>
       </div>
       <nav class="run-list" id="run-list"></nav>
+      <div class="cohort-bar" id="cohort-bar" hidden>
+        <span class="cohort-bar-count" id="cohort-bar-count"></span>
+        <button type="button" id="cohort-clear">Clear</button>
+        <button type="button" id="cohort-compare" class="is-primary">Compare</button>
+      </div>
     </aside>
 
     <main class="content" id="content">
@@ -51,6 +56,12 @@
           Every archived run under the data root is listed on the left. Choosing one
           recomputes its statistics from the run's own artefacts — the same functions
           the static HTML reports use — with one column per traded market.
+        </p>
+        <p>
+          Tick two or more runs and press <b>Compare</b> to read them as a cohort:
+          runs that differ only in the seed are aggregated into one condition with
+          its dispersion and reproduction rates, and runs that differ in a control
+          become separate conditions side by side.
         </p>
       </div>
 
@@ -143,6 +154,66 @@
         </section>
 
         <footer class="run-footer" id="run-footer"></footer>
+      </article>
+
+      <article class="cohort-view" id="cohort-view" hidden>
+        <section class="run-heading">
+          <h1 id="cohort-title"></h1>
+          <div class="run-provenance" id="cohort-summary"></div>
+          <div class="condition-legend" id="condition-legend"></div>
+          <div class="asset-legend" id="cohort-asset-legend"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Robustness verdicts</h2>
+            <div class="segmented" id="cohort-asset" role="group" aria-label="Market"></div>
+          </div>
+          <div class="verdict-summary" id="verdict-summary"></div>
+          <div class="table-scroll" id="verdict-table"></div>
+          <p class="panel-message" id="verdict-message" hidden></p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Stylised facts across seeds</h2>
+          </div>
+          <div class="fact-grid" id="cohort-fact-grid"></div>
+        </section>
+
+        <section id="cohort-metric-sections"></section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Seed convergence</h2>
+            <div class="segmented" id="convergence-metric" role="group"
+                 aria-label="Convergence metric"></div>
+          </div>
+          <div class="chart" id="chart-convergence"></div>
+          <p class="panel-message" id="convergence-message" hidden></p>
+        </section>
+
+        <div class="panel-pair">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Per-seed spread</h2>
+              <div class="segmented" id="spread-metric" role="group"
+                   aria-label="Spread metric"></div>
+            </div>
+            <div class="chart" id="chart-spread"></div>
+            <p class="panel-message" id="spread-message" hidden></p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Return distribution</h2>
+            </div>
+            <div class="chart" id="chart-cohort-distribution"></div>
+            <p class="panel-message" id="cohort-distribution-message" hidden></p>
+          </section>
+        </div>
+
+        <footer class="run-footer" id="cohort-footer"></footer>
       </article>
 
       <div class="status" id="status" hidden></div>

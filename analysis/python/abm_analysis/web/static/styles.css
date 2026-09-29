@@ -39,6 +39,21 @@
   --asset-2: #c1622a;
   --asset-3: #167c80;
   --asset-4: #8b4a9c;
+  --asset-5: #6d7d1f;
+  --asset-6: #9c4a4a;
+
+  /* Condition colours, for the cohort view. A separate ramp from the assets
+   * because the two are different questions asked at once: on a cohort chart a
+   * line means "this experimental condition", while the swatch beside a market
+   * name still means "this asset". Reusing one ramp for both would make a
+   * legend impossible to read. Green-to-purple, chosen to stay separable from
+   * the blue/orange asset pair when both keys appear on one page. */
+  --condition-1: #3c6e47;
+  --condition-2: #7b4397;
+  --condition-3: #b5651d;
+  --condition-4: #1f6f8b;
+  --condition-5: #99324f;
+  --condition-6: #5b5f2a;
 
   /* The protagonist. Held apart from the asset ramp on purpose: he is a person
    * in a chart of markets, and reusing a market's colour for him would read as
@@ -83,6 +98,15 @@
     --asset-2: #e5924f;
     --asset-3: #4fa9ad;
     --asset-4: #b47fc9;
+    --asset-5: #a8b95c;
+    --asset-6: #d98b8b;
+
+    --condition-1: #6fbb87;
+    --condition-2: #b98ad4;
+    --condition-3: #e0a05c;
+    --condition-4: #63b3cc;
+    --condition-5: #d97a95;
+    --condition-6: #a5aa66;
 
     --protagonist: #ef79b4;
     --protagonist-soft: rgba(239, 121, 180, 0.16);
@@ -472,6 +496,12 @@ h1, h2, h3 {
   overflow: hidden;
 }
 
+/* A one-option switch is hidden by the script; the class rule above would
+ * otherwise win over the attribute's default and leave a dead button. */
+.segmented[hidden] {
+  display: none;
+}
+
 .segmented button {
   font-family: inherit;
   font-size: 12px;
@@ -777,4 +807,280 @@ h1, h2, h3 {
   .metric-table td:first-child {
     width: auto;
   }
+}
+
+
+/* ------------------------------------------------------------- cohort view
+ *
+ * The cohort page answers a different question from the run page — whether a
+ * result survives the seed, and whether conditions differ — so it leads with
+ * evidence rather than with a price path. These components exist only there;
+ * everything the two pages share (panels, tables, verdict colours) is reused
+ * above rather than restyled here.
+ */
+
+.run-checkbox {
+  flex: 0 0 auto;
+  margin: 0 0.55rem 0 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.run-row {
+  display: flex;
+  align-items: center;
+  padding-left: 0.65rem;
+}
+
+.run-row .run-button {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.experiment-name .select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.experiment-name .select-all input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* The selection bar is pinned to the foot of the sidebar so the count and the
+ * compare action stay reachable however far the run list has been scrolled. */
+.cohort-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.cohort-bar[hidden] {
+  display: none;
+}
+
+.cohort-bar-count {
+  flex: 1 1 auto;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.cohort-bar button {
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.28rem 0.6rem;
+  border-radius: 5px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-muted);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.cohort-bar button.is-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.cohort-bar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.condition-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.condition-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.24rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  font-size: 0.78rem;
+}
+
+.condition-swatch {
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.condition-chip .condition-meta {
+  color: var(--text-faint);
+}
+
+/* The verdict table prints each criterion's statistic against the cut-offs
+ * that judged it. A reader who disagrees with a threshold can see the number
+ * without opening the CSV; the hypothesis and interpretation sit in tooltips
+ * so the panel reads as a table of statistics rather than prose. */
+.verdict-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+  font-size: 0.78rem;
+}
+
+.verdict-n {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  margin-right: 0.35rem;
+}
+
+.verdict-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  color: var(--verdict-unavailable);
+  background: var(--verdict-unavailable-soft);
+}
+
+.verdict-count b {
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-count[data-verdict='supported'] {
+  color: var(--verdict-supported);
+  background: var(--verdict-supported-soft);
+}
+
+.verdict-count[data-verdict='partial'] {
+  color: var(--verdict-partial);
+  background: var(--verdict-partial-soft);
+}
+
+.verdict-count[data-verdict='not-supported'] {
+  color: var(--verdict-not-supported);
+  background: var(--verdict-not-supported-soft);
+}
+
+/* The criterion column takes what it needs; the numeric columns are short. */
+.verdict-table th:first-child,
+.verdict-table td:first-child {
+  width: auto;
+}
+
+.verdict-table tr.verdict-group th {
+  text-align: left;
+  padding-top: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.verdict-table td.verdict-scope,
+.verdict-table td.verdict-statistic {
+  text-align: left;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.verdict-table td.verdict-rule {
+  color: var(--text-muted);
+}
+
+.verdict-table td.verdict-cell {
+  text-align: left;
+}
+
+.verdict-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--verdict-unavailable);
+  background: var(--verdict-unavailable-soft);
+  cursor: help;
+}
+
+.verdict-pill[data-verdict='supported'] {
+  color: var(--verdict-supported);
+  background: var(--verdict-supported-soft);
+}
+
+.verdict-pill[data-verdict='partial'] {
+  color: var(--verdict-partial);
+  background: var(--verdict-partial-soft);
+}
+
+.verdict-pill[data-verdict='not-supported'] {
+  color: var(--verdict-not-supported);
+  background: var(--verdict-not-supported-soft);
+}
+
+/* A reproduction rate is a fraction of seeds, so the denominator is shown
+ * beside it: "4/5" and "80/100" are not the same evidence. */
+.rate-value {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.rate-detail {
+  font-size: 0.73rem;
+  color: var(--text-faint);
+}
+
+.rate-condition {
+  display: block;
+  font-size: 0.73rem;
+  color: var(--text-muted);
+  margin-bottom: 0.1rem;
+}
+
+/* The comparison cell puts the interval and the dispersion under the mean.
+ * A mean alone would let a reader quote a number the seeds never supported. */
+.cell-mean {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-interval {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-dispersion {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.condition-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }

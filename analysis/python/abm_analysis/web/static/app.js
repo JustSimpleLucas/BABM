@@ -21,6 +21,18 @@ const state = {
   view: null,
   priceScale: 'level',
   acfSeries: 'all',
+  // Cohort mode. `selectedPaths` is the tick-box selection, which is kept
+  // independent of `selectedPath`: ticking runs to compare should not move the
+  // single-run page out from under the reader.
+  mode: 'run',
+  selectedPaths: new Set(),
+  cohort: null,
+  cohortAsset: null,
+  convergenceMetric: null,
+  spreadMetric: null,
+  // Incremented on every fetch so a slow reply that lands after a newer one is
+  // discarded rather than drawn over the run the reader is now looking at.
+  requestGeneration: 0,
 };
 
 const elements = {
@@ -50,6 +62,27 @@ const elements = {
   priceScale: document.getElementById('price-scale'),
   acfSeries: document.getElementById('acf-series'),
   runFooter: document.getElementById('run-footer'),
+  cohortBar: document.getElementById('cohort-bar'),
+  cohortBarCount: document.getElementById('cohort-bar-count'),
+  cohortClear: document.getElementById('cohort-clear'),
+  cohortCompare: document.getElementById('cohort-compare'),
+  cohortView: document.getElementById('cohort-view'),
+  cohortTitle: document.getElementById('cohort-title'),
+  cohortSummary: document.getElementById('cohort-summary'),
+  conditionLegend: document.getElementById('condition-legend'),
+  cohortAssetLegend: document.getElementById('cohort-asset-legend'),
+  cohortAsset: document.getElementById('cohort-asset'),
+  verdictSummary: document.getElementById('verdict-summary'),
+  verdictTable: document.getElementById('verdict-table'),
+  verdictMessage: document.getElementById('verdict-message'),
+  cohortFactGrid: document.getElementById('cohort-fact-grid'),
+  cohortMetricSections: document.getElementById('cohort-metric-sections'),
+  convergenceMetric: document.getElementById('convergence-metric'),
+  convergenceMessage: document.getElementById('convergence-message'),
+  spreadMetric: document.getElementById('spread-metric'),
+  spreadMessage: document.getElementById('spread-message'),
+  cohortDistributionMessage: document.getElementById('cohort-distribution-message'),
+  cohortFooter: document.getElementById('cohort-footer'),
 };
 
 /* ------------------------------------------------------------ formatting */
@@ -121,8 +154,35 @@ function cssValue(name) {
 }
 
 /** Return the colour reserved for the nth asset, wrapping past the fourth. */
+/** Number of distinct asset colours the stylesheet defines. */
+const ASSET_COLOUR_COUNT = 6;
+
+/** Number of distinct condition colours the stylesheet defines. */
+const CONDITION_COLOUR_COUNT = 6;
+
+/** Return the colour keying one traded market.
+ *
+ * Past the end of the ramp the series is drawn in a neutral tone rather than
+ * wrapping back to the first colour. Wrapping would put two markets under one
+ * key and silently attribute one market's line to the other; an unkeyed grey
+ * line is wrong in a way the reader can see.
+ */
 function assetColour(index) {
-  return cssValue(`--asset-${(index % 4) + 1}`);
+  return index < ASSET_COLOUR_COUNT
+    ? cssValue(`--asset-${index + 1}`)
+    : cssValue('--text-faint');
+}
+
+/** Return the colour keying one experimental condition, on the same terms. */
+function conditionColour(index) {
+  return index < CONDITION_COLOUR_COUNT
+    ? cssValue(`--condition-${index + 1}`)
+    : cssValue('--text-faint');
+}
+
+/** Render a condition's colour dot for the legend and table headers. */
+function conditionSwatch(index) {
+  return `<span class="condition-swatch" style="background:${conditionColour(index)}"></span>`;
 }
 
 function escapeHtml(text) {
@@ -164,6 +224,11 @@ function hideStatus() {
 }
 
 /* -------------------------------------------------------------- catalogue */
+
+//: Mirrors MAXIMUM_COHORT_RUNS in web/cohort_view.py. Kept here so the sidebar
+//: can disable Compare with a reason rather than sending a request that 422s.
+const MAXIMUM_COHORT_RUNS = 64;
+
 
 /** Build the sidebar label summarising a run's headline settings. */
 function runSummaryText(run) {
@@ -208,11 +273,51 @@ function renderCatalogue() {
 
     const heading = document.createElement('div');
     heading.className = 'experiment-name';
-    heading.innerHTML = `<span>${escapeHtml(experiment.name)}</span><span>${runs.length}</span>`;
     heading.title = experiment.path;
+    const selectAll = document.createElement('label');
+    selectAll.className = 'select-all';
+    const selectAllBox = document.createElement('input');
+    selectAllBox.type = 'checkbox';
+    selectAllBox.checked = runs.every((run) => state.selectedPaths.has(run.path));
+    const ticks = [];
+    selectAllBox.addEventListener('change', () => {
+      runs.forEach((run, position) => {
+        if (selectAllBox.checked) state.selectedPaths.add(run.path);
+        else state.selectedPaths.delete(run.path);
+        ticks[position].checked = selectAllBox.checked;
+      });
+      renderCohortBar();
+    });
+    selectAll.appendChild(selectAllBox);
+    selectAll.append(String(runs.length));
+
+    const name = document.createElement('span');
+    name.textContent = experiment.name;
+    heading.appendChild(name);
+    heading.appendChild(selectAll);
     group.appendChild(heading);
 
     runs.forEach((run) => {
+      const row = document.createElement('div');
+      row.className = 'run-row';
+
+      const tick = document.createElement('input');
+      tick.type = 'checkbox';
+      tick.className = 'run-checkbox';
+      tick.checked = state.selectedPaths.has(run.path);
+      tick.setAttribute('aria-label', `Select ${run.run_id} for comparison`);
+      // Ticking updates the selection in place rather than re-rendering the
+      // list. Rebuilding it would destroy the checkbox mid-click and take the
+      // keyboard focus with it, which makes ticking several runs in a row
+      // impossible without the mouse.
+      tick.addEventListener('change', () => {
+        if (tick.checked) state.selectedPaths.add(run.path);
+        else state.selectedPaths.delete(run.path);
+        selectAllBox.checked = runs.every((entry) => state.selectedPaths.has(entry.path));
+        renderCohortBar();
+      });
+      ticks.push(tick);
+
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'run-button';
@@ -222,7 +327,10 @@ function renderCatalogue() {
         `<span class="run-button-id">${escapeHtml(run.run_id)}</span>` +
         `<span class="run-button-meta">${escapeHtml(runSummaryText(run))}</span>`;
       button.addEventListener('click', () => selectRun(run.path));
-      group.appendChild(button);
+
+      row.appendChild(tick);
+      row.appendChild(button);
+      group.appendChild(row);
     });
 
     elements.runList.appendChild(group);
@@ -232,6 +340,19 @@ function renderCatalogue() {
   elements.sidebarCount.textContent = state.filterText
     ? `${visibleRuns} of ${total} runs`
     : `${total} runs in ${catalogue.experiment_count} groups`;
+  renderCohortBar();
+}
+
+/** Show how many runs are ticked, and whether they can be compared yet. */
+function renderCohortBar() {
+  const count = state.selectedPaths.size;
+  elements.cohortBar.hidden = count === 0;
+  if (!count) return;
+  const overLimit = count > MAXIMUM_COHORT_RUNS;
+  elements.cohortBarCount.textContent = overLimit
+    ? `${count} selected — at most ${MAXIMUM_COHORT_RUNS}`
+    : `${count} selected`;
+  elements.cohortCompare.disabled = count < 2 || overLimit;
 }
 
 /* -------------------------------------------------------------- rendering */
@@ -750,6 +871,12 @@ function drawAutocorrelationChart(autocorrelation, assets, selection) {
 }
 
 function drawCrossAssetCharts(crossAsset) {
+  // Both series here are properties of the *pair*, not of either market, so
+  // neither may wear a market's identity colour: the stylesheet's rule is that
+  // an asset colour answers "which asset is this", and a correlation between
+  // alpha and beta drawn in alpha's blue answers it wrongly. They take the
+  // neutral series tone instead, and the axis titles name the pair.
+  const pairColour = cssValue('--series-returns');
   const shapes = [];
   if (crossAsset.configured_correlation !== null && crossAsset.configured_correlation !== undefined) {
     shapes.push({
@@ -774,7 +901,7 @@ function drawCrossAssetCharts(crossAsset) {
         name: `Realised corr(${crossAsset.asset_a}, ${crossAsset.asset_b})`,
         type: 'scatter',
         mode: 'lines',
-        line: { color: cssValue('--asset-1'), width: 1.3 },
+        line: { color: pairColour, width: 1.3 },
       },
     ],
     chartLayout('Step', `Rolling correlation (${crossAsset.window} steps)`, {
@@ -795,7 +922,7 @@ function drawCrossAssetCharts(crossAsset) {
         name: `${crossAsset.asset_a} / ${crossAsset.asset_b}`,
         type: 'scatter',
         mode: 'lines',
-        line: { color: cssValue('--asset-2'), width: 1.3 },
+        line: { color: pairColour, width: 1.3 },
       },
     ],
     chartLayout('Step', `Price ratio ${crossAsset.asset_a} / ${crossAsset.asset_b}`, {
@@ -953,6 +1080,578 @@ function drawProtagonistWealthChart(trajectory) {
   Plotly.react('chart-protagonist-wealth', traces, layout, PLOT_CONFIG);
 }
 
+/* ---------------------------------------------------------- cohort view */
+
+/** Look up a condition's position, which fixes its colour across the page. */
+function conditionIndex(cohort, conditionId) {
+  return cohort.conditions.findIndex((entry) => entry.condition_id === conditionId);
+}
+
+/** Return the market currently in focus, or the only one there is. */
+function activeAsset(cohort) {
+  if (state.cohortAsset && cohort.assets.names.includes(state.cohortAsset)) {
+    return state.cohortAsset;
+  }
+  return cohort.assets.names[0];
+}
+
+/** Rebuild a segmented control's buttons from a list of {value,label}. */
+function fillSegmented(container, options, selected) {
+  container.innerHTML = options
+    .map(
+      (option) =>
+        `<button type="button" data-value="${escapeHtml(option.value)}">` +
+        `${escapeHtml(option.label)}</button>`
+    )
+    .join('');
+  container.hidden = options.length < 2;
+  setSegmented(container, selected);
+}
+
+function renderConditionLegend(cohort) {
+  elements.conditionLegend.innerHTML = cohort.conditions
+    .map((condition, index) => {
+      const seeds = condition.seed_count === 1 ? '1 seed' : `${condition.seed_count} seeds`;
+      return (
+        `<span class="condition-chip">${conditionSwatch(index)}` +
+        `<span>${escapeHtml(condition.label)}</span>` +
+        `<span class="condition-meta">${escapeHtml(seeds)}</span></span>`
+      );
+    })
+    .join('');
+}
+
+function renderCohortAssetLegend(cohort) {
+  if (cohort.assets.count < 2) {
+    elements.cohortAssetLegend.innerHTML = '';
+    return;
+  }
+  elements.cohortAssetLegend.innerHTML = cohort.assets.names
+    .map(
+      (name, index) =>
+        `<span class="parameter-chip asset-chip">${swatch(index)}` +
+        `<span class="asset-name">${escapeHtml(name)}</span></span>`
+    )
+    .join('');
+}
+
+/** Verdict tokens in the order the summary strip counts them. */
+const VERDICT_ORDER = [
+  { token: 'supported', label: 'pass' },
+  { token: 'partial', label: 'borderline' },
+  { token: 'not-supported', label: 'fail' },
+  { token: 'unavailable', label: 'n/a' },
+];
+
+const VERDICT_PILL_LABELS = {
+  supported: 'Pass',
+  partial: 'Borderline',
+  'not-supported': 'Fail',
+  unavailable: 'N/A',
+};
+
+/** Format a verdict statistic or cut-off in the units the rule is stated in. */
+function formatVerdictNumber(value, format) {
+  if (value === null || value === undefined) {
+    return '—';
+  }
+  switch (format) {
+    case 'share':
+      return `${(value * 100).toFixed(0)}%`;
+    case 'p_value':
+      return formatValue(value, 'p_value');
+    case 'ratio':
+    default:
+      return value.toFixed(3);
+  }
+}
+
+/** Render one cut-off as the inequality the rule actually tests. */
+function verdictRule(card, threshold) {
+  if (threshold === null || threshold === undefined) {
+    return '<td class="metric-number verdict-rule is-missing">—</td>';
+  }
+  const symbol = card.comparison === '>=' ? '≥' : '≤';
+  return (
+    `<td class="metric-number verdict-rule">${symbol} ` +
+    `${escapeHtml(formatVerdictNumber(threshold, card.value_format))}</td>`
+  );
+}
+
+function renderVerdicts(cohort) {
+  const asset = activeAsset(cohort);
+  // A verdict scoped to one market is only shown while that market is in
+  // focus; cohort-wide criteria (the distribution tests) carry no asset and
+  // are always shown, since they describe the selection as a whole.
+  const cards = cohort.verdicts.filter(
+    (card) => card.asset === null || card.asset === undefined || card.asset === asset
+  );
+  elements.verdictMessage.hidden = cards.length > 0;
+  if (!cards.length) {
+    elements.verdictMessage.textContent =
+      'No robustness criteria could be evaluated for this selection.';
+    elements.verdictSummary.innerHTML = '';
+    elements.verdictTable.innerHTML = '';
+    return;
+  }
+
+  // The strip counts what is on screen, so it follows the market in focus.
+  const seeds = cohort.seed_count === 1 ? '1 seed' : `${cohort.seed_count} seeds`;
+  const minimum = cohort.verdict_minimum_seeds;
+  const shortfall = minimum && cohort.seed_count < minimum ? minimum - cohort.seed_count : 0;
+  const sample =
+    `<span class="verdict-n">n = ${escapeHtml(seeds)}` +
+    (minimum ? ` · min ${minimum}` : '') +
+    (shortfall ? ` · ${shortfall} more needed` : '') +
+    '</span>';
+  const counts = VERDICT_ORDER.map((entry) => {
+    const count = cards.filter((card) => card.token === entry.token).length;
+    return (
+      `<span class="verdict-count" data-verdict="${entry.token}">` +
+      `<b>${count}</b> ${entry.label}</span>`
+    );
+  }).join('');
+  elements.verdictSummary.innerHTML = sample + counts;
+
+  const showScope = cards.some((card) => card.scope);
+  const columns = showScope ? 7 : 6;
+  const headers =
+    '<th>Criterion</th>' +
+    (showScope ? '<th>Condition</th>' : '') +
+    '<th>Statistic</th><th>Value</th><th>Pass</th><th>Borderline</th><th>Verdict</th>';
+
+  // Rows are grouped by category in the order the server listed them.
+  const groups = [];
+  cards.forEach((card) => {
+    let group = groups.find((entry) => entry.category === card.category);
+    if (!group) {
+      group = { category: card.category, label: card.category_label, cards: [] };
+      groups.push(group);
+    }
+    group.cards.push(card);
+  });
+
+  const body = groups
+    .map((group) => {
+      const heading =
+        `<tr class="verdict-group"><th colspan="${columns}">` +
+        `${escapeHtml(group.label || group.category || 'Criteria')}</th></tr>`;
+      const rows = group.cards
+        .map((card) => {
+          const missing = card.value === null || card.value === undefined;
+          const sampleSize =
+            card.sample_size === null || card.sample_size === undefined
+              ? ''
+              : `<span class="cell-dispersion">n = ${card.sample_size} ` +
+                `${escapeHtml(card.sample_unit || '')}</span>`;
+          const value =
+            `<td class="metric-number${missing ? ' is-missing' : ''}">` +
+            `<span class="cell-mean">` +
+            `${escapeHtml(formatVerdictNumber(card.value, card.value_format))}</span>` +
+            `${sampleSize}</td>`;
+          const pill =
+            `<span class="verdict-pill" data-verdict="${escapeHtml(card.token)}" ` +
+            `title="${escapeHtml(card.interpretation)}">` +
+            `${escapeHtml(VERDICT_PILL_LABELS[card.token] || card.verdict)}</span>`;
+          return (
+            `<tr><td title="${escapeHtml(card.hypothesis)}">${escapeHtml(card.criterion)}</td>` +
+            (showScope ? `<td class="verdict-scope">${escapeHtml(card.scope || '—')}</td>` : '') +
+            `<td class="verdict-statistic">${escapeHtml(card.statistic || '')}</td>` +
+            value +
+            verdictRule(card, card.pass_threshold) +
+            verdictRule(card, card.borderline_threshold) +
+            `<td class="verdict-cell">${pill}</td></tr>`
+          );
+        })
+        .join('');
+      return heading + rows;
+    })
+    .join('');
+
+  elements.verdictTable.innerHTML =
+    `<table class="metric-table verdict-table"><thead><tr>${headers}</tr></thead>` +
+    `<tbody>${body}</tbody></table>`;
+}
+
+function renderCohortFacts(cohort) {
+  const asset = activeAsset(cohort);
+  elements.cohortFactGrid.innerHTML = cohort.success_rates
+    .map((fact) => {
+      const perAsset = fact.assets[asset] || {};
+      const blocks = cohort.conditions
+        .map((condition) => {
+          const entry = perAsset[condition.condition_id] || {};
+          const rate = entry.rate;
+          const percent = rate === null || rate === undefined
+            ? '—'
+            : `${(rate * 100).toFixed(0)}%`;
+          const detail =
+            entry.successes === null || entry.successes === undefined
+              ? 'no runs'
+              : `${entry.successes} of ${entry.runs} runs`;
+          return (
+            `<div class="fact-asset" data-verdict="${escapeHtml(entry.verdict || 'unavailable')}">` +
+            `<span class="rate-condition">${escapeHtml(condition.label)}</span>` +
+            `<span class="rate-value">${escapeHtml(percent)}</span>` +
+            `<span class="rate-detail">${escapeHtml(detail)}</span></div>`
+          );
+        })
+        .join('');
+      return (
+        `<div class="fact-card"><h3>${escapeHtml(fact.fact)}</h3>` +
+        `<p class="fact-expectation">${escapeHtml(fact.expectation)}</p>` +
+        blocks +
+        `</div>`
+      );
+    })
+    .join('');
+}
+
+/** Render one comparison cell: the mean, its interval, and its dispersion. */
+function comparisonCell(cell, format) {
+  if (!cell) {
+    return '<td class="metric-number is-missing">—</td>';
+  }
+  const mean = escapeHtml(formatValue(cell.mean, format));
+  const interval =
+    cell.ci_half_width === null || cell.ci_half_width === undefined || cell.count < 2
+      ? ''
+      : `<span class="cell-interval">± ${escapeHtml(formatValue(cell.ci_half_width, format))}</span>`;
+  const parts = [];
+  if (cell.cov !== null && cell.cov !== undefined) {
+    parts.push(`CoV ${cell.cov.toFixed(3)}`);
+  }
+  if (cell.count !== null && cell.count !== undefined) {
+    parts.push(`n = ${Math.round(cell.count)}`);
+  }
+  const dispersion = parts.length
+    ? `<span class="cell-dispersion">${escapeHtml(parts.join(' · '))}</span>`
+    : '';
+  return (
+    `<td class="metric-number"><span class="cell-mean">${mean}</span>` +
+    `${interval}${dispersion}</td>`
+  );
+}
+
+function renderCohortMetricGroups(cohort) {
+  const asset = activeAsset(cohort);
+  const headers = cohort.conditions
+    .map(
+      (condition, index) =>
+        `<th><span class="condition-header">${conditionSwatch(index)}` +
+        `${escapeHtml(condition.label)}</span></th>`
+    )
+    .join('');
+
+  elements.cohortMetricSections.innerHTML = cohort.metric_groups
+    .map((group) => {
+      const rows = group.metrics
+        .map((metric) => {
+          const perAsset = metric.values[asset] || {};
+          const cells = cohort.conditions
+            .map((condition) =>
+              comparisonCell(perAsset[condition.condition_id], metric.format)
+            )
+            .join('');
+          return (
+            `<tr${metric.emphasis ? ' class="is-emphasis"' : ''}>` +
+            `<td>${escapeHtml(metric.label)}</td>${cells}</tr>`
+          );
+        })
+        .join('');
+      return (
+        `<section class="panel"><div class="panel-heading">` +
+        `<h2>${escapeHtml(group.title)}</h2></div>` +
+        `<p class="fact-expectation">${escapeHtml(group.caption)}</p>` +
+        `<div class="table-scroll"><table class="metric-table">` +
+        `<thead><tr><th>Metric</th>${headers}</tr></thead>` +
+        `<tbody>${rows}</tbody></table></div></section>`
+      );
+    })
+    .join('');
+}
+
+/* ------------------------------------------------------- cohort charts */
+
+function drawConvergenceChart(cohort) {
+  const target = document.getElementById('chart-convergence');
+  const asset = activeAsset(cohort);
+  const metric = state.convergenceMetric;
+  const series = (cohort.convergence.series || []).filter(
+    (entry) => entry.asset === asset && entry.metric === metric
+  );
+
+  if (!series.length) {
+    Plotly.purge('chart-convergence');
+    target.textContent = '';
+    elements.convergenceMessage.hidden = false;
+    elements.convergenceMessage.textContent =
+      'Convergence needs runs whose seeds are recorded; none were found for this selection.';
+    return;
+  }
+  elements.convergenceMessage.hidden = true;
+
+  const traces = [];
+  series.forEach((entry) => {
+    const index = conditionIndex(cohort, entry.condition_id);
+    const colour = conditionColour(index);
+    const condition = cohort.conditions[index];
+    const upper = entry.running_mean.map((value, position) => {
+      const half = entry.ci_half_width[position];
+      return value === null || half === null ? null : value + half;
+    });
+    const lower = entry.running_mean.map((value, position) => {
+      const half = entry.ci_half_width[position];
+      return value === null || half === null ? null : value - half;
+    });
+    // The band is drawn first so the running mean sits on top of it.
+    traces.push({
+      x: entry.seed_count,
+      y: upper,
+      name: `${condition ? condition.label : entry.condition_id} upper`,
+      type: 'scatter',
+      mode: 'lines',
+      line: { width: 0 },
+      hoverinfo: 'skip',
+      showlegend: false,
+    });
+    traces.push({
+      x: entry.seed_count,
+      y: lower,
+      name: `${condition ? condition.label : entry.condition_id} 95% CI`,
+      type: 'scatter',
+      mode: 'lines',
+      line: { width: 0 },
+      fill: 'tonexty',
+      fillcolor: withAlpha(colour, 0.15),
+      hoverinfo: 'skip',
+      showlegend: false,
+    });
+    traces.push({
+      x: entry.seed_count,
+      y: entry.running_mean,
+      name: condition ? condition.label : entry.condition_id,
+      type: 'scatter',
+      mode: 'lines+markers',
+      line: { color: colour, width: 1.8 },
+      marker: { color: colour, size: 5 },
+    });
+  });
+
+  const definition = (cohort.convergence.metrics || []).find((entry) => entry.key === metric);
+  Plotly.react(
+    'chart-convergence',
+    traces,
+    chartLayout('Seeds accumulated', definition ? definition.label : metric, {
+      showlegend: cohort.conditions.length > 1,
+    }),
+    PLOT_CONFIG
+  );
+}
+
+/* The cohort charts keep their "no data" text in a sibling element, never in
+ * the chart div. Writing into a div that holds a live plot removes Plotly's own
+ * DOM while its internal state survives, and Plotly only rebuilds that DOM for
+ * an empty graph — so the next redraw lands in detached nodes and the chart
+ * goes blank on every metric or market switch. */
+
+function drawSpreadChart(cohort) {
+  const target = document.getElementById('chart-spread');
+  const asset = activeAsset(cohort);
+  const metric = state.spreadMetric;
+  const series = (cohort.spread.series || []).filter(
+    (entry) => entry.asset === asset && entry.metric === metric
+  );
+
+  if (!series.length) {
+    Plotly.purge('chart-spread');
+    target.textContent = '';
+    elements.spreadMessage.hidden = false;
+    elements.spreadMessage.textContent = 'No per-seed values for this metric.';
+    return;
+  }
+  elements.spreadMessage.hidden = true;
+
+  const traces = series.map((entry) => {
+    const index = conditionIndex(cohort, entry.condition_id);
+    const condition = cohort.conditions[index];
+    return {
+      y: entry.points.map((point) => point.value),
+      // Every draw is plotted, not just the summary shape: with a handful of
+      // seeds a box plot's quartiles are themselves noise, and the reader
+      // needs to see whether one seed carried the condition.
+      text: entry.points.map((point) =>
+        point.seed === null || point.seed === undefined ? 'seed —' : `seed ${point.seed}`
+      ),
+      name: condition ? condition.label : entry.condition_id,
+      type: 'box',
+      boxpoints: 'all',
+      jitter: 0.5,
+      pointpos: 0,
+      marker: { color: conditionColour(index), size: 6 },
+      line: { color: conditionColour(index), width: 1.2 },
+      fillcolor: withAlpha(conditionColour(index), 0.12),
+      hoveron: 'points',
+    };
+  });
+
+  const definition = (cohort.spread.metrics || []).find((entry) => entry.key === metric);
+  Plotly.react(
+    'chart-spread',
+    traces,
+    chartLayout('', definition ? definition.label : metric, { showlegend: false }),
+    PLOT_CONFIG
+  );
+}
+
+function drawCohortDistribution(cohort) {
+  const target = document.getElementById('chart-cohort-distribution');
+  const asset = activeAsset(cohort);
+  const entry = cohort.distribution.available
+    ? cohort.distribution.assets[asset]
+    : null;
+
+  if (!entry) {
+    Plotly.purge('chart-cohort-distribution');
+    target.textContent = '';
+    elements.cohortDistributionMessage.hidden = false;
+    elements.cohortDistributionMessage.textContent =
+      'Too few returns to estimate a distribution.';
+    return;
+  }
+  elements.cohortDistributionMessage.hidden = true;
+
+  const traces = cohort.conditions
+    .map((condition, index) => {
+      const density = entry.conditions[condition.condition_id];
+      if (!density) return null;
+      return {
+        x: entry.bin_centre,
+        y: density.density,
+        name: `${condition.label} (${density.observations.toLocaleString('en-GB')} obs)`,
+        type: 'scatter',
+        mode: 'lines',
+        line: { color: conditionColour(index), width: 1.6, shape: 'spline' },
+      };
+    })
+    .filter(Boolean);
+
+  Plotly.react(
+    'chart-cohort-distribution',
+    traces,
+    chartLayout('Log return', 'Density', { showlegend: true }),
+    PLOT_CONFIG
+  );
+}
+
+/** Return a CSS colour with an alpha channel, for chart confidence bands.
+ *
+ * Plotly needs an rgba string; the stylesheet stores hex. Anything that is not
+ * a six-digit hex is returned untouched so a future token change degrades to an
+ * opaque fill rather than an invalid colour.
+ */
+function withAlpha(colour, alpha) {
+  const match = /^#([0-9a-f]{6})$/i.exec(String(colour).trim());
+  if (!match) return colour;
+  const value = parseInt(match[1], 16);
+  const red = (value >> 16) & 255;
+  const green = (value >> 8) & 255;
+  const blue = value & 255;
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+/* ------------------------------------------------- cohort orchestration */
+
+function renderCohortCharts(cohort) {
+  drawConvergenceChart(cohort);
+  drawSpreadChart(cohort);
+  drawCohortDistribution(cohort);
+}
+
+/** Redraw everything that depends on which market is in focus. */
+function renderCohortForAsset(cohort) {
+  renderVerdicts(cohort);
+  renderCohortFacts(cohort);
+  renderCohortMetricGroups(cohort);
+  renderCohortCharts(cohort);
+}
+
+function renderCohort(cohort) {
+  state.cohort = cohort;
+  state.mode = 'cohort';
+  state.cohortAsset = cohort.assets.names[0];
+
+  const conditions = cohort.condition_count === 1 ? '1 condition' : `${cohort.condition_count} conditions`;
+  const seeds = cohort.seed_count === 1 ? '1 seed' : `${cohort.seed_count} seeds`;
+  elements.cohortTitle.textContent = `${cohort.run_count} runs · ${conditions}`;
+  elements.cohortSummary.textContent = `${seeds} · ${cohort.phase} phase · ${cohort.price_column}`;
+
+  renderConditionLegend(cohort);
+  renderCohortAssetLegend(cohort);
+
+  fillSegmented(
+    elements.cohortAsset,
+    cohort.assets.names.map((name) => ({ value: name, label: name })),
+    state.cohortAsset
+  );
+
+  const convergenceOptions = (cohort.convergence.metrics || []).map((metric) => ({
+    value: metric.key,
+    label: metric.label,
+  }));
+  state.convergenceMetric = convergenceOptions.length ? convergenceOptions[0].value : null;
+  fillSegmented(elements.convergenceMetric, convergenceOptions, state.convergenceMetric);
+
+  const spreadOptions = (cohort.spread.metrics || []).map((metric) => ({
+    value: metric.key,
+    label: metric.label,
+  }));
+  // Excess kurtosis is the default because it is the stylised fact whose
+  // per-seed dispersion is largest, so it is where an outlier seed shows.
+  const kurtosis = spreadOptions.find((option) => option.value === 'excess_kurtosis');
+  state.spreadMetric = kurtosis
+    ? kurtosis.value
+    : spreadOptions.length
+      ? spreadOptions[0].value
+      : null;
+  fillSegmented(elements.spreadMetric, spreadOptions, state.spreadMetric);
+
+  elements.cohortFooter.innerHTML = cohort.notes.map(escapeHtml).join('<br>');
+
+  elements.placeholder.hidden = true;
+  elements.runView.hidden = true;
+  elements.cohortView.hidden = false;
+
+  renderCohortForAsset(cohort);
+}
+
+async function loadCohort() {
+  const paths = Array.from(state.selectedPaths);
+  if (paths.length < 2) return;
+
+  const generation = ++state.requestGeneration;
+  showStatus(`Computing diagnostics for ${paths.length} runs…`, false);
+
+  const query = new URLSearchParams();
+  paths.forEach((path) => query.append('path', path));
+  query.set('phase', state.phase);
+  query.set('price_column', state.priceColumn);
+
+  try {
+    const cohort = await fetchJson(`/api/cohort?${query.toString()}`);
+    if (generation !== state.requestGeneration) return;
+    hideStatus();
+    renderCohort(cohort);
+  } catch (error) {
+    if (generation !== state.requestGeneration) return;
+    elements.cohortView.hidden = true;
+    elements.runView.hidden = true;
+    elements.placeholder.hidden = true;
+    state.cohort = null;
+    showStatus(`Could not compare these runs: ${error.message}`, true);
+  }
+}
+
 /* --------------------------------------------------------------- toggles */
 
 /** Mark the pressed button of a segmented control. */
@@ -962,10 +1661,11 @@ function setSegmented(container, value) {
   });
 }
 
-function wireSegmented(container, onChange) {
+function wireSegmented(container, onChange, isReady) {
+  const ready = isReady || (() => Boolean(state.view));
   container.addEventListener('click', (event) => {
     const button = event.target.closest('button');
-    if (!button || !state.view) return;
+    if (!button || !button.dataset.value || !ready()) return;
     setSegmented(container, button.dataset.value);
     onChange(button.dataset.value);
   });
@@ -1003,9 +1703,14 @@ function renderRun(view) {
 
 async function selectRun(path) {
   state.selectedPath = path;
+  state.mode = 'run';
   renderCatalogue();
   showStatus('Computing diagnostics…', false);
 
+  // Every request carries a generation. A cohort takes seconds and a cached run
+  // returns at once, so without this a slow earlier reply could land last and
+  // draw over whatever the reader had moved on to.
+  const generation = ++state.requestGeneration;
   const query = new URLSearchParams({
     path,
     phase: state.phase,
@@ -1013,24 +1718,37 @@ async function selectRun(path) {
   });
   try {
     const view = await fetchJson(`/api/run?${query.toString()}`);
+    if (generation !== state.requestGeneration) return;
     hideStatus();
+    elements.cohortView.hidden = true;
     renderRun(view);
   } catch (error) {
+    if (generation !== state.requestGeneration) return;
     elements.runView.hidden = true;
+    elements.cohortView.hidden = true;
     elements.placeholder.hidden = true;
     state.view = null;
     showStatus(`Could not open this run: ${error.message}`, true);
   }
 }
 
+/** Re-run whichever view is on screen after a phase or price-column change. */
+function refreshActiveView() {
+  if (state.mode === 'cohort' && state.cohort) {
+    loadCohort();
+  } else if (state.selectedPath) {
+    selectRun(state.selectedPath);
+  }
+}
+
 async function initialise() {
   elements.phaseSelect.addEventListener('change', (event) => {
     state.phase = event.target.value;
-    if (state.selectedPath) selectRun(state.selectedPath);
+    refreshActiveView();
   });
   elements.priceColumnSelect.addEventListener('change', (event) => {
     state.priceColumn = event.target.value;
-    if (state.selectedPath) selectRun(state.selectedPath);
+    refreshActiveView();
   });
   elements.runSearch.addEventListener('input', (event) => {
     state.filterText = event.target.value.trim().toLowerCase();
@@ -1046,6 +1764,60 @@ async function initialise() {
   wireSegmented(elements.acfSeries, (value) => {
     state.acfSeries = value;
     drawAutocorrelationChart(state.view.autocorrelation, state.view.assets, value);
+  });
+
+  // The cohort controls redraw from the payload in memory too, so switching
+  // market or metric never refits a GARCH model.
+  const cohortReady = () => Boolean(state.cohort);
+  wireSegmented(
+    elements.cohortAsset,
+    (value) => {
+      state.cohortAsset = value;
+      renderCohortForAsset(state.cohort);
+    },
+    cohortReady
+  );
+  wireSegmented(
+    elements.convergenceMetric,
+    (value) => {
+      state.convergenceMetric = value;
+      drawConvergenceChart(state.cohort);
+    },
+    cohortReady
+  );
+  wireSegmented(
+    elements.spreadMetric,
+    (value) => {
+      state.spreadMetric = value;
+      drawSpreadChart(state.cohort);
+    },
+    cohortReady
+  );
+
+  // Chart colours are read from CSS custom properties at draw time, so a theme
+  // change after a draw would leave the old scheme's colours on the plots until
+  // something else forced a redraw. Redraw from the payload already in memory —
+  // this refits nothing.
+  const scheme = window.matchMedia('(prefers-color-scheme: dark)');
+  const redrawForTheme = () => {
+    if (state.mode === 'cohort' && state.cohort) renderCohortForAsset(state.cohort);
+    else if (state.view) renderRun(state.view);
+  };
+  if (typeof scheme.addEventListener === 'function') {
+    scheme.addEventListener('change', redrawForTheme);
+  }
+
+  elements.cohortCompare.addEventListener('click', loadCohort);
+  elements.cohortClear.addEventListener('click', () => {
+    state.selectedPaths.clear();
+    renderCatalogue();
+    if (state.mode === 'cohort') {
+      state.mode = 'run';
+      state.cohort = null;
+      elements.cohortView.hidden = true;
+      if (state.selectedPath) selectRun(state.selectedPath);
+      else elements.placeholder.hidden = false;
+    }
   });
 
   try {

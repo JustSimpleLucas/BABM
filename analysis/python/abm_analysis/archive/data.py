@@ -23,6 +23,7 @@ from abm_analysis.archive.manifests import (
     _coalesce_duplicate_columns,
     _order_runs_index_columns,
     build_runs_index,
+    build_runs_index_from_run_dirs,
     normalise_manifest_schema,
     read_experiment_manifest,
 )
@@ -61,6 +62,7 @@ __all__ = [
     "_read_output_flag",
     "build_run_archive",
     "build_runs_index",
+    "build_runs_index_from_run_dirs",
     "compute_log_returns",
     "discover_run_directories",
     "ensure_valid_run_archive",

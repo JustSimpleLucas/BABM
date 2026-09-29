@@ -155,8 +155,11 @@ def build_robustness_verdicts(
 
     Returns one row per criterion with columns ``criterion, category,
     hypothesis, metric_value, metric_display, threshold_description, verdict,
-    interpretation``. Verdicts are ``pass``, ``borderline``, ``fail``, or
-    ``not_available``. When fewer than the minimum replication count seeds
+    interpretation`` plus the rule in structured form — ``statistic,
+    value_format, comparison, pass_threshold, borderline_threshold,
+    sample_size, sample_unit`` — so an interface can print the value beside
+    the cut-offs that judged it instead of quoting the prose. Verdicts are
+    ``pass``, ``borderline``, ``fail``, or ``not_available``. When fewer than the minimum replication count seeds
     completed, every verdict is ``not_available`` because dispersion and rate
     estimates from so few replications would be spurious. ``thresholds``
     defaults to the literature-backed module constants.
@@ -223,6 +226,36 @@ def verdict_rows_for_display(verdicts: pd.DataFrame) -> list[dict[str, str]]:
     return cards
 
 
+def _rule_fields(
+    statistic: str,
+    value_format: str,
+    comparison: str,
+    pass_threshold: float,
+    borderline_threshold: float,
+    *,
+    sample_size: int | None = None,
+    sample_unit: str = "",
+) -> dict[str, object]:
+    """Return the decision rule as columns rather than prose.
+
+    ``comparison`` is the direction of the pass test (``"<="`` for
+    dispersion-style rules, ``">="`` for rate-style rules); ``value_format``
+    names how the value and both cut-offs print (``ratio``, ``share`` or
+    ``p_value``); ``sample_size`` carries the n behind the value only when it
+    is not simply the cohort's seed count.
+    """
+
+    return {
+        "statistic": statistic,
+        "value_format": value_format,
+        "comparison": comparison,
+        "pass_threshold": pass_threshold,
+        "borderline_threshold": borderline_threshold,
+        "sample_size": sample_size if sample_size is not None else np.nan,
+        "sample_unit": sample_unit,
+    }
+
+
 def _cov_verdict_rows(
     seed_summary: pd.DataFrame,
     thresholds: VerdictThresholds,
@@ -231,6 +264,7 @@ def _cov_verdict_rows(
         f"pass when CoV <= {thresholds.cov_pass:g}; borderline when "
         f"CoV <= {thresholds.cov_borderline:g}; fail otherwise."
     )
+    rule = _rule_fields("CoV", "ratio", "<=", thresholds.cov_pass, thresholds.cov_borderline)
     rows: list[dict[str, object]] = []
     for condition_prefix, summary_row in _condition_rows(seed_summary):
         for metric in COV_VERDICT_METRICS:
@@ -255,6 +289,7 @@ def _cov_verdict_rows(
                     "threshold_description": threshold_description,
                     "verdict": verdict,
                     "interpretation": _cov_interpretation(display_name, value, verdict),
+                    **rule,
                 }
             )
     return rows
@@ -267,6 +302,13 @@ def _success_rate_verdict_rows(
     threshold_description = (
         f"pass when the success rate >= {thresholds.success_rate_pass:g}; borderline "
         f"when >= {thresholds.success_rate_borderline:g}; fail otherwise."
+    )
+    rule = _rule_fields(
+        "Success rate",
+        "share",
+        ">=",
+        thresholds.success_rate_pass,
+        thresholds.success_rate_borderline,
     )
     rows: list[dict[str, object]] = []
     for condition_prefix, summary_row in _condition_rows(seed_summary):
@@ -291,6 +333,7 @@ def _success_rate_verdict_rows(
                     "threshold_description": threshold_description,
                     "verdict": verdict,
                     "interpretation": _success_rate_interpretation(fact_name, value, verdict),
+                    **rule,
                 }
             )
     return rows
@@ -346,6 +389,15 @@ def _ks_share_verdict_row(
         ),
         "verdict": verdict,
         "interpretation": interpretation,
+        **_rule_fields(
+            "Insignificant K-S share",
+            "share",
+            ">=",
+            thresholds.ks_insignificant_share_pass,
+            thresholds.ks_insignificant_share_borderline,
+            sample_size=pair_count,
+            sample_unit="pairs",
+        ),
     }
 
 
@@ -358,6 +410,13 @@ def _distribution_test_verdict_rows(
         f"pass when p-value >= {SIGNIFICANCE_LEVEL:g}; borderline when "
         f"{thresholds.strong_rejection_p_value:g} <= p-value < {SIGNIFICANCE_LEVEL:g}; "
         "fail on strong rejection below that."
+    )
+    rule = _rule_fields(
+        "p-value",
+        "p_value",
+        ">=",
+        SIGNIFICANCE_LEVEL,
+        thresholds.strong_rejection_p_value,
     )
     if distribution_tests.empty:
         return [
@@ -376,6 +435,7 @@ def _distribution_test_verdict_rows(
                     "The k-sample tests could not run; at least two seeds with "
                     "enough finite log returns are required."
                 ),
+                **rule,
             }
         ]
     for _, test_row in distribution_tests.iterrows():
@@ -405,6 +465,7 @@ def _distribution_test_verdict_rows(
                 "threshold_description": threshold_description,
                 "verdict": verdict,
                 "interpretation": _distribution_test_interpretation(display_name, verdict),
+                **rule,
             }
         )
     return rows
@@ -452,6 +513,15 @@ def _adf_verdict_row(
         ),
         "verdict": verdict,
         "interpretation": interpretation,
+        **_rule_fields(
+            "ADF rejection rate",
+            "share",
+            ">=",
+            thresholds.adf_rejection_rate_pass,
+            thresholds.adf_rejection_rate_borderline,
+            sample_size=tested,
+            sample_unit="seeds",
+        ),
     }
 
 
@@ -465,6 +535,15 @@ def _relative_ci_verdict_rows(
         f"pass when the relative 95% CI half-width <= "
         f"{thresholds.relative_ci_half_width_pass:g}; borderline when <= "
         f"{thresholds.relative_ci_half_width_borderline:g}; fail otherwise."
+    )
+    rule = _rule_fields(
+        "Relative CI half-width",
+        "ratio",
+        "<=",
+        thresholds.relative_ci_half_width_pass,
+        thresholds.relative_ci_half_width_borderline,
+        sample_size=seed_count,
+        sample_unit="seeds",
     )
     rows: list[dict[str, object]] = []
     for metric in RELATIVE_CI_VERDICT_METRICS:
@@ -506,6 +585,7 @@ def _relative_ci_verdict_rows(
                 "threshold_description": threshold_description,
                 "verdict": verdict,
                 "interpretation": interpretation,
+                **rule,
             }
         )
     return rows

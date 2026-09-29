@@ -669,3 +669,349 @@ def test_run_endpoint_serves_the_multi_asset_payload(multi_asset_root: Path) -> 
     assert payload["cross_asset"]["available"] is True
     assert payload["agents"]["available"] is True
     assert len(payload["metric_groups"]) == 3
+
+
+# --------------------------------------------------------------------------
+# The cohort dimension
+# --------------------------------------------------------------------------
+#
+# A cohort is the dashboard's answer to the two questions a single run cannot
+# settle: whether a result survives the seed, and whether it differs between
+# conditions. Both are served by one aggregation, so the tests below check the
+# split it makes — seeds collapse, controls separate — and that the numbers it
+# shows are the ones the CSV export writes.
+
+
+#: Six runs: three seeds with prospect theory on, three with it off, identical
+#: in every other control. The run-id schema is
+#: ``<stamp>_<cpt>_<heterogeneity>_<social>_<short>_<fund>_<chart>_<noise>_<bh>_<steps>_<seed>``.
+COHORT_RUN_IDS = (
+    ("20260501100001_1_0_0_0_20_30_5_2_180_11", 11),
+    ("20260501100002_1_0_0_0_20_30_5_2_180_12", 12),
+    ("20260501100003_1_0_0_0_20_30_5_2_180_13", 13),
+    ("20260501100004_0_0_0_0_20_30_5_2_180_14", 14),
+    ("20260501100005_0_0_0_0_20_30_5_2_180_15", 15),
+    ("20260501100006_0_0_0_0_20_30_5_2_180_16", 16),
+)
+
+PROSPECT_ON_RUN_IDS = tuple(run_id for run_id, _ in COHORT_RUN_IDS[:3])
+PROSPECT_OFF_RUN_IDS = tuple(run_id for run_id, _ in COHORT_RUN_IDS[3:])
+
+
+@pytest.fixture()
+def cohort_root(tmp_path: Path) -> Path:
+    """Build an archive holding two conditions of three seeds each."""
+
+    root = tmp_path / "cohort_data"
+    experiment_dir = root / "experiments" / "treatment"
+    experiment_dir.mkdir(parents=True)
+    for run_id, seed in COHORT_RUN_IDS:
+        write_synthetic_run(experiment_dir / run_id, run_id, seed, 0.0)
+    return root
+
+
+def cohort_paths(run_ids: tuple[str, ...]) -> list[tuple[str, str]]:
+    """Return repeated ``path`` query parameters for the cohort endpoint."""
+
+    return [("path", f"experiments/treatment/{run_id}") for run_id in run_ids]
+
+
+def cohort_dirs(cohort_root: Path, run_ids: tuple[str, ...]) -> list[Path]:
+    """Return the run directories behind a set of run ids."""
+
+    return [cohort_root / "experiments" / "treatment" / run_id for run_id in run_ids]
+
+
+def test_seeds_of_one_configuration_collapse_into_one_condition(cohort_root: Path) -> None:
+    """Seed is the replication device, so varying it must not split conditions."""
+
+    client = TestClient(create_app(cohort_root))
+
+    payload = client.get("/api/cohort", params=cohort_paths(PROSPECT_ON_RUN_IDS)).json()
+
+    assert payload["condition_count"] == 1
+    assert payload["run_count"] == 3
+    assert payload["seed_count"] == 3
+    assert payload["conditions"][0]["seed_count"] == 3
+
+
+def test_a_changed_control_separates_conditions(cohort_root: Path) -> None:
+    """The comparison the thesis makes has to survive as two columns."""
+
+    client = TestClient(create_app(cohort_root))
+    every_run = PROSPECT_ON_RUN_IDS + PROSPECT_OFF_RUN_IDS
+
+    payload = client.get("/api/cohort", params=cohort_paths(every_run)).json()
+
+    assert payload["condition_count"] == 2
+    assert payload["run_count"] == 6
+    labels = {condition["label"] for condition in payload["conditions"]}
+    assert labels == {"Prospect theory on", "Prospect theory off"}
+    # Only the control that actually varies is offered as the distinguishing
+    # parameter; listing all fifteen would bury the contrast.
+    for condition in payload["conditions"]:
+        assert [entry["label"] for entry in condition["parameters"]] == ["Prospect theory"]
+
+
+def test_cohort_numbers_are_the_exported_numbers(cohort_root: Path) -> None:
+    """The panel and ``robustness_reports/`` must not be able to disagree.
+
+    The dashboard asks for per-asset diagnostics and the CSV export does not, so
+    the two are compared through the frame builder they share rather than by
+    reading the files: same runs, same call, same aggregate cells.
+    """
+
+    from abm_analysis.exports.seed_robustness import build_seed_robustness_frames
+    from abm_analysis.web.cohort_view import build_cohort_view
+
+    run_dirs = cohort_dirs(cohort_root, PROSPECT_ON_RUN_IDS)
+    frames = build_seed_robustness_frames(run_dirs, per_asset=True)
+    payload = build_cohort_view(run_dirs)
+
+    summary_row = frames.seed_robustness.iloc[0]
+    condition_id = payload["conditions"][0]["condition_id"]
+    asset = payload["assets"]["names"][0]
+
+    checked = 0
+    for group in payload["metric_groups"]:
+        for metric in group["metrics"]:
+            cell = metric["values"][asset][condition_id]
+            if cell is None:
+                continue
+            assert cell["mean"] == pytest.approx(summary_row[f"{metric['key']}_mean"])
+            assert cell["std"] == pytest.approx(summary_row[f"{metric['key']}_std"])
+            assert cell["ci_low"] == pytest.approx(summary_row[f"{metric['key']}_ci95_lower"])
+            checked += 1
+    assert checked >= 5, "the comparison table reported almost nothing"
+
+
+def test_export_still_writes_the_shared_frames(cohort_root: Path) -> None:
+    """Splitting compute from write must not have changed what is written."""
+
+    from abm_analysis.exports.seed_robustness import (
+        build_seed_robustness_frames,
+        write_seed_robustness_tables,
+    )
+
+    experiment_dir = cohort_root / "experiments" / "treatment"
+    tables = write_seed_robustness_tables(experiment_dir)
+    frames = build_seed_robustness_frames(
+        cohort_dirs(cohort_root, tuple(run_id for run_id, _ in COHORT_RUN_IDS)),
+        manifest_dir=experiment_dir,
+    )
+
+    written = pd.read_csv(tables.seed_robustness_csv_path)
+    assert len(written) == len(frames.seed_robustness)
+    assert written["condition_id"].tolist() == frames.seed_robustness["condition_id"].tolist()
+    assert pd.read_csv(tables.verdicts_csv_path)["criterion"].tolist() == (
+        frames.verdicts["criterion"].tolist()
+    )
+
+
+def test_success_rates_count_seeds_not_percentages(cohort_root: Path) -> None:
+    """A rate without its denominator is not evidence; 4/5 and 80/100 differ."""
+
+    client = TestClient(create_app(cohort_root))
+
+    payload = client.get("/api/cohort", params=cohort_paths(PROSPECT_ON_RUN_IDS)).json()
+
+    condition_id = payload["conditions"][0]["condition_id"]
+    asset = payload["assets"]["names"][0]
+    assert len(payload["success_rates"]) == 3
+    for fact in payload["success_rates"]:
+        entry = fact["assets"][asset][condition_id]
+        assert entry["runs"] == 3
+        assert entry["verdict"] in VERDICT_TOKENS
+        if entry["rate"] is not None:
+            assert entry["successes"] == pytest.approx(entry["rate"] * entry["runs"], abs=0.5)
+
+
+def test_verdicts_are_labelled_by_condition_not_by_summary_row(cohort_root: Path) -> None:
+    """``Condition 3`` would name a row the reader was never shown."""
+
+    client = TestClient(create_app(cohort_root))
+    every_run = PROSPECT_ON_RUN_IDS + PROSPECT_OFF_RUN_IDS
+
+    payload = client.get("/api/cohort", params=cohort_paths(every_run)).json()
+
+    assert payload["verdicts"], "no robustness criteria were evaluated"
+    scopes = {card["scope"] for card in payload["verdicts"] if card["scope"]}
+    assert scopes, "multi-condition verdicts lost their condition labels"
+    assert not any(str(scope).startswith("Condition ") for scope in scopes)
+    for card in payload["verdicts"]:
+        assert card["token"] in VERDICT_TOKENS
+        assert not card["criterion"].startswith("Condition ")
+
+
+def test_interface_files_are_revalidated_on_every_load(tmp_path: Path) -> None:
+    """A cached app.js against a newer index.html breaks the page on upgrade."""
+
+    client = TestClient(create_app(tmp_path))
+
+    for path in ("/", "/static/app.js", "/static/styles.css"):
+        response = client.get(path)
+        assert response.status_code == 200, path
+        assert response.headers["cache-control"] == "no-cache", path
+    assert "cache-control" not in client.get("/api/catalogue").headers
+
+
+def test_index_references_assets_by_content_version(tmp_path: Path) -> None:
+    """A changed script must be a new URL, so no browser can keep the old one."""
+
+    import re
+
+    from abm_analysis.web.app import STATIC_DIRECTORY, _asset_version
+
+    client = TestClient(create_app(tmp_path))
+
+    html = client.get("/").text
+    for name in ("styles.css", "app.js"):
+        match = re.search(rf'/static/{re.escape(name)}\?v=([0-9a-f]+)', html)
+        assert match, f"{name} is not versioned in the page"
+        assert match.group(1) == _asset_version(STATIC_DIRECTORY / name)
+        assert client.get(f"/static/{name}?v={match.group(1)}").status_code == 200
+    assert "/static/app.js\"" not in html
+
+
+def test_verdict_cards_expose_the_rule_as_numbers(cohort_root: Path) -> None:
+    """The verdict table prints a value against its cut-offs, not a sentence."""
+
+    from abm_analysis.statistics.robustness_verdicts import MINIMUM_SEEDS_FOR_VERDICTS
+    from abm_analysis.web.cohort_view import VERDICT_CATEGORY_LABELS
+
+    client = TestClient(create_app(cohort_root))
+
+    payload = client.get("/api/cohort", params=cohort_paths(PROSPECT_ON_RUN_IDS)).json()
+
+    assert payload["verdict_minimum_seeds"] == MINIMUM_SEEDS_FOR_VERDICTS
+    assert payload["verdicts"], "no robustness criteria were evaluated"
+    for card in payload["verdicts"]:
+        assert card["statistic"]
+        assert card["category_label"] == VERDICT_CATEGORY_LABELS[card["category"]]
+        assert card["value_format"] in {"ratio", "share", "p_value"}
+        assert card["comparison"] in {"<=", ">="}
+        assert isinstance(card["pass_threshold"], float)
+        assert isinstance(card["borderline_threshold"], float)
+        assert card["value"] is None or isinstance(card["value"], float)
+        assert card["sample_size"] is None or isinstance(card["sample_size"], int)
+        # Prose survives for the tooltips.
+        assert card["hypothesis"] and card["interpretation"]
+
+
+def test_cohort_payload_is_json_serialisable(cohort_root: Path) -> None:
+    """NaN dispersion at n = 1 must reach the browser as null, not NaN."""
+
+    from abm_analysis.web.cohort_view import build_cohort_view
+
+    payload = build_cohort_view(cohort_dirs(cohort_root, PROSPECT_ON_RUN_IDS))
+    encoded = json.dumps(payload)
+
+    assert "NaN" not in encoded
+    assert "Infinity" not in encoded
+
+
+def test_cohort_rejects_a_selection_that_is_too_small(cohort_root: Path) -> None:
+    client = TestClient(create_app(cohort_root))
+
+    response = client.get("/api/cohort", params=cohort_paths(PROSPECT_ON_RUN_IDS[:1]))
+
+    assert response.status_code == 422
+    assert "at least" in response.json()["detail"]
+
+
+def test_cohort_collapses_a_run_selected_twice(cohort_root: Path) -> None:
+    """Counting one run twice would halve every dispersion statistic."""
+
+    client = TestClient(create_app(cohort_root))
+    duplicated = cohort_paths(PROSPECT_ON_RUN_IDS) + cohort_paths(PROSPECT_ON_RUN_IDS[:1])
+
+    payload = client.get("/api/cohort", params=duplicated).json()
+
+    assert payload["run_count"] == 3
+    assert payload["seed_count"] == 3
+
+
+def test_cohort_rejects_a_traversal_in_any_position(cohort_root: Path) -> None:
+    """A list of paths is no more trusted than a single one."""
+
+    client = TestClient(create_app(cohort_root))
+    params = cohort_paths(PROSPECT_ON_RUN_IDS[:2]) + [("path", "../outside")]
+
+    response = client.get("/api/cohort", params=params)
+
+    assert response.status_code == 404
+
+
+def test_experiment_cohort_endpoint_gathers_the_whole_group(cohort_root: Path) -> None:
+    client = TestClient(create_app(cohort_root))
+
+    payload = client.get(
+        "/api/cohort/experiment", params={"path": "experiments/treatment"}
+    ).json()
+
+    assert payload["run_count"] == len(COHORT_RUN_IDS)
+    assert payload["condition_count"] == 2
+
+
+def test_cohort_convergence_never_pools_two_conditions(cohort_root: Path) -> None:
+    """A path mixing conditions would show the contrast as dispersion."""
+
+    client = TestClient(create_app(cohort_root))
+    every_run = PROSPECT_ON_RUN_IDS + PROSPECT_OFF_RUN_IDS
+
+    payload = client.get("/api/cohort", params=cohort_paths(every_run)).json()
+
+    assert payload["convergence"]["available"] is True
+    for entry in payload["convergence"]["series"]:
+        assert entry["condition_id"] is not None
+        # Three seeds per condition, so no path may claim more.
+        assert max(entry["seed_count"]) <= 3
+
+
+def test_per_run_diagnostics_are_reused_across_cohorts(cohort_root: Path) -> None:
+    """A cohort must cost only its uncached runs, not a refit of every run.
+
+    Each run carries a GARCH(1,1) fit. Without this, adding one run to a
+    selection would refit every run already in it, and the dashboard would be
+    unusable at the replication counts the thesis actually needs.
+    """
+
+    from abm_analysis.web.app import _cached_run_diagnostics
+
+    client = TestClient(create_app(cohort_root))
+    every_run = PROSPECT_ON_RUN_IDS + PROSPECT_OFF_RUN_IDS
+    _cached_run_diagnostics.cache_clear()
+
+    client.get("/api/cohort", params=cohort_paths(every_run))
+    after_first = _cached_run_diagnostics.cache_info()
+    assert after_first.misses == len(every_run)
+    assert after_first.hits == 0
+
+    # A different cohort over the same archives: nothing may be refitted.
+    client.get("/api/cohort", params=cohort_paths(every_run[:-1]))
+    after_second = _cached_run_diagnostics.cache_info()
+    assert after_second.misses == after_first.misses
+    assert after_second.hits == len(every_run) - 1
+
+
+def test_touching_an_artefact_invalidates_the_cohort(cohort_root: Path) -> None:
+    """A cohort must never show numbers from a superseded archive."""
+
+    from abm_analysis.web.app import _cached_cohort_view
+
+    client = TestClient(create_app(cohort_root))
+    params = cohort_paths(PROSPECT_ON_RUN_IDS)
+    _cached_cohort_view.cache_clear()
+
+    client.get("/api/cohort", params=params)
+    # The same request again is a hit, which is what makes the miss below
+    # evidence of invalidation rather than of an ineffective cache.
+    client.get("/api/cohort", params=params)
+    assert _cached_cohort_view.cache_info().hits == 1
+    misses = _cached_cohort_view.cache_info().misses
+
+    summary = cohort_dirs(cohort_root, PROSPECT_ON_RUN_IDS)[0] / "summary_metrics.csv"
+    summary.write_text(summary.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+
+    assert client.get("/api/cohort", params=params).status_code == 200
+    assert _cached_cohort_view.cache_info().misses == misses + 1
