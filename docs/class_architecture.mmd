@@ -80,12 +80,6 @@ class StrategyConfig {
 }
 
 class ProtagonistConfig {
-  <<header>>
-  +ProtagonistStrategyKind
-  +ProtagonistConfig
-}
-
-class ProtagonistSettings {
   +bool enabled
   +string name
   +ProtagonistStrategyKind strategy
@@ -143,7 +137,7 @@ class SimulationConfig {
   +ChartistConfig chartist
   +NoiseTraderConfig noiseTrader
   +BuyAndHoldConfig buyAndHold
-  +ProtagonistSettings protagonist
+  +ProtagonistConfig protagonist
   +TransactionCostConfig transactionCosts
   +SocialInfluenceConfig social
   +MicrostructureConfig microstructure
@@ -627,13 +621,12 @@ MarketConfig ..> SocialInfluenceConfig
 MarketConfig ..> MicrostructureConfig
 MarketConfig ..> WarmupPriceProcessConfig
 ModelConfig ..> SimulationConfig
-ProtagonistConfig ..> ProtagonistSettings
 SimulationConfig *-- ControlParameters
 SimulationConfig *-- FundamentalistConfig
 SimulationConfig *-- ChartistConfig
 SimulationConfig *-- NoiseTraderConfig
 SimulationConfig *-- BuyAndHoldConfig
-SimulationConfig *-- ProtagonistSettings
+SimulationConfig *-- ProtagonistConfig
 SimulationConfig *-- ShortSaleConfig
 SimulationConfig *-- TransactionCostConfig
 SimulationConfig *-- SocialInfluenceConfig

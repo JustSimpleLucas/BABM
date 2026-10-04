@@ -17,7 +17,7 @@ flowchart TD
     agents["abm_agents<br/>Agent, AgentStrategy"]
     results["abm_results<br/>completed-run DTOs"]
     simulation["abm_simulation<br/>Simulation engine services"]
-    analysis["abm_analysis<br/>stylised-fact metrics"]
+    metrics["abm_metrics<br/>stylised-fact metrics, allocative efficiency"]
     output["abm_output<br/>CSV, JSON, metadata, run logs"]
     archive["abm_archive<br/>DataManagement, Experiment"]
     application["abm_application<br/>CLI, console, Python analysis runner"]
@@ -40,7 +40,7 @@ flowchart TD
     sources --> behavioural
     sources --> agents
     sources --> simulation
-    sources --> analysis
+    sources --> metrics
     sources --> output
     sources --> archive
     sources --> application
@@ -51,13 +51,14 @@ flowchart TD
     includes --> behavioural
     includes --> agents
     includes --> simulation
-    includes --> analysis
+    includes --> metrics
     includes --> output
     includes --> archive
     includes --> application
 
     utility --> config
     utility --> market
+    config --> market
     utility --> behavioural
     config --> behavioural
     config --> results
@@ -68,8 +69,9 @@ flowchart TD
     agents --> simulation
     results --> simulation
     simulation --> application
-    results --> analysis
-    analysis --> output
+    results --> metrics
+    metrics --> simulation
+    metrics --> output
     results --> output
     config --> output
     buildMetadata --> output
@@ -79,7 +81,7 @@ flowchart TD
     application --> core
     archive --> core
     output --> core
-    analysis --> core
+    metrics --> core
     simulation --> core
     agents --> core
     behavioural --> core
@@ -103,6 +105,6 @@ flowchart TD
 
     class root,compiler,metadata,sources cmake
     class includes,buildMetadata,core interface
-    class utility,config,market,behavioural,agents,results,simulation,analysis,output,archive,application domain
+    class utility,config,market,behavioural,agents,results,simulation,metrics,output,archive,application domain
     class app target
     class modelTests,parsingTests,archiveTests,validationTests,artifactTests test

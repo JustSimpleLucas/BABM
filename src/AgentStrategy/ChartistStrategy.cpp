@@ -7,8 +7,8 @@
 #include "AgentStrategy/StrategyMarketHelpers.h"
 #include "AgentStrategy/TradingStrategy.h"
 #include "Market/Market.h"
+#include "OrderBook/OrderPricing.h"
 #include "Utility/NumericValidation.h"
-#include "Utility/OrderPricing.h"
 #include "Utility/SimulationConstants.h"
 #include "Utility/TransactionCosts.h"
 

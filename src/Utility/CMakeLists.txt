@@ -4,6 +4,5 @@ target_sources(abm_utility
         CholeskyFactorization.cpp
         ConsoleProgressBar.cpp
         NumericValidation.cpp
-        OrderPricing.cpp
         ProcessMemoryUsage.cpp
 )

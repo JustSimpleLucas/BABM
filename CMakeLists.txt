@@ -49,7 +49,12 @@ abm_add_domain_library(abm_config)
 target_link_libraries(abm_config PRIVATE abm_utility)
 
 abm_add_domain_library(abm_market)
-target_link_libraries(abm_market PRIVATE abm_utility)
+target_link_libraries(abm_market
+    PUBLIC
+        abm_config
+    PRIVATE
+        abm_utility
+)
 
 abm_add_domain_library(abm_behavioural_finance)
 target_link_libraries(abm_behavioural_finance
@@ -76,6 +81,9 @@ target_link_libraries(abm_results
         abm_market
 )
 
+abm_add_domain_library(abm_metrics)
+target_link_libraries(abm_metrics PUBLIC abm_results)
+
 abm_add_domain_library(abm_simulation)
 target_link_libraries(abm_simulation
     PUBLIC
@@ -84,10 +92,9 @@ target_link_libraries(abm_simulation
         abm_market
         abm_results
         abm_utility
+    PRIVATE
+        abm_metrics
 )
-
-abm_add_domain_library(abm_metrics)
-target_link_libraries(abm_metrics PUBLIC abm_results)
 
 abm_add_domain_library(abm_output)
 target_link_libraries(abm_output

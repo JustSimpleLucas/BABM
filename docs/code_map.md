@@ -27,7 +27,7 @@ launches the C++ binary and consumes its files.
 | --- | --- |
 | `README.md` | Non-technical run instructions: install, build, simulate, configure, analyse, calibrate, replicate, plus repository layout and CI commands. |
 | `AGENTS.md` | Research context and working rules (naming, reproducibility, run-id schema, required build/test commands). The run-id folder schema documented here is **frozen** — Python parsing depends on it. |
-| `CMakeLists.txt` | Defines the static-library targets, their dependency order, the `simulate` executable, and the five CTest test executables. |
+| `CMakeLists.txt` | Defines the static-library targets and their declared dependencies — the whole layering in one place, enforced by `tests/python/test_repository_hygiene.py` — plus the `simulate` executable. It pulls in `tests/`, whose `tests/cpp/CMakeLists.txt` declares the five CTest test executables. |
 | `CMakePresets.json` | The `debug`, `release`, and `sanitizers` presets and their build dirs (`build/debug`, `build/release`, `build/sanitizers`). |
 | `cmake/AbmCompilerOptions.cmake` | `abm_apply_project_warnings()` / `abm_apply_project_sanitizers()` — shared warning and ASan/UBSan flags applied to every target. |
 | `cmake/AbmBuildMetadata.cmake` | Captures model version, git commit, and dirty flag at configure time; these become compile definitions consumed by the output layer so every run records the exact build that produced it. |
@@ -65,38 +65,49 @@ launches the C++ binary and consumes its files.
 
 ### 2.1 Layered dependency order
 
-Libraries are wired in `CMakeLists.txt` so that dependencies flow strictly
-downward. Nothing in a lower layer knows about a higher one:
+Libraries are wired in the root `CMakeLists.txt` so that dependencies flow
+strictly downward. Nothing in a lower layer knows about a higher one. The table
+runs bottom-up, so a target links only targets listed before it:
 
-```
-                simulate (app/simulate/main.cpp)
-                          |
-                     abm_application
-             /       /        |        \
-     abm_archive  abm_output  abm_simulation  abm_analysis
-          |          |            |               |
-          |          |         abm_agents         |
-          |          |            |               |
-          |          |   abm_behavioural_finance  |
-           \         \            |              /
-                    abm_market  abm_config  abm_results
-                            \      |      /
-                              abm_utility
-```
+| Target | Directories | Declared links |
+| --- | --- | --- |
+| `abm_utility` | `RandomGenerator`, `Utility` | — |
+| `abm_config` | `Config` | `abm_utility` |
+| `abm_market` | `Market`, `OrderBook`, `RiskManagement` | `abm_config`, `abm_utility` |
+| `abm_behavioural_finance` | `BehaviouralFinance` | `abm_config`, `abm_utility` |
+| `abm_results` (header-only) | `Results` | `abm_config`, `abm_market` |
+| `abm_agents` | `Agent`, `AgentStrategy` | `abm_behavioural_finance`, `abm_config`, `abm_market`, `abm_utility` |
+| `abm_metrics` | `Metrics` | `abm_results` |
+| `abm_simulation` | `Simulation` | `abm_agents`, `abm_config`, `abm_market`, `abm_metrics`, `abm_results`, `abm_utility` |
+| `abm_output` | `Output` | `abm_config`, `abm_metrics`, `abm_results` |
+| `abm_archive` | `DataManagement`, `Experiment` | `abm_config`, `abm_output` |
+| `abm_application` | `Application` | `abm_archive`, `abm_config`, `abm_metrics`, `abm_output`, `abm_simulation`, `abm_utility` |
 
-Read that as: utilities know nothing; config knows utilities; market knows
-utilities; agents know behaviour + config + market; the simulation engine knows
-agents; output knows results and config; the application layer knows everything
+`simulate` (`app/simulate/main.cpp`) and the test executables link `abm_core`, an
+INTERFACE aggregate of all eleven libraries; it is a convenience, not a layer.
+`docs/build_structure.mmd` draws the same graph.
+
+Read it as: utilities know nothing; config knows utilities; market knows config;
+behaviour knows config; agents know behaviour + config + market; metrics know the
+result records; the simulation engine knows agents and metrics; output knows
+metrics and results; archive knows output; the application layer knows everything
 and glues it together.
+
+The rule is enforced, not just stated. Every target sees all of `src/` through
+`abm_project_includes`, so the compiler would accept an include into a layer the
+target does not link. `tests/python/test_repository_hygiene.py` therefore fails if
+a cross-directory `#include` is not backed by a declared link, or if the declared
+links form a cycle.
 
 ### 2.2 Entry point and application layer (`abm_application`)
 
 | File | Function | Connects to |
 | --- | --- | --- |
 | `app/simulate/main.cpp` | The executable's entry point. Deliberately trivial — it only forwards `argc`/`argv`. | `Application/SimulationApplication.h` |
-| `src/Application/CliOptions.{h,cpp}` | Parses the command line into a result object; represents `--help` and usage errors as early exits so config loading stays separate from execution. Accepts `--config <path>`, a bare path, or nothing. | Used by `SimulationApplication` |
+| `src/Application/CliOptions.{h,cpp}` | Parses the command line into a result object; represents `--help` and usage errors as early exits so config loading stays separate from execution. Accepts `--config <path>`, a bare path, or nothing, plus `--validate`/`--check` (check the config and exit), `--config-reference` (print the key reference and exit) and `--quiet-progress` (hide the progress bar). | Used by `SimulationApplication` |
 | `src/Application/SimulationApplication.{h,cpp}` | The run coordinator: parse CLI → load and validate config → construct `SimulationEngine` → run with a progress bar → hand the result to the archive workflow → print a console summary → optionally invoke Python. | `CliOptions`, `SimulationEngine`, `ExperimentDataWorkflow`, `ConsoleReporter`, `PythonAnalysisRunner`, `StylisedFactMetrics`, `ConsoleProgressBar`, `ProcessMemoryUsage` |
 | `src/Application/ConsoleReporter.{h,cpp}` | Prints the compact terminal summary of a finished run. Kept separate from artefact export: console output is for humans, files are the research record. | Reads `SimulationRunResult` |
+| `src/Application/ConfigInspection.{h,cpp}` | What `--validate` and `--config-reference` print: every setting the file assigned (as written, grouped by section), the keys that fell back to built-in defaults, and the key reference as a markdown table generated from the compiled-in `ConfigKeyRegistry`, so the documentation cannot drift from the parser. | `ConfigKeyRegistry`, `RuntimeConfig` |
 | `src/Application/PythonAnalysisRunner.{h,cpp}` | Optional post-processing step: shells out to the Python package to import a finished run's artefacts into PostgreSQL when `database_output_enabled = 1`. Reading the results is the dashboard's job and is never started by the simulator. | Bridge to `analysis/python/` |
 
 ### 2.3 Configuration (`abm_config`)
@@ -112,9 +123,11 @@ objects. It is split into a *schema* (headers holding plain records) and a
 | `src/Config/SimulationConfig.h` | Stable facade that aggregates every domain config record. Older code includes just this; new code should include the narrower header it actually needs. |
 | `src/Config/ModelConfig.h` | The complete set of model parameters for one run (population sizes, steps, seed, warm-up, and so on). |
 | `src/Config/MarketConfig.h` | Per-asset market parameters: the GBM fundamental-value process, volatility, drift, initial price, cross-asset correlation, tick size, transaction costs. All declared assets share the same functional form so no asset is analytically privileged. |
+| `src/Config/MarketConfigAssetUniverse.cpp` | Implements `AssetUniverse`, declared in `MarketConfig.h`: the declared asset set, lookup by name, and normalisation (disabled assets move aside so every consumer sees only tradable assets, and the primary asset is resolved). An undeclared universe holds the single legacy-scalar asset, which keeps studies that predate the multi-asset extension reproducible. |
 | `src/Config/StrategyConfig.h` | Strategy-side parameters, including the chartist mode selector (momentum / mean-reversion / breakout / RSI) and per-strategy thresholds. |
 | `src/Config/BehaviouralConfig.h` | Cumulative Prospect Theory parameters and the reference-point mode (fixed anchor vs. per-agent personal reference state). |
 | `src/Config/OutputConfig.h` | Where artefacts go and whether one-folder-per-run archiving is enabled. |
+| `src/Config/ProtagonistConfig.h` | Parameters for the *protagonist*: one individually specified trader — stated endowment, risk appetite and loss aversion — who runs one of the four existing strategies through the same order-generation, clearing and risk machinery as every other agent. Every other agent is anonymous, so this is what lets a run say what happened to *one identified investor*. |
 
 **Parsing and validation pipeline:**
 
@@ -122,11 +135,14 @@ objects. It is split into a *schema* (headers holding plain records) and a
 | --- | --- |
 | `src/Config/SimulationConfigIO.{h,cpp}` | Locates `config/simulation.cfg` (working directory first, then paths relative to the executable) and drives file reading. |
 | `src/Config/SimulationConfigParsing.{h,cpp}` | Low-level typed value parsing (`parseBoolValue`, `parseDoubleValue`, …), each call carrying the key name and source line so errors are traceable to a config line. |
-| `src/Config/SimulationConfigSettingAppliers.{h,cpp}` | Defines `ConfigSetting` (key + value + source location) and dispatches each parsed setting through an array of 16 applier functions until one claims the key. Unknown keys therefore fail loudly. |
-| `…SimulationSettings.cpp` | Appliers for core simulation keys and the `asset.*` per-asset key family. |
-| `…StrategySettings.cpp` | Appliers for fundamentalist / chartist / noise-trader / buy-and-hold keys. |
-| `…BehaviouralSettings.cpp` | Appliers for `control_*` keys: prospect theory, heterogeneity, social influence, short selling. |
-| `…OutputSettings.cpp` | Appliers for `experiment_output_*` keys. |
+| `src/Config/ConfigKeyRegistry.{h,cpp}` | The compiled-in table of every accepted config key: its section, whether it is canonical or legacy, units, valid range, description, and the applier that owns it. It is the sole gate on the accepted key set, and it drives both the `--validate` output and the generated `docs/config_reference.md`. |
+| `src/Config/ConfigDiagnostics.{h,cpp}` | Provenance of a config file: where (file and line) and how each key was assigned, and which keys fell back to defaults. It lets validation errors name the line to edit and makes silently defaulted settings reportable. Held on `RuntimeConfig` rather than `SimulationConfig`, so it stays out of the archived `config.json` and its hash. |
+| `src/Config/SimulationConfigSettingAppliers.{h,cpp}` | Defines `ConfigSetting` (key + value + source location) and dispatches each parsed setting through the key registry, which names the applier that owns the key. Unknown keys therefore fail loudly, and an applier cannot quietly accept a key the registry does not describe. |
+| `SimulationConfigSettingAppliersSimulation.cpp` | Appliers for core simulation keys and the `asset.*` per-asset key family. |
+| `SimulationConfigSettingAppliersStrategy.cpp` | Appliers for fundamentalist / chartist / noise-trader / buy-and-hold keys. |
+| `SimulationConfigSettingAppliersBehavioural.cpp` | Appliers for `control_*` keys: prospect theory, heterogeneity, social influence, short selling. |
+| `SimulationConfigSettingAppliersOutput.cpp` | Appliers for `experiment_output_*` keys. |
+| `SimulationConfigSettingAppliersProtagonist.cpp` | Appliers for the `protagonist_*` keys. They sit in their own translation unit because they describe one identified individual rather than a strategy population, so reading the file gives the complete set of things that can be said about that trader. |
 | `src/Config/SimulationConfigValidation.{h,cpp}` | Checks feasibility of the fully assembled config (positive counts, admissible probabilities, consistent asset lists). Separate from engine construction so configs can be tested without running a simulation. |
 
 ### 2.4 Market microstructure (`abm_market`)
@@ -137,6 +153,7 @@ objects. It is split into a *schema* (headers holding plain records) and a
 | `src/Market/FundamentalValueProcess.{h,cpp}` | The latent fundamental-value dynamics: arithmetic random walk or geometric Brownian motion, with equicorrelated cross-asset innovations built from the closed-form one-factor square root of the equicorrelation matrix. Owns the fundamental random stream, seeded from `config.seed` — deliberately separate from the agent-side engine (`config.seed + 1`) so agent-side changes cannot perturb the fundamental path. | `Market`, `RandomGenerator`, `MarketConfig`; driven by `MarketProcess` |
 | `src/OrderBook/Order.h` | The `Order` record and `OrderType` side enum. Side is kept explicit rather than implied by a signed quantity so CSV exports can distinguish buyer from seller unambiguously. | Used everywhere orders flow |
 | `src/OrderBook/LimitOrderBook.{h,cpp}` | The continuous double-auction engine: resting-order storage, price-time priority matching, cancellation, and a visible-state snapshot (best bid/ask, depth). | `Order`, `Market` |
+| `src/OrderBook/OrderPricing.{h,cpp}` | Quantises limit prices to the tick grid, rounding buys down and sells up so rounding never makes an agent more aggressive than intended. It lives beside `Order.h` because it needs `OrderType`; in `Utility/` it would make the bottom layer include the market. | `Order`; used by the strategies in `AgentStrategy/` |
 | `src/Market/CovarianceEstimator.{h,cpp}` | Rolling sample covariance of per-asset one-period log returns, using a common trailing window across assets. This is the risk input to portfolio choice. | Feeds `PortfolioOptimizer` via `SimulationEngine` |
 | `src/RiskManagement/ShortSaleRiskControls.{h,cpp}` | Clips sell orders by short-sale margin and borrow availability. | Used by `OrderCollector` / `RiskControlService` |
 
@@ -212,10 +229,12 @@ of its collaborators, not in the controller itself.
 | --- | --- |
 | `src/Output/RunArtifactWriter.{h,cpp}` | The single entry point for durable output. Calls every specialised writer below and returns write metadata. This class *is* the file-format boundary. |
 | `src/Output/OutputSerialization.{h,cpp}` | Shared low-level formatting: CSV escaping, fixed-precision doubles, JSON escaping, enum-to-label mapping, and `buildNormalizedConfigJson()` which produces `config.json`. |
+| `src/Output/CsvSchema.h` | `CsvColumn<Row>`: a column's header name paired with the function that writes its value, so each writer declares its schema once and its header line and value lines cannot disagree. `tests/python/test_schema_sync.py` reads these tables straight out of the C++ sources. |
 | `src/Output/StepTimeseriesCsvWriter.{h,cpp}` | `step_timeseries.csv` — one row per step phase for the primary asset (a projection of the long-format artefact). |
 | `src/Output/AssetTimeseriesCsvWriter.{h,cpp}` | `asset_timeseries.csv` — the long format, one row per phase row *and* asset. The authoritative multi-asset series. |
 | `src/Output/TradeLedgerCsvWriter.{h,cpp}` | `trade_ledger.csv` — counterparty-level execution audit rows (optional, enabled by flag). |
 | `src/Output/AgentSnapshotCsvWriter.{h,cpp}` | `agents_final.csv` — end-of-run per-agent wealth, holdings, strategy, and behavioural parameters. |
+| `src/Output/ProtagonistTimeseriesCsvWriter.{h,cpp}` | `protagonist_timeseries.csv` — the protagonist's per-step position and standing in the wealth cross-section. Header-only when no protagonist was configured, so a caller that writes it unconditionally still gets a readable file. |
 | `src/Output/RunSummaryCsvWriter.{h,cpp}` | `summary_metrics.csv` — the run's headline scalars. |
 | `src/Output/StylisedFactCsvWriter.{h,cpp}` | `stylised_facts.csv` — one screening block per traded asset, so every market gets its own verdict. |
 | `src/Output/RunMetadataWriters.{h,cpp}` | `config.json` and `metadata.json`, the latter embedding the build metadata from `AbmBuildMetadata.cmake`. |
@@ -236,7 +255,6 @@ of its collaborators, not in the controller itself.
 | `src/RandomGenerator/RandomGenerator.{h,cpp}` | The deterministic RNG wrapper. Every stochastic draw goes through it, which is what makes runs reproducible from a seed. |
 | `src/Utility/CholeskyFactorization.{h,cpp}` | Dense symmetric matrix type and Cholesky solve — used for correlated asset shocks and for the portfolio optimisation solve. |
 | `src/Utility/NumericValidation.{h,cpp}` | Rejects NaN/infinity at module boundaries so non-finite values cannot silently propagate through prices, wealth, and utility scores. |
-| `src/Utility/OrderPricing.{h,cpp}` | Quantises limit prices to the tick grid, rounding buys down and sells up so rounding never makes an agent more aggressive than intended. |
 | `src/Utility/TransactionCosts.h` | Proportional one-way cost rate and the per-side cash cost of an execution. |
 | `src/Utility/SimulationConstants.h` | Shared numerical safeguards, notably the minimum admissible positive price. |
 | `src/Utility/ConsoleProgressBar.{h,cpp}` | Terminal progress bar. Explicitly touches no model state, so console behaviour cannot affect results. |
@@ -324,6 +342,7 @@ Optuna searches the parameter space; the C++ binary remains the simulator.
 | `scoring.py` | The minimum-distance objective: distance between simulated and empirical return moments/statistics. |
 | `execution.py` | Launches simulator subprocesses per trial and handles the isolated-worker payload protocol. |
 | `robustness.py` | Re-runs top candidates across validation seeds inside a shared `simulation_runs/validation` directory, mirroring the seed-robustness export in memory. |
+| `artifacts.py` | Everything written once a study ends: the best config, the summary JSON, the holdout report and the copied best runs. Keeping the file-layout decisions here means `study.py` never interleaves them with computation. |
 | `study.py` | Orchestrates the whole study and writes `best_config.cfg`, `calibration_trials.csv`, and `settings.json`. |
 | `worker.py` | The isolated worker process for one trial, launched as `python -m abm_analysis.calibration.worker`. It exists so pandas/NumPy/statsmodels allocations are reclaimed by process exit — a hard memory reset every trial. |
 
@@ -389,6 +408,8 @@ gets one column per market in every table and one line per market in every chart
 | `web/run_view.py` | Assembles one run's payload: identity, parameters, the three metric tables (return moments, serial dependence, market outcomes) with a value per asset, and the stylised-fact verdicts with their evidence per asset. Delegates the asset and agent dimensions to the two modules below. |
 | `web/asset_view.py` | The per-asset half. `resolve_asset_context()` is the **only** place that decides whether a run is read from `asset_timeseries.csv` or `step_timeseries.csv`, gating on `len(list_assets(run_dir)) >= 2` rather than on the artefact's presence — see its docstring for the inconsistent-archive case that distinction protects. Also builds the per-asset series, distributions, autocorrelations, and the cross-asset panel. |
 | `web/agent_view.py` | The agent panel: the per-strategy table (via `statistics.agents.build_agent_summary_statistics`) and the shared-bin final-wealth density per strategy. Reads the wealth Gini from `summary_metrics.csv`; the authoritative implementation is the simulator's. |
+| `web/protagonist_view.py` | The protagonist panel: where one identified trader finished inside the market they traded in. Every figure is a standing rather than a level — rank among all agents, wealth beside the population median, a marker on the distribution the agent panel already draws. The rank is recomputed from `agents_final.csv` rather than read from `summary_metrics.csv`, so it always describes the archive on screen; `protagonist_timeseries.csv` supplies the path that led there. |
+| `web/cohort_view.py` | The cross-seed and cross-condition payload for a cohort of runs: whether a finding survives the random seed, and whether it differs between experimental conditions. Every frame comes from `exports.seed_robustness.build_seed_robustness_frames`, the call the CSV export makes, so a number on the panel and the same number in `robustness_reports/` cannot disagree. It decides only which frame cell becomes which payload field, and rebuilds the condition identifiers without the asset dimension. |
 | `web/metrics.py` | Cell builders and column helpers shared by the two view modules. Keeping them here rather than in either view is what stops the three modules importing each other in a circle. |
 | `web/serialisation.py` | Converts pandas/NumPy values to JSON primitives, mapping every non-finite value to `null` so an uncomputable diagnostic reads as absent rather than as a number. |
 | `web/static/` | The single-page interface: `index.html`, `styles.css` (light and dark, with the asset colour key), `app.js` (formatting, run selection, the metric tables, and the Plotly charts). Holds no analysis logic; the price-scale and autocorrelation switches redraw from the payload already in memory and never refetch. |
@@ -412,7 +433,7 @@ gets one column per market in every table and one line per market in every chart
 | `test_database.py` | Schema, imports, exports. |
 | `test_archive_storage.py` | Drift guard, caching, compression, chunked inserts. |
 | `test_schema_sync.py` | **Cross-language guard** — asserts the C++ writer header literals, the Python required-column sets, and the PostgreSQL column tuples all still agree. This is the test that fails when a C++ CSV column changes without a Python update. |
-| `test_repository_hygiene.py` | **Structural guard** — asserts the conventions this document describes: every `src/*.cpp` is named in its directory's `target_sources()` (so a new file cannot silently go uncompiled), every domain with sources has a `CMakeLists.txt` and is `add_subdirectory`'d, every source shares a prefix with a header in its directory, and no `*.egg-info` is tracked. |
+| `test_repository_hygiene.py` | **Structural guard** — asserts the conventions this document describes: every `src/*.cpp` is named in its directory's `target_sources()` (so a new file cannot silently go uncompiled), every domain with sources has a `CMakeLists.txt` and is `add_subdirectory`'d, every source shares a prefix with a header in its directory, the declared `target_link_libraries()` graph is acyclic, every cross-directory `#include` is backed by a declared link (so the layering table in §2.1 is enforced rather than only described), and no `*.egg-info` is tracked. |
 | `test_xlsx_conversion.py` | Builds minimal SpreadsheetML workbooks in-process and checks the benchmark conversion: shared/inline strings, booleans, date serials, padded gap rows, lock-file skipping, and the `convert-benchmarks` subcommand end to end. |
 | `test_web_app.py` | Dashboard run discovery across all three archive layouts, the data-root containment check, per-asset reporting for multi-asset runs, the agent panel, and the guarantee that the served metrics equal `statistics/diagnostics.py`'s and `statistics/agents.py`'s. Also pins the awkward archives: the warm-up phase falling back to the primary market, and an `asset_timeseries.csv` that disagrees with its own run. |
 
@@ -489,10 +510,12 @@ replication.py → parallel.py → N × simulate (one per seed) → run_discover
 Four boundaries are load-bearing. Changing one without the others is where
 breakage comes from:
 
-1. **The config key set.** `config/simulation.cfg` ↔ the applier functions in
-   `SimulationConfigSettingAppliers.cpp` and its four settings files. Unknown
-   keys are rejected, so adding a key means adding an applier and a validation
-   rule.
+1. **The config key set.** `config/simulation.cfg` ↔ `ConfigKeyRegistry.cpp` ↔
+   the applier functions in `SimulationConfigSettingAppliers.cpp` and its five
+   section files. The registry is the sole gate on accepted keys, so adding a
+   key means adding a registry descriptor, the applier it names, and a
+   validation rule; `docs/config_reference.md` is then regenerated with
+   `simulate --config-reference`.
 2. **The run-id folder name.** Written by `ExperimentRunManager`, parsed by
    `run_ids.py`. The schema is frozen — new parameters go into `metadata.json`
    and `summary_metrics.csv`, never into the folder name.
@@ -500,10 +523,12 @@ breakage comes from:
    required by `archives.py`, and inserted by `database/constants.py`.
    `tests/python/test_schema_sync.py` exists specifically to fail when these
    three drift apart.
-4. **The build source list.** A new `src/<Domain>/*.cpp` must be added to the
-   `target_sources()` call in that directory's own `CMakeLists.txt`; the
-   top-level `CMakeLists.txt` only changes when a module boundary genuinely
-   changes.
+4. **The build source list and layering.** A new `src/<Domain>/*.cpp` must be
+   added to the `target_sources()` call in that directory's own
+   `CMakeLists.txt`; the top-level `CMakeLists.txt` only changes when a module
+   boundary genuinely changes — which includes a new cross-directory
+   `#include`, since that needs a matching `target_link_libraries()` edge
+   (`test_repository_hygiene.py` fails otherwise).
 
 Per `AGENTS.md`, when class responsibilities, build structure, data management,
 or simulation flow change, the matching Mermaid diagram under `docs/` should be

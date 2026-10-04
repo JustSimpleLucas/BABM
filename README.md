@@ -454,13 +454,13 @@ app/simulate/main.cpp   Executable entry point (forwards argc/argv only)
 src/                    The C++ model engine, one directory per domain
   Application/            CLI parsing, run coordination, console summary, Python hand-off
   Config/                 Config schema, parsing, setting appliers, validation
-  Market/ OrderBook/      Fundamental-value process, market state, limit-order book
+  Market/ OrderBook/      Fundamental-value process, market state, limit-order book, tick pricing
   BehaviouralFinance/     Cumulative Prospect Theory and per-agent preference sampling
   Agent/ AgentStrategy/   Agents plus fundamentalist, chartist, noise-trader, buy-and-hold rules
   Simulation/             The engine and its collaborators (scheduling, herding, clearing, risk)
   Metrics/ Results/       Stylised-fact screening, allocative efficiency, the run-result DTO
   Output/ DataManagement/ Experiment/   Artefact writers, archive schema, run-folder policy
-  RandomGenerator/ Utility/ RiskManagement/   Seeded RNG, numerics, tick pricing, short-sale controls
+  RandomGenerator/ Utility/ RiskManagement/   Seeded RNG, numerics, short-sale controls
 analysis/python/abm_analysis/
   cli.py                   The console-script entry point; everything else CLI-shaped is below
   commands/                One module per subcommand, the parser, and the options they share

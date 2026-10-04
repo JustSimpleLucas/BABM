@@ -2,4 +2,5 @@
 target_sources(abm_market
     PRIVATE
         LimitOrderBook.cpp
+        OrderPricing.cpp
 )

@@ -2,7 +2,7 @@
 
 #include "AgentStrategy/OrderSizing.h"
 
-#include "Utility/OrderPricing.h"
+#include "OrderBook/OrderPricing.h"
 #include "Utility/TransactionCosts.h"
 
 #include <algorithm>

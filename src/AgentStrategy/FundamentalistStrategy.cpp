@@ -10,8 +10,8 @@
 #include "BehaviouralFinance/ProspectTheory.h"
 #include "Market/Market.h"
 #include "OrderBook/Order.h"
+#include "OrderBook/OrderPricing.h"
 #include "Utility/NumericValidation.h"
-#include "Utility/OrderPricing.h"
 #include "Utility/SimulationConstants.h"
 #include "Utility/TransactionCosts.h"
 
