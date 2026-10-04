@@ -3,16 +3,24 @@
 #include "tests/cpp/TestSupport.h"
 
 #include "Agent/Agent.h"
+#include "AgentStrategy/AssetAllocationLine.h"
+#include "AgentStrategy/FundamentalistStrategy.h"
 #include "AgentStrategy/StrategyMarketHelpers.h"
+#include "AgentStrategy/TradingStrategy.h"
 #include "BehaviouralFinance/ProspectTheory.h"
+#include "Config/MarketConfig.h"
 #include "Market/Market.h"
+#include "OrderBook/Order.h"
 #include "Simulation/SimulationEngine.h"
+#include "Utility/CholeskyFactorization.h"
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace {
@@ -32,6 +40,415 @@ std::vector<std::uint32_t> prospectTheoryAgentIds(const abm::SimulationRunResult
         }
     }
     return selectedIds;
+}
+
+/** Loss aversion of the shipped configuration (config/simulation.cfg). */
+constexpr double kShippedLossAversion = 3.30477818806;
+
+/**
+ * Builds CPT preferences with the Tversky and Kahneman (1992) curvature and
+ * probability weighting, so the property tests below pin the transform at the
+ * parameters the model actually runs with.
+ */
+abm::ProspectTheory tverskyKahnemanPreferences(double lossAversion, std::size_t scenarioCount) {
+    abm::ProspectTheoryParameters parameters{};
+    parameters.lossAversion = lossAversion;
+    parameters.curvatureForGain = 0.88;
+    parameters.curvatureForLoss = 0.88;
+    parameters.probDistortionForGain = 0.61;
+    parameters.probDistortionForLoss = 0.69;
+    parameters.scenarioCount = scenarioCount;
+    return abm::ProspectTheory(parameters);
+}
+
+/** Builds CPT preferences with linear probability weights, isolating value-function curvature. */
+abm::ProspectTheory linearWeightPreferences(double lossAversion, double curvature,
+                                            std::size_t scenarioCount) {
+    abm::ProspectTheoryParameters parameters{};
+    parameters.lossAversion = lossAversion;
+    parameters.curvatureForGain = curvature;
+    parameters.curvatureForLoss = curvature;
+    parameters.probDistortionForGain = 1.0;
+    parameters.probDistortionForLoss = 1.0;
+    parameters.scenarioCount = scenarioCount;
+    return abm::ProspectTheory(parameters);
+}
+
+/*
+ * P1, moment matching. The scenario ladder must reproduce the subjective
+ * one-step distribution it stands for: mean r_f + forecast and variance
+ * sigma^2, whatever the scenario count.
+ */
+void testScenarioLadderMatchesForecastMoments(int& failures) {
+    const abm::ProspectReturnForecast forecast{0.01, 0.02, 0.03, 0.001};
+    for (const std::size_t scenarioCount : {3U, 5U, 13U, 21U, 101U}) {
+        const std::vector<abm::ProspectOutcome> scenarios =
+            tverskyKahnemanPreferences(kShippedLossAversion, scenarioCount)
+                .returnScenarios(forecast);
+
+        double totalProbability = 0.0;
+        double mean = 0.0;
+        for (const abm::ProspectOutcome& scenario : scenarios) {
+            totalProbability += scenario.probability;
+            mean += scenario.probability * (scenario.relativeOutcome + forecast.referenceLogReturn);
+        }
+        double variance = 0.0;
+        for (const abm::ProspectOutcome& scenario : scenarios) {
+            const double deviation = scenario.relativeOutcome + forecast.referenceLogReturn - mean;
+            variance += scenario.probability * deviation * deviation;
+        }
+
+        const std::string label = " (n = " + std::to_string(scenarioCount) + ")";
+        abm::test::expect(scenarios.size() == scenarioCount,
+                          "the ladder should hold one outcome per scenario" + label, failures);
+        abm::test::expect(abm::test::nearlyEqual(totalProbability, 1.0, 1e-12),
+                          "scenario probabilities should sum to one" + label, failures);
+        abm::test::expect(abm::test::nearlyEqual(mean, 0.011, 1e-12),
+                          "the ladder mean should equal the risk-free plus forecast return" + label,
+                          failures);
+        abm::test::expect(abm::test::nearlyEqual(variance, 0.0004, 1e-12),
+                          "the ladder variance should equal sigma^2" + label, failures);
+    }
+}
+
+/** The inverse value function recovers the gain or loss that produced a value. */
+void testInverseValueFunctionRecoversOutcomes(int& failures) {
+    const abm::ProspectTheory preferences = tverskyKahnemanPreferences(kShippedLossAversion, 13);
+    for (const double outcome : {-0.3, -0.01, 0.0, 0.01, 0.3}) {
+        abm::test::expect(abm::test::nearlyEqual(
+                              preferences.inverseValueFunction(preferences.valueFunction(outcome)),
+                              outcome, 1e-14),
+                          "the inverse value function should recover the original gain or loss",
+                          failures);
+    }
+}
+
+/*
+ * P3, comparison with cash. The premium is the certainty equivalent of holding
+ * minus that of cash, and the inverse value function is strictly increasing,
+ * so the premium must be positive exactly when CPT values holding above the
+ * sure outcome of selling, r_f - r_ref.
+ */
+void testPremiumSignMatchesHoldVersusCashChoice(int& failures) {
+    const abm::ProspectTheory preferences = tverskyKahnemanPreferences(kShippedLossAversion, 13);
+    int cases = 0;
+    int violations = 0;
+    for (const double riskFree : {0.0, 0.001}) {
+        for (const double forecast : {-0.02, -0.005, 0.0, 0.005, 0.02}) {
+            for (const double volatility : {0.005, 0.0187, 0.05}) {
+                for (const double reference : {-0.2, -0.05, -0.01, 0.0, 0.01, 0.05, 0.2}) {
+                    const abm::ProspectReturnForecast candidate{forecast, volatility, reference,
+                                                                riskFree};
+                    const double holdValue =
+                        preferences.calculateProspectValue(preferences.returnScenarios(candidate));
+                    const double cashValue = preferences.valueFunction(riskFree - reference);
+                    if (std::abs(holdValue - cashValue) < 1e-12) {
+                        continue; // Indifference leaves the sign undefined.
+                    }
+                    ++cases;
+                    const bool premiumPositive =
+                        preferences.prospectAdjustedReturn(candidate) > 0.0;
+                    violations += premiumPositive == (holdValue > cashValue) ? 0 : 1;
+                }
+            }
+        }
+    }
+    abm::test::expect(violations == 0,
+                      "the CPT premium should be positive exactly when holding beats cash (" +
+                          std::to_string(violations) + " of " + std::to_string(cases) +
+                          " cases disagree)",
+                      failures);
+}
+
+/*
+ * Cash earns the risk-free rate, so it is the benchmark: a riskless asset keeps
+ * its excess forecast as its premium whatever r_f, and an asset that only
+ * matches the risk-free return carries no premium.
+ */
+void testRiskFreeRateIsTheCashBenchmark(int& failures) {
+    const abm::ProspectTheory preferences = tverskyKahnemanPreferences(kShippedLossAversion, 13);
+    for (const double reference : {-0.05, 0.0, 0.05}) {
+        abm::test::expect(
+            abm::test::nearlyEqual(
+                preferences.prospectAdjustedReturn({0.002, 0.0, reference, 0.001}), 0.002, 1e-12),
+            "a riskless excess forecast should keep its premium when cash earns r_f", failures);
+        abm::test::expect(
+            abm::test::nearlyEqual(preferences.prospectAdjustedReturn({0.0, 0.0, reference, 0.001}),
+                                   0.0, 1e-12),
+            "an asset that only matches the risk-free return should carry no premium", failures);
+    }
+}
+
+/*
+ * P2, riskless invariance. Prospect theory changes how agents treat risk, not
+ * how they read a sure return: with zero volatility every scenario is the
+ * forecast itself, so its certainty equivalent must be the forecast whatever
+ * the agent's reference point or loss aversion.
+ */
+void testRisklessForecastPassesThroughUnchanged(int& failures) {
+    int violations = 0;
+    for (const double lossAversion : {1.0, 2.25, kShippedLossAversion}) {
+        const abm::ProspectTheory preferences = tverskyKahnemanPreferences(lossAversion, 13);
+        for (const double reference : {-0.2, -0.05, 0.0, 0.05, 0.2}) {
+            for (const double forecast : {-0.03, 0.0, 0.004, 0.02}) {
+                const double adjusted =
+                    preferences.prospectAdjustedReturn({forecast, 0.0, reference});
+                violations += abm::test::nearlyEqual(adjusted, forecast, 1e-12) ? 0 : 1;
+            }
+        }
+    }
+    abm::test::expect(violations == 0,
+                      "a riskless forecast should pass through the CPT transform unchanged (" +
+                          std::to_string(violations) + " of 60 cases differ)",
+                      failures);
+}
+
+/*
+ * P9, the scenario count sets resolution only. The ladder approximates one
+ * subjective return distribution, so adding scenarios must refine the result
+ * rather than move it; a count-dependent result would let a numerical setting
+ * act as a preference parameter.
+ */
+void testScenarioCountOnlySetsResolution(int& failures) {
+    const abm::ProspectReturnForecast forecast{0.005, 0.0187, 0.0};
+    const double limit =
+        tverskyKahnemanPreferences(kShippedLossAversion, 201).prospectAdjustedReturn(forecast);
+    for (const std::size_t scenarioCount : {13U, 21U, 51U, 101U}) {
+        const double adjusted = tverskyKahnemanPreferences(kShippedLossAversion, scenarioCount)
+                                    .prospectAdjustedReturn(forecast);
+        abm::test::expect(abm::test::nearlyEqual(adjusted, limit, 1e-4),
+                          "the CPT premium should converge as scenarios are added (n = " +
+                              std::to_string(scenarioCount) + ")",
+                          failures);
+    }
+}
+
+/*
+ * P4, return units. With equal gain and loss curvature the value function is
+ * homogeneous of degree alpha and its inverse of degree 1/alpha, so the
+ * certainty-equivalent premium scales one-for-one with the returns. A raw CPT
+ * value would scale by c^alpha instead and so depend on the time unit of a step.
+ */
+void testPremiumIsMeasuredInReturnUnits(int& failures) {
+    const abm::ProspectTheory preferences = tverskyKahnemanPreferences(kShippedLossAversion, 13);
+    const double forecast = 0.005;
+    const double volatility = 0.0187;
+    const double reference = 0.02;
+    const double base = preferences.prospectAdjustedReturn({forecast, volatility, reference});
+    for (const double scale : {0.5, 2.0, 4.0}) {
+        const double scaled = preferences.prospectAdjustedReturn(
+            {scale * forecast, scale * volatility, scale * reference});
+        abm::test::expect(abm::test::nearlyEqual(scaled, scale * base, 1e-12),
+                          "scaling every return by c should scale the CPT premium by c", failures);
+    }
+}
+
+/*
+ * P5, loss aversion cancels within one domain. When every scenario is a loss,
+ * lambda multiplies every value and is divided out again by the inverse value
+ * function; when every scenario is a gain it never appears. Loss aversion
+ * therefore matters only for mixed prospects, as in the theory.
+ */
+void testLossAversionCancelsWithinOneDomain(int& failures) {
+    for (const double reference : {0.3, -0.3}) {
+        const abm::ProspectReturnForecast forecast{0.005, 0.0187, reference};
+        const double atOne = tverskyKahnemanPreferences(1.0, 13).prospectAdjustedReturn(forecast);
+        for (const double lossAversion : {2.25, kShippedLossAversion, 5.0}) {
+            const double adjusted =
+                tverskyKahnemanPreferences(lossAversion, 13).prospectAdjustedReturn(forecast);
+            abm::test::expect(abm::test::nearlyEqual(adjusted, atOne, 1e-12),
+                              reference > 0.0
+                                  ? "loss aversion should cancel when every scenario is a loss"
+                                  : "loss aversion should not affect an all-gain prospect",
+                              failures);
+        }
+    }
+}
+
+/*
+ * P6 and P7, reflection and the disposition direction (Kahneman and Tversky,
+ * 1979; Shefrin and Statman, 1985). When the paper loss or gain delta is large
+ * enough that next step's gamble lies entirely in losses (reference +delta) or
+ * entirely in gains (reference -delta), the convex loss domain makes the agent
+ * risk seeking and the concave gain domain risk averse:
+ *
+ *     premium(+delta) > forecast > premium(-delta).
+ *
+ * The agent holding a loser is therefore more willing to keep it than the agent
+ * holding a winner. Near break-even, where the gamble straddles the reference,
+ * prospect theory makes no clear prediction (Barberis and Xiong, 2009; Kaustia,
+ * 2010), so the property is pinned only under its single-domain condition
+ * delta > |forecast| + sigma * sqrt(n - 1). The ordering is a theorem for linear
+ * weights (power-mean inequality) and was verified numerically for the
+ * Tversky-Kahneman weights on this grid.
+ */
+void testReflectionImpliesDispositionDirection(int& failures) {
+    int cases = 0;
+    int violations = 0;
+    for (const bool linearWeights : {false, true}) {
+        for (const double lossAversion : {1.0, 2.25, kShippedLossAversion}) {
+            for (const std::size_t scenarioCount : {3U, 13U, 21U}) {
+                const abm::ProspectTheory preferences =
+                    linearWeights ? linearWeightPreferences(lossAversion, 0.88, scenarioCount)
+                                  : tverskyKahnemanPreferences(lossAversion, scenarioCount);
+                for (const double forecast : {-0.01, 0.0, 0.01}) {
+                    for (const double volatility : {0.005, 0.0187, 0.05}) {
+                        const double delta =
+                            std::abs(forecast) +
+                            (volatility * std::sqrt(static_cast<double>(scenarioCount - 1))) + 0.01;
+                        const double holdingLoser =
+                            preferences.prospectAdjustedReturn({forecast, volatility, delta});
+                        const double holdingWinner =
+                            preferences.prospectAdjustedReturn({forecast, volatility, -delta});
+                        ++cases;
+                        violations += (holdingLoser > forecast && forecast > holdingWinner) ? 0 : 1;
+                    }
+                }
+            }
+        }
+    }
+    abm::test::expect(violations == 0,
+                      "single-domain gambles should give premium(paper loss) > forecast > "
+                      "premium(paper gain) (" +
+                          std::to_string(violations) + " of " + std::to_string(cases) +
+                          " cases violate)",
+                      failures);
+}
+
+/*
+ * P8, loss aversion. The premium is non-increasing in lambda, and a centred
+ * gamble (zero forecast, reference at today's price) is worth less than cash
+ * once losses loom larger than gains (first-order risk aversion at the kink;
+ * Segal and Spivak, 1990). The three-scenario linear case is checked against
+ * its closed form: scenarios at -sqrt(2)sigma, 0, +sqrt(2)sigma with
+ * probabilities 1/4, 1/2, 1/4 give V = (1 - lambda) sqrt(2) sigma / 4, whose
+ * certainty equivalent for lambda = 2 is -sqrt(2) sigma / 8.
+ */
+void testLossAversionLowersThePremium(int& failures) {
+    const abm::ProspectReturnForecast mixedForecast{0.005, 0.0187, 0.0};
+    double previous = tverskyKahnemanPreferences(1.0, 13).prospectAdjustedReturn(mixedForecast);
+    for (const double lossAversion : {2.25, kShippedLossAversion, 5.0}) {
+        const double adjusted =
+            tverskyKahnemanPreferences(lossAversion, 13).prospectAdjustedReturn(mixedForecast);
+        abm::test::expect(adjusted < previous,
+                          "the CPT premium of a mixed gamble should fall as loss aversion rises",
+                          failures);
+        previous = adjusted;
+    }
+
+    const abm::ProspectReturnForecast centredForecast{0.0, 0.0187, 0.0};
+    abm::test::expect(
+        tverskyKahnemanPreferences(2.25, 13).prospectAdjustedReturn(centredForecast) < 0.0,
+        "a centred gamble should be worth less than cash under Tversky-Kahneman preferences",
+        failures);
+
+    const double volatility = 0.01;
+    const double closedForm = -std::sqrt(2.0) * volatility / 8.0;
+    abm::test::expect(
+        abm::test::nearlyEqual(
+            linearWeightPreferences(2.0, 1.0, 3).prospectAdjustedReturn({0.0, volatility, 0.0}),
+            closedForm, 1e-15),
+        "the three-scenario linear premium should match its closed form -sqrt(2) sigma / 8",
+        failures);
+}
+
+/*
+ * Reference values at the shipped preferences, forecast 0.005, volatility
+ * 0.0187 and 13 scenarios. They were computed with an independent
+ * re-implementation of docs/formalism.tex (CPT section) and guard against
+ * accidental numerical drift that the qualitative properties above would miss.
+ */
+void testCertaintyEquivalentPremiumReferenceValues(int& failures) {
+    const abm::ProspectTheory preferences = tverskyKahnemanPreferences(kShippedLossAversion, 13);
+    abm::test::expect(
+        abm::test::nearlyEqual(preferences.prospectAdjustedReturn({0.005, 0.0187, 0.05}),
+                               0.008529104410294017, 1e-12),
+        "CPT premium for a 5% paper loss should match the reference value", failures);
+    abm::test::expect(
+        abm::test::nearlyEqual(preferences.prospectAdjustedReturn({0.005, 0.0187, 0.0}),
+                               -0.002991120365568333, 1e-12),
+        "CPT premium at the reference point should match the reference value", failures);
+    abm::test::expect(
+        abm::test::nearlyEqual(preferences.prospectAdjustedReturn({0.005, 0.0187, -0.05}),
+                               -0.0009394597155681222, 1e-12),
+        "CPT premium for a 5% paper gain should match the reference value", failures);
+}
+
+/**
+ * Runs one CPT fundamentalist through the production order path at a given
+ * average entry price. The asset is slightly overvalued (fundamental 99.9
+ * against price 100), so the valuation quote is a sell; CPT then decides
+ * how much of the position the agent still wants to hold.
+ */
+std::vector<abm::Order> fundamentalistOrdersAtEntryPrice(double entryPrice,
+                                                         bool usesProspectTheory) {
+    constexpr double kPrice = 100.0;
+    abm::Market market;
+    market.configureAssets({"asset"});
+    market.storeMarketValue(0, kPrice);
+    market.storeTrueValue(0, 99.9);
+
+    abm::Agent agent(1U, abm::AgentEndowment{10000.0, {100.0}},
+                     tverskyKahnemanPreferences(kShippedLossAversion, 13), usesProspectTheory);
+    // Initialising at the entry price anchors the position there; the strategy
+    // then marks it to the current price of 100.
+    agent.initializeWealth(std::vector<double>{entryPrice});
+
+    abm::FundamentalistStrategyParameters parameters;
+    parameters.allocationLine = abm::AssetAllocationLine(3.0, 0.0, 1.0);
+    parameters.riskThresholds = abm::FundamentalistRiskThresholds{0.9, 0.9};
+    parameters.referencePointMode = abm::ProspectReferencePointMode::AveragePurchasePrice;
+    abm::FundamentalistStrategy strategy(parameters);
+
+    abm::AssetUniverse assets;
+    assets.declare({abm::test::makeAssetDefinition("asset", kPrice, 100.0, 0.01, 0.01, 0.0, 1e-6)});
+    const std::vector<double> prices{kPrice};
+    abm::SymmetricMatrix covariance(1);
+    covariance.at(0, 0) = 0.0187 * 0.0187;
+    const abm::MarketStepView marketView{prices, covariance, assets};
+
+    abm::TradingOrderContext context;
+    context.useValuationLimitPrice = true;
+    context.priceTickSize = 0.01;
+    context.transactionCostAffectsDecisions = false;
+    return strategy.generateOrders(agent, market, 1, context, marketView);
+}
+
+double soldQuantity(const std::vector<abm::Order>& orders) {
+    double quantity = 0.0;
+    for (const abm::Order& order : orders) {
+        quantity += order.type == abm::OrderType::SELL ? order.quantity : 0.0;
+    }
+    return quantity;
+}
+
+/*
+ * The disposition direction end to end, through the production generateOrders
+ * path. Two identical CPT fundamentalists face the same slightly overvalued
+ * asset; one bought 10% above today's price (a loser), the other 10% below (a
+ * winner). Prospect theory predicts the winner realises its gain while the
+ * loser keeps the position (Shefrin and Statman, 1985; Odean, 1998). Agents
+ * without CPT ignore the entry price and act identically.
+ */
+void testCptFundamentalistKeepsLoserAndRealisesWinner(int& failures) {
+    const double loserEntryPrice = 100.0 * std::exp(0.1);
+    const double winnerEntryPrice = 100.0 * std::exp(-0.1);
+
+    const double loserSold = soldQuantity(fundamentalistOrdersAtEntryPrice(loserEntryPrice, true));
+    const double winnerSold =
+        soldQuantity(fundamentalistOrdersAtEntryPrice(winnerEntryPrice, true));
+    abm::test::expect(abm::test::nearlyEqual(loserSold, 0.0),
+                      "a CPT fundamentalist with a 10% paper loss should keep the position",
+                      failures);
+    abm::test::expect(abm::test::nearlyEqual(winnerSold, 100.0),
+                      "a CPT fundamentalist with a 10% paper gain should realise it", failures);
+
+    const double loserSoldWithoutCpt =
+        soldQuantity(fundamentalistOrdersAtEntryPrice(loserEntryPrice, false));
+    const double winnerSoldWithoutCpt =
+        soldQuantity(fundamentalistOrdersAtEntryPrice(winnerEntryPrice, false));
+    abm::test::expect(abm::test::nearlyEqual(loserSoldWithoutCpt, winnerSoldWithoutCpt),
+                      "without CPT the entry price should not change the order", failures);
 }
 
 void testProspectTheoryPreferences(int& failures) {
@@ -62,9 +479,12 @@ void testProspectTheoryPreferences(int& failures) {
     abm::test::expect(
         abm::test::nearlyEqual(prospectTheory.prospectAdjustedReturn({0.02, 0.0, 0.0}), 0.02),
         "a certain positive return should remain unchanged with linear preferences", failures);
+    // A sure outcome is its own certainty equivalent: loss aversion prices the
+    // risk of a prospect, not the size of a loss that is certain to occur.
     abm::test::expect(
-        abm::test::nearlyEqual(prospectTheory.prospectAdjustedReturn({-0.02, 0.0, 0.0}), -0.045),
-        "a certain negative return should be magnified by loss aversion", failures);
+        abm::test::nearlyEqual(prospectTheory.prospectAdjustedReturn({-0.02, 0.0, 0.0}), -0.02),
+        "a certain negative return should pass through unchanged, not be scaled by loss aversion",
+        failures);
 }
 
 void testCumulativeProspectTheoryDecisionWeights(int& failures) {
@@ -446,6 +866,18 @@ void runProspectTheoryTests(int& failures) {
     testProspectTheoryRejectsEvenScenarioCountInEnabledRuns(failures);
     testAgentTracksAverageEntryReferenceAcrossPositionChanges(failures);
     testProspectReferencePointResolutionModes(failures);
+    testScenarioLadderMatchesForecastMoments(failures);
+    testInverseValueFunctionRecoversOutcomes(failures);
+    testPremiumSignMatchesHoldVersusCashChoice(failures);
+    testRiskFreeRateIsTheCashBenchmark(failures);
+    testRisklessForecastPassesThroughUnchanged(failures);
+    testScenarioCountOnlySetsResolution(failures);
+    testPremiumIsMeasuredInReturnUnits(failures);
+    testLossAversionCancelsWithinOneDomain(failures);
+    testReflectionImpliesDispositionDirection(failures);
+    testLossAversionLowersThePremium(failures);
+    testCertaintyEquivalentPremiumReferenceValues(failures);
+    testCptFundamentalistKeepsLoserAndRealisesWinner(failures);
 }
 
 } // namespace abm::test

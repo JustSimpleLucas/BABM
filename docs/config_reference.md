@@ -61,6 +61,7 @@ Each declared asset is configured with `asset.<name>.<field>`:
 | `protagonist_stop_loss_threshold` | relative loss | [0, 1) | Relative loss from his entry price at which he closes a position. |
 | `protagonist_take_profit_threshold` | relative gain | [0, 1) | Relative gain from his entry price at which he takes profit. |
 | `protagonist_volatility_window` | observations | > 0 | Recent one-period log returns he uses for realised volatility. |
+| `protagonist_forecast_horizon` | steps | >= 1 | Steps over which he expects his forecast to play out, under the fundamentalist and chartist rules. 1 reproduces the one-step rule. |
 | `protagonist_short_window` | steps | > 0 and <= protagonist_long_window | Short moving-average window used by his momentum rule. |
 | `protagonist_long_window` | steps | > 0 and >= protagonist_short_window | Long moving-average window used by his momentum and mean-reversion rules. |
 | `protagonist_momentum_signal_threshold` | relative gap | [0, 1) | Deadband applied to weak short-minus-long moving-average gaps. |
@@ -110,7 +111,7 @@ Each declared asset is configured with `asset.<name>.<field>`:
 | `control_reference_point` | price or wealth | > 0 when prospect theory is enabled | Reference price or wealth scale used when an agent has no personal entry price. |
 | `control_reference_point_mode` |  | configured, average_purchase_price, recent_peak_wealth, moving_average_price, initial_wealth | Rule that determines each agent's gain/loss reference point. |
 | `control_reference_moving_average_window` | steps | > 0 when control_reference_point_mode = moving_average_price | Lookback used only by the moving_average_price reference-point rule. |
-| `control_prospect_scenario_count` | scenarios | odd integer >= 3 | Number of subjective return scenarios valued by CPT. Use 3 for the original simple distribution; 5 or more gives richer tails. |
+| `control_prospect_scenario_count` | scenarios | odd integer >= 3 | Number of scenarios in the moment-matched return ladder valued by CPT. The ladder variance equals the forecast volatility squared for every count, so the count sets only the resolution of the tails; results settle by about 13. |
 
 ## Social influence
 
@@ -148,6 +149,7 @@ Each declared asset is configured with `asset.<name>.<field>`:
 | `fundamentalist_stop_loss_threshold` | relative loss | [0, 1) | Relative loss at which a fundamentalist closes a position. |
 | `fundamentalist_take_profit_threshold` | relative gain | [0, 1) | Relative gain at which a fundamentalist closes a position. |
 | `fundamentalist_volatility_window` | observations | > 0 | Recent one-period log returns used for realised volatility. |
+| `fundamentalist_forecast_horizon` | steps | >= 1 | Steps over which a fundamentalist expects the mispricing to close. Sizing uses the mispricing divided by this horizon and CPT values the gamble over it. 1 reproduces the one-step rule. |
 | `fundamentalist_risk_aversion` |  | > 0 | Markowitz risk-aversion coefficient used when sizing the risky allocation. |
 | `fundamentalist_min_risky_weight` | weight | finite and <= fundamentalist_max_risky_weight | Lower bound on the portfolio weight allocated to risky assets. |
 | `fundamentalist_max_risky_weight` | weight | finite and >= fundamentalist_min_risky_weight | Upper bound on the portfolio weight allocated to risky assets. |
@@ -157,6 +159,7 @@ Each declared asset is configured with `asset.<name>.<field>`:
 | `chartist_momentum_signal_threshold` | relative gap | [0, 1) | Deadband for weak short-minus-long moving-average gaps. 0 preserves the historical crossover rule. |
 | `chartist_breakout_window` | steps | > 0 | Donchian-style window whose previous high and low define a breakout. |
 | `chartist_volatility_window` | observations | > 0 | Recent one-period log returns used for realised volatility. |
+| `chartist_forecast_horizon` | steps | >= 1 | Steps over which a chartist expects its technical forecast to play out. Sizing uses the forecast divided by this horizon and CPT values the gamble over it. 1 reproduces the one-step rule. |
 | `chartist_max_short_weight` | weight | [0, 1] | Maximum short exposure. Forced to 0 when short_selling_enabled is false. |
 | `chartist_risk_aversion` |  | > 0 | Markowitz risk-aversion coefficient used when sizing the risky allocation. |
 | `chartist_min_risky_weight` | weight | finite and <= chartist_max_risky_weight | Lower bound on the portfolio weight allocated to risky assets. |

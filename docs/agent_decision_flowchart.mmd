@@ -14,12 +14,12 @@ flowchart TD
         fRiskExit{"Stop-loss or take-profit triggered?"}
         fMispricing["Compute mispricing: fundamental minus market price"]
         fSignal{"Mispricing exceeds threshold plus cost hurdle?"}
-        fForecast["Forecast excess return from mispricing"]
+        fForecast["Forecast excess return over the horizon from mispricing"]
         fVolatility["Estimate realised log-return volatility"]
         fProspect{"Prospect Theory enabled?"}
-        fCpt["Resolve reference point and apply CPT adjustment"]
+        fCpt["Resolve reference point; CPT certainty-equivalent premium of holding over cash"]
         fExpected["Use expected excess return"]
-        fAllocation["Mean-variance target risky units"]
+        fAllocation["Mean-variance target units from the per-step forecast (horizon return / horizon)"]
         fQuote["Quote around fundamental value adjusted by social opinion"]
         fHold{"Absolute log price gap within hold tolerance plus cost hurdle?"}
         fSide["Choose buy or sell from log price gap"]
@@ -35,12 +35,12 @@ flowchart TD
         cMeanReversion["Mean reversion: compare price with long moving average"]
         cRsi["RSI: buy below 30 and sell above 70"]
         cBreakout["Breakout: compare latest price with previous channel high and low"]
-        cSignal["Convert technical signal into forecast excess return"]
+        cSignal["Convert technical signal into excess return over the horizon"]
         cVolatility["Estimate realised log-return volatility"]
         cProspect{"Prospect Theory enabled?"}
-        cCpt["Resolve reference point and apply CPT adjustment"]
+        cCpt["Resolve reference point; CPT certainty-equivalent premium of holding over cash"]
         cExpected["Use expected excess return"]
-        cAllocation["Mean-variance target risky units with short cap"]
+        cAllocation["Mean-variance target units from the per-step forecast, with short cap"]
         cQuote["Quote around behavioural price adjusted by social opinion"]
         cHold{"Absolute log price gap within hold tolerance plus cost hurdle?"}
         cSide["Choose buy or sell from log price gap"]

@@ -115,6 +115,10 @@ std::vector<ConfigKeyDescriptor> buildConfigKeyRegistry() {
         {"protagonist_volatility_window", ConfigSection::Protagonist, kCanonical, "observations",
          "> 0", "Recent one-period log returns he uses for realised volatility.",
          applyProtagonistSetting},
+        {"protagonist_forecast_horizon", ConfigSection::Protagonist, kCanonical, "steps", ">= 1",
+         "Steps over which he expects his forecast to play out, under the fundamentalist and "
+         "chartist rules. 1 reproduces the one-step rule.",
+         applyProtagonistSetting},
         {"protagonist_short_window", ConfigSection::Protagonist, kCanonical, "steps",
          "> 0 and <= protagonist_long_window",
          "Short moving-average window used by his momentum rule.", applyProtagonistSetting},
@@ -265,8 +269,9 @@ std::vector<ConfigKeyDescriptor> buildConfigKeyRegistry() {
          applyControlSetting},
         {"control_prospect_scenario_count", ConfigSection::Behavioural, kCanonical, "scenarios",
          "odd integer >= 3",
-         "Number of subjective return scenarios valued by CPT. Use 3 for the original simple "
-         "distribution; 5 or more gives richer tails.",
+         "Number of scenarios in the moment-matched return ladder valued by CPT. The ladder "
+         "variance equals the forecast volatility squared for every count, so the count sets "
+         "only the resolution of the tails; results settle by about 13.",
          applyControlSetting},
 
         // --- Social influence ------------------------------------------------
@@ -347,6 +352,11 @@ std::vector<ConfigKeyDescriptor> buildConfigKeyRegistry() {
         {"fundamentalist_volatility_window", ConfigSection::Strategy, kCanonical, "observations",
          "> 0", "Recent one-period log returns used for realised volatility.",
          applyFundamentalistSetting},
+        {"fundamentalist_forecast_horizon", ConfigSection::Strategy, kCanonical, "steps", ">= 1",
+         "Steps over which a fundamentalist expects the mispricing to close. Sizing uses the "
+         "mispricing divided by this horizon and CPT values the gamble over it. 1 reproduces the "
+         "one-step rule.",
+         applyFundamentalistSetting},
         {"fundamentalist_risk_aversion", ConfigSection::Strategy, kCanonical, "", "> 0",
          "Markowitz risk-aversion coefficient used when sizing the risky allocation.",
          applyFundamentalistSetting},
@@ -378,6 +388,11 @@ std::vector<ConfigKeyDescriptor> buildConfigKeyRegistry() {
          applyChartistSetting},
         {"chartist_volatility_window", ConfigSection::Strategy, kCanonical, "observations", "> 0",
          "Recent one-period log returns used for realised volatility.", applyChartistSetting},
+        {"chartist_forecast_horizon", ConfigSection::Strategy, kCanonical, "steps", ">= 1",
+         "Steps over which a chartist expects its technical forecast to play out. Sizing uses the "
+         "forecast divided by this horizon and CPT values the gamble over it. 1 reproduces the "
+         "one-step rule.",
+         applyChartistSetting},
         {"chartist_max_short_weight", ConfigSection::Strategy, kCanonical, "weight", "[0, 1]",
          "Maximum short exposure. Forced to 0 when short_selling_enabled is false.",
          applyChartistSetting},

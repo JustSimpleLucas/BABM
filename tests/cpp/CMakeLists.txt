@@ -18,6 +18,7 @@ abm_add_test_executable(abm_model_tests
     BuyAndHoldStrategyTests.cpp
     ChartistStrategyTests.cpp
     CoreModelTestMain.cpp
+    FundamentalistStrategyTests.cpp
     LimitOrderBookTests.cpp
     NoiseTraderStrategyTests.cpp
     PortfolioOptimizerTests.cpp

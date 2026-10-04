@@ -24,6 +24,10 @@ bool applyFundamentalistSetting(RuntimeConfig& config, const ConfigSetting& sett
         fundamentalist.volatilityWindow = parseSizeValue(setting);
         return true;
     }
+    if (key == "fundamentalist_forecast_horizon") {
+        fundamentalist.forecastHorizon = parseDoubleValue(setting);
+        return true;
+    }
     if (key == "fundamentalist_risk_aversion") {
         fundamentalist.allocation.riskAversion = parseDoubleValue(setting);
         return true;
@@ -66,6 +70,10 @@ bool applyChartistSetting(RuntimeConfig& config, const ConfigSetting& setting) {
     }
     if (key == "chartist_volatility_window") {
         chartist.volatilityWindow = parseSizeValue(setting);
+        return true;
+    }
+    if (key == "chartist_forecast_horizon") {
+        chartist.forecastHorizon = parseDoubleValue(setting);
         return true;
     }
     if (key == "chartist_max_short_weight") {

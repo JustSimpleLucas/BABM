@@ -11,6 +11,7 @@ int main() {
     abm::test::runPortfolioOptimizerTests(failures);
     abm::test::runProspectTheoryTests(failures);
     abm::test::runChartistStrategyTests(failures);
+    abm::test::runFundamentalistStrategyTests(failures);
     abm::test::runBuyAndHoldStrategyTests(failures);
     abm::test::runNoiseTraderStrategyTests(failures);
     abm::test::runLimitOrderBookTests(failures);

@@ -92,6 +92,28 @@ double ProspectTheory::valueFunction(double relativeOutcome) const {
     return -lossAversion_ * std::pow(-relativeOutcome, curvatureForLoss_);
 }
 
+double ProspectTheory::inverseValueFunction(double value) const {
+    requireFinite(value, "Prospect value");
+
+    /*
+     * Formula note:
+     * v^-1(y) = y^(1 / alpha_gain) for y >= 0,
+     * v^-1(y) = -(-y / lambda)^(1 / alpha_loss) for y < 0.
+     *
+     * The inverse maps a prospect value back to the sure gain or loss that the
+     * agent values equally: the certainty equivalent through which Tversky and
+     * Kahneman (1992) measured these preferences. It is what puts CPT output
+     * back into the return units that the mean-variance allocation and the
+     * valuation quotes require; a raw value is in value units, which bend small
+     * returns upwards and scale by c^alpha rather than c with the returns.
+     */
+    if (value >= 0.0) {
+        return std::pow(value, 1.0 / curvatureForGain_);
+    }
+
+    return -std::pow(-value / lossAversion_, 1.0 / curvatureForLoss_);
+}
+
 double ProspectTheory::probabilityWeight(double probability, ProspectDomain domain) const {
     requireProbability(probability, "Scenario probability");
     if (probability <= 0.0) {
@@ -180,33 +202,39 @@ double ProspectTheory::calculateProspectValue(const std::vector<ProspectOutcome>
     return prospectValue;
 }
 
-double ProspectTheory::prospectAdjustedReturn(const ProspectReturnForecast& forecast) const {
-    return returnScenarioProspectValue(forecast);
-}
-
-double ProspectTheory::returnScenarioProspectValue(const ProspectReturnForecast& forecast) const {
+std::vector<ProspectOutcome>
+ProspectTheory::returnScenarios(const ProspectReturnForecast& forecast) const {
     requireFinite(forecast.expectedReturn, "Expected return");
     requireNonNegative(forecast.volatility, "Volatility");
     requireFinite(forecast.referenceLogReturn, "Reference log return");
+    requireFinite(forecast.riskFreeLogReturn, "Risk-free log return");
 
     const double boundedExpected =
         std::clamp(forecast.expectedReturn, -kMaxScenarioReturn, kMaxScenarioReturn);
     const double boundedVolatility = std::clamp(forecast.volatility, 0.0, kMaxScenarioReturn);
 
-    // The odd scenario count creates a central forecast with symmetric adverse
-    // and favourable shocks. Binomial probabilities keep the original
-    // three-scenario weights {0.25, 0.50, 0.25} when scenarioCount_ is 3, while
-    // allowing richer distributions such as five or seven scenarios.
+    // The ladder discretises the agent's subjective one-step return
+    // distribution N(r_f + E[r], sigma^2). With n - 1 = 2H binomial steps of
+    // size Delta, Var(s - H) = H / 2, so Delta = 2 sigma / sqrt(n - 1) gives
+    // variance sigma^2 for every odd scenario count: the variance-matching rule
+    // of the Cox, Ross and Rubinstein (1979) binomial tree. The count therefore
+    // controls only how finely the tails are resolved (de Moivre-Laplace
+    // convergence), never the risk the agent perceives; an unscaled step would
+    // let a numerical setting act as a preference parameter. Three scenarios
+    // keep the weights {0.25, 0.50, 0.25}, placed at +/- sqrt(2) sigma.
     //
     // Formula note:
-    // r_s = clamp(E[r] + k_s * sigma, -0.95, 0.95),
-    // x_s = r_s - r_ref,
-    // p_s = C(n, s) * 0.5^n, where n = scenarioCount - 1.
+    // Delta = 2 sigma / sqrt(n - 1),
+    // R_s = clamp(r_f + E[r] + (s - H) * Delta, -0.95, 0.95),
+    // x_s = R_s - r_ref,
+    // p_s = C(n - 1, s) * 0.5^(n - 1).
     //
     // Outcomes stay in return space relative to the reference log return, so
     // the CPT valuation is invariant to price and wealth levels.
     const std::size_t binomialOrder = scenarioCount_ - 1;
     const int halfWidth = static_cast<int>(binomialOrder / 2);
+    const double scenarioStep =
+        2.0 * boundedVolatility / std::sqrt(static_cast<double>(binomialOrder));
 
     std::vector<ProspectOutcome> outcomes;
     outcomes.reserve(scenarioCount_);
@@ -215,7 +243,8 @@ double ProspectTheory::returnScenarioProspectValue(const ProspectReturnForecast&
     for (std::size_t scenarioIndex = 0; scenarioIndex <= binomialOrder; ++scenarioIndex) {
         const int shockMultiplier = static_cast<int>(scenarioIndex) - halfWidth;
         const double scenarioReturn =
-            std::clamp(boundedExpected + (static_cast<double>(shockMultiplier) * boundedVolatility),
+            std::clamp(forecast.riskFreeLogReturn + boundedExpected +
+                           (static_cast<double>(shockMultiplier) * scenarioStep),
                        -kMaxScenarioReturn, kMaxScenarioReturn);
 
         outcomes.push_back({scenarioReturn - forecast.referenceLogReturn, scenarioProbability});
@@ -227,7 +256,31 @@ double ProspectTheory::returnScenarioProspectValue(const ProspectReturnForecast&
                                    static_cast<double>(scenarioIndex + 1);
         }
     }
-    return calculateProspectValue(outcomes);
+    return outcomes;
+}
+
+double ProspectTheory::prospectAdjustedReturn(const ProspectReturnForecast& forecast) const {
+    // The agent chooses between holding the asset for one more step (the
+    // scenario ladder) and holding cash, whose sure outcome r_f - r_ref
+    // realises today's paper gain or loss. CPT compares the two options by
+    // value; expressing both as certainty equivalents measured from today's
+    // price keeps the comparison in log-return units.
+    //
+    // Formula note:
+    // CE_hold = r_ref + v^-1(V_hold),
+    // CE_cash = r_ref + v^-1(v(r_f - r_ref)) = r_f,
+    // premium = CE_hold - CE_cash = v^-1(V_hold) + r_ref - r_f.
+    //
+    // Because v is strictly increasing, the premium is positive exactly when
+    // holding beats selling under CPT. Comparing against cash rather than
+    // against zero is what lets reference dependence act on the choice: with a
+    // paper loss the convex loss domain favours holding, and with a paper gain
+    // the concave gain domain favours realising it (Kahneman and Tversky, 1979;
+    // Shefrin and Statman, 1985). A riskless forecast passes through unchanged,
+    // so CPT alters how agents treat risk, not how they read a sure return.
+    const double holdValue = calculateProspectValue(returnScenarios(forecast));
+    return inverseValueFunction(holdValue) + forecast.referenceLogReturn -
+           forecast.riskFreeLogReturn;
 }
 
 } // namespace abm

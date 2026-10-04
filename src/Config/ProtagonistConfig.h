@@ -97,6 +97,10 @@ struct ProtagonistConfig {
     /** Recent one-period log returns he uses to estimate realised volatility. */
     std::size_t volatilityWindow{20};
 
+    /** Steps over which he expects his forecast to play out, under the fundamentalist and
+     * chartist rules. */
+    double forecastHorizon{1.0};
+
     /** Short moving-average window used by the momentum rule. */
     std::size_t shortWindow{5};
 

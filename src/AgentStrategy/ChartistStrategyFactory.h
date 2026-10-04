@@ -51,6 +51,9 @@ struct ChartistRuleSettings {
     /** Cap on multi-asset gross exposure sum_j |w_j|. */
     double maxGrossExposure{1.0};
 
+    /** Steps over which the technical forecast is expected to play out. */
+    double forecastHorizon{1.0};
+
     /** Per-step risk-free return used in the allocation rule. */
     double riskFreeRate{0.0};
 

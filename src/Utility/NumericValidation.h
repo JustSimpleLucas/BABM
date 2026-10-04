@@ -46,6 +46,20 @@ void requireStrictlyPositive(double value, const char* name);
 void requireNonNegative(double value, const char* name);
 
 /**
+ * Requires a finite value to be greater than or equal to a lower bound.
+ *
+ * Used for model quantities with a natural floor other than zero, such as a
+ * forecast horizon measured in simulation steps, which cannot be shorter than
+ * the single step over which a trade is decided.
+ *
+ * @param value Numeric value to validate.
+ * @param minimum Smallest admissible value.
+ * @param name Human-readable parameter or state name used in the exception.
+ * @throws std::invalid_argument if value is non-finite or below minimum.
+ */
+void requireAtLeast(double value, double minimum, const char* name);
+
+/**
  * Requires a finite value to lie in the closed unit interval [0, 1].
  *
  * @param value Numeric value to validate.

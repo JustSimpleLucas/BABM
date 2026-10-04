@@ -4,10 +4,15 @@
 
 #include "Agent/Agent.h"
 #include "AgentStrategy/BreakoutChartistStrategy.h"
+#include "AgentStrategy/MeanReversionChartistStrategy.h"
 #include "AgentStrategy/MomentumChartistStrategy.h"
+#include "AgentStrategy/TradingStrategy.h"
 #include "BehaviouralFinance/ProspectTheory.h"
+#include "Config/MarketConfig.h"
 #include "Market/Market.h"
+#include "Utility/CholeskyFactorization.h"
 
+#include <cmath>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -242,6 +247,71 @@ void testBreakoutHoldsOnChannelBoundaryEquality(int& failures) {
                       "breakout should hold when price equals the previous channel low", failures);
 }
 
+/**
+ * Orders a cash-only mean-reversion chartist submits through the production
+ * generateOrders path. Nineteen prices at 101 followed by 100 put the 20-step
+ * average at 100.95, so the forecast is log(100.95 / 100); the covariance
+ * fixes volatility at 2% so the Markowitz weight has a closed form.
+ */
+std::vector<abm::Order> meanReversionOrdersAtHorizon(double forecastHorizon) {
+    std::vector<double> history(19, 101.0);
+    history.push_back(100.0);
+    abm::Market market;
+    storePrices(market, history);
+
+    abm::Agent agent(1U, abm::AgentEndowment{10000.0, {0.0}}, abm::ProspectTheory{}, false);
+    abm::MeanReversionChartistStrategyParameters parameters;
+    parameters.commonParameters = makeCommonChartistParameters();
+    parameters.commonParameters.forecastHorizon = forecastHorizon;
+    parameters.longWindow = 20;
+    abm::MeanReversionChartistStrategy strategy(std::move(parameters));
+
+    abm::AssetUniverse assets;
+    assets.declare({abm::test::makeAssetDefinition(kAssetName, 100.0, 0.0, 0.01, 0.01, 0.0, 1e-6)});
+    const std::vector<double> latestPrices{100.0};
+    abm::SymmetricMatrix covariance(1);
+    covariance.at(0, 0) = 0.02 * 0.02;
+    const abm::MarketStepView marketView{latestPrices, covariance, assets};
+
+    abm::TradingOrderContext context;
+    context.useValuationLimitPrice = true;
+    context.priceTickSize = 0.01;
+    context.transactionCostAffectsDecisions = false;
+    return strategy.generateOrders(agent, market, 1, context, marketView);
+}
+
+/*
+ * The forecast horizon spreads the technical forecast over the steps it is
+ * expected to take, so sizing sees a per-step return: doubling the horizon
+ * halves an interior position. The valuation quote is the price expected at
+ * the horizon and so does not depend on the horizon's length.
+ */
+void testForecastHorizonScalesChartistSizeButNotQuote(int& failures) {
+    const std::vector<abm::Order> twentySteps = meanReversionOrdersAtHorizon(20.0);
+    const std::vector<abm::Order> fortySteps = meanReversionOrdersAtHorizon(40.0);
+    abm::test::expect(twentySteps.size() == 1 && fortySteps.size() == 1,
+                      "the mean-reversion chartist should submit one buy at each horizon",
+                      failures);
+    if (twentySteps.size() != 1 || fortySteps.size() != 1) {
+        return;
+    }
+
+    const double forecast = std::log(100.95 / 100.0);
+    const double interiorWeight = (forecast / 20.0) / (3.0 * 0.02 * 0.02);
+    abm::test::expect(
+        abm::test::nearlyEqual(twentySteps.front().quantity, 10000.0 * interiorWeight / 100.0,
+                               1e-9),
+        "a 20-step horizon should give the interior Markowitz position for forecast / 20",
+        failures);
+    abm::test::expect(abm::test::nearlyEqual(fortySteps.front().quantity,
+                                             twentySteps.front().quantity / 2.0, 1e-9),
+                      "doubling the forecast horizon should halve an interior chartist position",
+                      failures);
+    abm::test::expect(abm::test::nearlyEqual(fortySteps.front().price, twentySteps.front().price),
+                      "the chartist valuation quote should not depend on the forecast horizon",
+                      failures);
+}
+
 } // namespace
 
 namespace abm::test {
@@ -257,6 +327,7 @@ void runChartistStrategyTests(int& failures) {
     testBreakoutHoldsInsidePreviousChannel(failures);
     testChartistHonoursConfiguredAllocationFloor(failures);
     testBreakoutHoldsOnChannelBoundaryEquality(failures);
+    testForecastHorizonScalesChartistSizeButNotQuote(failures);
 }
 
 } // namespace abm::test

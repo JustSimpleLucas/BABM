@@ -3,6 +3,7 @@
 #include "Utility/NumericValidation.h"
 
 #include <cmath>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -25,6 +26,15 @@ void requireNonNegative(double value, const char* name) {
     requireFinite(value, name);
     if (value < 0.0) {
         throw std::invalid_argument(std::string(name) + " cannot be negative.");
+    }
+}
+
+void requireAtLeast(double value, double minimum, const char* name) {
+    requireFinite(value, name);
+    if (value < minimum) {
+        std::ostringstream message;
+        message << name << " must be at least " << minimum << '.';
+        throw std::invalid_argument(message.str());
     }
 }
 

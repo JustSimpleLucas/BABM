@@ -347,6 +347,14 @@ void testTradeLedgerToggleDoesNotChangeAggregateSimulation(int& failures) {
     config.timeSteps = 20;
     config.numFundamentalists = 10;
     config.numChartists = 10;
+    /*
+     * Noise traders supply two-sided order flow so that trades occur by
+     * construction. Without them this fixture relies on its CPT agents to
+     * trade in a near-flat, slightly overvalued market, where loss-averse
+     * agents correctly decline small positive forecasts and no buyer appears.
+     * The test concerns ledger plumbing, not strategy behaviour.
+     */
+    config.numNoiseTraders = 10;
     config.initialCash = 5000.0;
     abm::test::soleAsset(config).initialStock = 10.0;
 
@@ -355,6 +363,8 @@ void testTradeLedgerToggleDoesNotChangeAggregateSimulation(int& failures) {
     const abm::SimulationRunResult disabledLedgerResult = disabledLedgerEngine.run();
     const abm::SimulationRunResult enabledLedgerResult = enabledLedgerEngine.run({}, true);
 
+    abm::test::expect(enabledLedgerResult.stats().totalTradedVolume > 0.0,
+                      "the trade-ledger fixture should execute trades", failures);
     abm::test::expect(disabledLedgerResult.externalTradeLedger().empty(),
                       "disabled trade ledger should not collect audit rows", failures);
     abm::test::expect(!enabledLedgerResult.externalTradeLedger().empty(),

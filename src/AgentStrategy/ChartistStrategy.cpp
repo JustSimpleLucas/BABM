@@ -29,6 +29,8 @@ ChartistStrategy::ChartistStrategy(ChartistStrategyParameters parameters)
     setMaxShortWeight(parameters.maxShortWeight);
     requireStrictlyPositive(parameters.maxGrossExposure, "Max gross exposure");
     maxGrossExposure_ = parameters.maxGrossExposure;
+    requireAtLeast(parameters.forecastHorizon, 1.0, "Forecast horizon");
+    forecastHorizon_ = parameters.forecastHorizon;
 }
 
 std::size_t ChartistStrategy::assetIndex() const {
@@ -75,9 +77,9 @@ std::optional<Order> ChartistStrategy::generateOrder(Agent& agent, const Market&
     const double excessReturn = forecastExcessReturn(market, assetIndex_);
     const double sigma =
         strategy_detail::boundedLogReturnVolatility(market, assetIndex_, volatilityWindow_);
-    const double behaviouralExcessReturn =
-        prospectAdjustedExcessReturn(agent, market, assetIndex_, excessReturn, sigma, price);
-    const double mu = riskFreeRate_ + behaviouralExcessReturn;
+    const double horizonExcessReturn =
+        prospectAdjustedHorizonReturn(agent, market, assetIndex_, excessReturn, sigma, price);
+    const double mu = riskFreeRate_ + (horizonExcessReturn / forecastHorizon_);
     const double rawRiskyWeight = allocationLine_.optimalRiskyWeight(mu, riskFreeRate_, sigma);
     /*
      * The effective lower bound is the tighter of the configured allocation
@@ -118,15 +120,15 @@ std::optional<Order> ChartistStrategy::generateOrder(Agent& agent, const Market&
     } else {
         /*
          * Formula note:
-         * P_baseline = P_t * exp(expected_excess_return),
+         * P_baseline = P_t * exp(expected_excess_return over the horizon),
          * P_lim_raw = P_baseline * exp(kappa * o_i,t).
          *
          * The chartist forecast and the social-opinion signal are both applied
          * in log-price space, so the submitted valuation remains strictly
-         * positive and reacts multiplicatively to optimism or pessimism.
+         * positive and reacts multiplicatively to optimism or pessimism. The
+         * baseline is the price expected at the forecast horizon.
          */
-        const double baselinePrice =
-            std::max(kMinimumPrice, price * std::exp(behaviouralExcessReturn));
+        const double baselinePrice = std::max(kMinimumPrice, price * std::exp(horizonExcessReturn));
         const double rawOrderPrice =
             std::max(kMinimumPrice, baselinePrice * std::exp(std::max(0.0, context.opinionKappa) *
                                                              context.socialOpinion));
@@ -159,10 +161,11 @@ std::optional<Order> ChartistStrategy::generateOrder(Agent& agent, const Market&
     return order;
 }
 
-double ChartistStrategy::prospectAdjustedExcessReturn(Agent& agent, const Market& market,
-                                                      std::size_t forecastAssetIndex,
-                                                      double expectedExcessReturn,
-                                                      double volatility, double marketPrice) const {
+double ChartistStrategy::prospectAdjustedHorizonReturn(Agent& agent, const Market& market,
+                                                       std::size_t forecastAssetIndex,
+                                                       double expectedExcessReturn,
+                                                       double volatility,
+                                                       double marketPrice) const {
     if (!agent.usesProspectTheory()) {
         return expectedExcessReturn;
     }
@@ -170,7 +173,17 @@ double ChartistStrategy::prospectAdjustedExcessReturn(Agent& agent, const Market
     const double referenceLogReturn = strategy_detail::resolveProspectReferenceReturn(
         agent, market, forecastAssetIndex, referencePointMode_, referenceMovingAverageWindow_,
         marketPrice);
-    const ProspectReturnForecast forecast{expectedExcessReturn, volatility, referenceLogReturn};
+    /*
+     * The technical forecast is the log return expected over the forecast
+     * horizon, so CPT values the gamble over that same horizon, the agent's
+     * evaluation period in the sense of Benartzi and Thaler (1995). Volatility
+     * grows with the square root of the horizon (independent per-step returns),
+     * and cash, the alternative the asset is valued against, earns the
+     * risk-free log return for every step of it.
+     */
+    const ProspectReturnForecast forecast{
+        expectedExcessReturn, volatility * std::sqrt(forecastHorizon_), referenceLogReturn,
+        forecastHorizon_ * std::log1p(riskFreeRate_)};
     return std::clamp(agent.prospectTheory().prospectAdjustedReturn(forecast), -1.0, 1.0);
 }
 
@@ -192,21 +205,28 @@ std::vector<Order> ChartistStrategy::generateOrders(Agent& agent, const Market& 
     /*
      * The concrete technical rule is evaluated per asset; the CPT-adjusted
      * forecasts feed one joint Markowitz solve with the shared covariance.
+     * Each forecast is a return expected over the forecast horizon: the
+     * valuation quote uses it whole (the price expected at the horizon), while
+     * the Markowitz rule receives it spread over the horizon, a per-step return
+     * commensurate with the per-step covariance (Merton, 1969).
      */
-    std::vector<double> excessReturns(assetCount);
+    std::vector<double> horizonExcessReturns(assetCount);
+    std::vector<double> perStepExcessReturns(assetCount);
     for (std::size_t assetIndex = 0; assetIndex < assetCount; ++assetIndex) {
         const double excessReturn = forecastExcessReturn(market, assetIndex);
         const double sigma = std::sqrt(std::max(covariance.at(assetIndex, assetIndex),
                                                 kMinimumVolatility * kMinimumVolatility));
-        excessReturns[assetIndex] = prospectAdjustedExcessReturn(
+        horizonExcessReturns[assetIndex] = prospectAdjustedHorizonReturn(
             agent, market, assetIndex, excessReturn, sigma, prices[assetIndex]);
+        perStepExcessReturns[assetIndex] = horizonExcessReturns[assetIndex] / forecastHorizon_;
     }
 
     const double lowerBound = std::max(allocationLine_.minRiskyWeight(), -maxShortWeight_);
     const std::vector<AssetWeightBounds> bounds(
         assetCount, AssetWeightBounds{lowerBound, std::max(0.0, allocationLine_.maxRiskyWeight())});
-    const std::vector<double> weights = optimalRiskyWeights(PortfolioInputs{
-        &excessReturns, &covariance, allocationLine_.riskAversion(), &bounds, maxGrossExposure_});
+    const std::vector<double> weights = optimalRiskyWeights(
+        PortfolioInputs{&perStepExcessReturns, &covariance, allocationLine_.riskAversion(), &bounds,
+                        maxGrossExposure_});
 
     std::vector<Order> orders;
     orders.reserve(assetCount);
@@ -219,8 +239,8 @@ std::vector<Order> ChartistStrategy::generateOrders(Agent& agent, const Market& 
         TradingOrderContext assetContext = context;
         assetContext.priceTickSize = assets[assetIndex].priceTickSize;
 
-        const double baselinePrice =
-            std::max(kMinimumPrice, prices[assetIndex] * std::exp(excessReturns[assetIndex]));
+        const double baselinePrice = std::max(
+            kMinimumPrice, prices[assetIndex] * std::exp(horizonExcessReturns[assetIndex]));
         const double rawOrderPrice =
             std::max(kMinimumPrice, baselinePrice * std::exp(std::max(0.0, context.opinionKappa) *
                                                              context.socialOpinion));

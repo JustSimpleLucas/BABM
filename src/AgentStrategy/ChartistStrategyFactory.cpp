@@ -43,6 +43,7 @@ ChartistStrategyParameters makeCommonChartistParameters(const ChartistRuleSettin
     parameters.referencePointMode = settings.referencePointMode;
     parameters.referenceMovingAverageWindow = settings.referenceMovingAverageWindow;
     parameters.maxGrossExposure = settings.maxGrossExposure;
+    parameters.forecastHorizon = settings.forecastHorizon;
     return parameters;
 }
 
@@ -85,6 +86,7 @@ ChartistRuleSettings populationChartistSettings(const SimulationConfig& config,
     settings.volatilityWindow = config.chartist.volatilityWindow;
     settings.maxShortWeight = config.chartist.maxShortWeight;
     settings.maxGrossExposure = config.chartist.allocation.maxGrossExposure;
+    settings.forecastHorizon = config.chartist.forecastHorizon;
     settings.riskFreeRate = config.riskFreeRate;
     settings.referencePointMode = config.control.referencePointMode;
     settings.referenceMovingAverageWindow = config.control.referenceMovingAverageWindow;

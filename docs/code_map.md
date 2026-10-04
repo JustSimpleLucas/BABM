@@ -144,7 +144,7 @@ objects. It is split into a *schema* (headers holding plain records) and a
 
 | File | Function |
 | --- | --- |
-| `src/BehaviouralFinance/ProspectTheory.{h,cpp}` | The Cumulative Prospect Theory valuation: the value function over gains/losses relative to a reference point, and the probability weighting function. This is the core behavioural mechanism the thesis is about. |
+| `src/BehaviouralFinance/ProspectTheory.{h,cpp}` | The Cumulative Prospect Theory valuation: the value function over gains/losses relative to a reference point, its inverse, the probability weighting function, and rank-dependent decision weights. `prospectAdjustedReturn` builds a moment-matched scenario ladder for next step's return and returns the certainty-equivalent premium of holding the asset over holding cash, in log-return units. This is the core behavioural mechanism the thesis is about. |
 | `src/BehaviouralFinance/ProspectPreferenceSampler.{h,cpp}` | Assigns CPT preferences to agents. Homogeneous runs give everyone the configured parameters; heterogeneous runs draw bounded per-agent preferences from deterministic random streams, so diversity never breaks seed reproducibility. |
 
 ### 2.6 Agents and strategies (`abm_agents`)
@@ -159,8 +159,8 @@ objects. It is split into a *schema* (headers holding plain records) and a
 
 | File | Function |
 | --- | --- |
-| `FundamentalistStrategy.{h,cpp}` | Trades on the gap between price and latent fundamental value, with stop-loss / take-profit controls. |
-| `ChartistStrategy.{h,cpp}` | Shared base and shared parameters for the four technical rules. |
+| `FundamentalistStrategy.{h,cpp}` | Trades on the gap between price and latent fundamental value, with stop-loss / take-profit controls. The gap is the return expected over `fundamentalist_forecast_horizon` steps, so sizing uses it divided by that horizon. |
+| `ChartistStrategy.{h,cpp}` | Shared base and shared parameters for the four technical rules, including the forecast horizon that turns a rule's forecast into a per-step return for sizing while the quote stays the price expected at the horizon. |
 | `MomentumChartistStrategy.{h,cpp}` | Moving-average crossover momentum rule. |
 | `MeanReversionChartistStrategy.{h,cpp}` | Reversal rule over a configured horizon. |
 | `BreakoutChartistStrategy.{h,cpp}` | Price-channel breakout rule. |
@@ -250,7 +250,7 @@ fixtures).
 
 | Executable | Sources | Covers |
 | --- | --- | --- |
-| `abm_model_tests` | `CoreModelTestMain.cpp` + `BuyAndHoldStrategyTests`, `ChartistStrategyTests`, `NoiseTraderStrategyTests`, `PortfolioOptimizerTests`, `ProspectTheoryTests`, `LimitOrderBookTests`, `RandomMarketRiskTests`, `SimulationComponentTests`, `SimulationIntegrationTests` | Strategy behaviour, CPT valuation, order-book matching, risk controls, engine collaborators, and an end-to-end simulation run. |
+| `abm_model_tests` | `CoreModelTestMain.cpp` + `BuyAndHoldStrategyTests`, `ChartistStrategyTests`, `FundamentalistStrategyTests`, `NoiseTraderStrategyTests`, `PortfolioOptimizerTests`, `ProspectTheoryTests`, `LimitOrderBookTests`, `RandomMarketRiskTests`, `SimulationComponentTests`, `SimulationIntegrationTests` | Strategy behaviour, CPT valuation, order-book matching, risk controls, engine collaborators, and an end-to-end simulation run. |
 | `abm_config_parsing_tests` | `ConfigParsingTestMain.cpp`, `ConfigParsingTests.cpp` | Key parsing, the applier dispatch, `asset.*` keys, unknown-key rejection. |
 | `abm_config_validation_tests` | `ConfigValidationTestMain.cpp`, `ConfigValidationTests.cpp` | Feasibility rules, independently of running a simulation. |
 | `abm_archive_workflow_tests` | `ArchiveWorkflowTestMain.cpp`, `ArchiveWorkflowTests.cpp` | Run-id generation, folder layout, archive-schema completeness. |

@@ -95,6 +95,7 @@ class ProtagonistSettings {
   +AllocationConfig allocation
   +double mispricingThreshold
   +size_t volatilityWindow
+  +double forecastHorizon
   +bool prospectTheoryEnabled
   +double lossAversion
 }
@@ -238,6 +239,7 @@ class ChartistStrategyParameters {
   +string assetName
   +AssetAllocationLine allocationLine
   +size_t volatilityWindow
+  +double forecastHorizon
   +double riskFreeRate
   +double maxShortWeight
   +ProspectReferencePointMode referencePointMode
@@ -267,6 +269,7 @@ class FundamentalistStrategyParameters {
   +double mispricingThreshold
   +FundamentalistRiskThresholds riskThresholds
   +size_t volatilityWindow
+  +double forecastHorizon
   +double riskFreeRate
 }
 
@@ -291,6 +294,7 @@ class ChartistStrategy {
   -string assetName_
   -AssetAllocationLine allocationLine_
   -size_t volatilityWindow_
+  -double forecastHorizon_
   -double maxShortWeight_
   +generateOrder(agent_market_step_context) OptionalOrder
   +generateSignal(market) AgentAction
@@ -342,9 +346,11 @@ class ProspectTheory {
   -double referencePoint_
   -size_t scenarioCount_
   +valueFunction(relativeOutcome) double
+  +inverseValueFunction(value) double
   +probabilityWeight(probability_domain) double
   +calculateProspectValue(outcomes) double
-  +prospectAdjustedReturn(expectedReturn_volatility) double
+  +returnScenarios(forecast) vector~ProspectOutcome~
+  +prospectAdjustedReturn(forecast) double
 }
 
 class AssetAllocationLine {

@@ -54,6 +54,18 @@
       "low": 0.002,
       "high": 0.08,
       "log": true
+    },
+    "fundamentalist_forecast_horizon": {
+      "type": "float",
+      "low": 1.0,
+      "high": 250.0,
+      "log": true
+    },
+    "chartist_forecast_horizon": {
+      "type": "float",
+      "low": 1.0,
+      "high": 50.0,
+      "log": true
     }
   }
 }

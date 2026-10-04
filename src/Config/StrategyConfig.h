@@ -51,6 +51,16 @@ struct FundamentalistConfig {
     /** Number of recent one-period log returns used to estimate realised volatility. */
     std::size_t volatilityWindow{20};
 
+    /**
+     * Steps over which a fundamentalist expects the mispricing to close.
+     *
+     * The mispricing is the return expected over this horizon, so position
+     * sizing uses it divided by the horizon (a per-step return, commensurate
+     * with the per-step covariance) and CPT values the gamble over the same
+     * horizon. One reproduces the one-step rule.
+     */
+    double forecastHorizon{1.0};
+
     /** Portfolio allocation rule used after a fundamentalist signal is formed. */
     AllocationConfig allocation{};
 };
@@ -81,6 +91,15 @@ struct ChartistConfig {
 
     /** Number of recent one-period log returns used to estimate realised volatility. */
     std::size_t volatilityWindow{20};
+
+    /**
+     * Steps over which a chartist expects its technical forecast to play out.
+     *
+     * Sizing uses the forecast divided by this horizon and CPT values the
+     * gamble over it; the valuation quote remains the price expected at the
+     * horizon. One reproduces the one-step rule.
+     */
+    double forecastHorizon{1.0};
 
     /** Maximum absolute short weight available to chartists when shorting is enabled. */
     double maxShortWeight{0.30};

@@ -53,6 +53,7 @@ void runRandomMarketRiskTests(int& failures);
 void runPortfolioOptimizerTests(int& failures);
 void runProspectTheoryTests(int& failures);
 void runChartistStrategyTests(int& failures);
+void runFundamentalistStrategyTests(int& failures);
 void runBuyAndHoldStrategyTests(int& failures);
 void runNoiseTraderStrategyTests(int& failures);
 void runLimitOrderBookTests(int& failures);

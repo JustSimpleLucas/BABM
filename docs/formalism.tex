@@ -213,6 +213,8 @@
         \midrule
         \endhead
         \(r_f\) & Risk-free interest rate per period. & Per-period return \\
+        \(\ell_f=\log(1+r_f)\) & Risk-free log return per period; the sure return of the cash alternative in CPT valuation. & Per-period log return \\
+        \(\mathcal H_i\) & Forecast horizon of agent \(i\): the number of steps over which its forecast is expected to play out (\(\mathcal H^F\) for fundamentalists, \(\mathcal H^C\) for chartists, set individually for the protagonist). & Real number, \(\mathcal H_i\ge1\) \\
         \(\rho_i\) & Risk-aversion coefficient of agent \(i\). & Positive real number \\
         \(v_{\Sigma}\) & Trailing log-return window used to estimate the shared covariance matrix \(\Sigma_t\). & Positive integer \\
         \(v\) & Lookback window for the legacy single-asset rolling volatility estimate; the implementation allows separate fundamentalist and chartist windows. & Positive integer \\
@@ -246,7 +248,7 @@
         \(\nu_i^0\) & Configured fallback CPT reference point. & Positive price or wealth scale \\
         \(W_{i,t}^{\max}\) & Highest positive mark-to-market wealth observed by agent \(i\) up to time \(t\). & Currency units \\
         \(h_{\nu}\) & Moving-average window used when \(m_{\nu}\) selects a moving-average price reference. & Positive integer \\
-        \(n_{\mathrm{CPT}}\) & Number of subjective return scenarios used in CPT valuation. & Odd integer, \(n_{\mathrm{CPT}}\ge3\) \\
+        \(n_{\mathrm{CPT}}\) & Number of scenarios in the moment-matched CPT return ladder; sets only its resolution, not its variance. & Odd integer, \(n_{\mathrm{CPT}}\ge3\) \\
         \(\sigma_N\) & Standard deviation of the noise-trader log-belief shock. & Positive return scale \\
         \(\phi_N\) & Fraction of wealth committed to one noise-trader order. & Positive unit interval \\
         \(\bar w_N^{\text{short}}\) & Maximum absolute short risky weight available to noise traders. & \([0,1]\) \\
@@ -603,17 +605,32 @@
 
     \subsection{Portfolio Allocation}\label{sec:allocation}
 
-    Given the vector of prospect-adjusted excess returns
+    Each strategy forecast \(\breve r_{i,j,t}\) is the excess log return the agent
+    expects over its forecast horizon \(\mathcal H_i\ge1\), the number of steps
+    over which it expects the forecast to play out: a mispricing, for instance,
+    is not expected to close in a single step. The Markowitz rule needs the
+    expected return and the covariance over the same period, and the covariance
+    is per step (in Merton's rule both are rates per unit time), so the forecast
+    is spread over the horizon. Given the vector of prospect-adjusted excess
+    returns
     \(\breve{\mathbf r}_{i,t}=(\breve r_{i,1,t},\ldots,\breve r_{i,n,t})^{\top}\),
     the agent solves the full Markowitz problem
     \[
-        \mu_{i,j,t}=r_f+\breve r_{i,j,t},
+        \mu_{i,j,t}=r_f+\frac{\breve r_{i,j,t}}{\mathcal H_i},
         \qquad
         \mathbf w_{i,t}^{\mathrm{raw}}
         =
-        \frac{1}{\rho_i}\Sigma_t^{-1}\breve{\mathbf r}_{i,t},
+        \frac{1}{\rho_i\mathcal H_i}\Sigma_t^{-1}\breve{\mathbf r}_{i,t},
     \]
-    where \(\rho_i>0\) is the agent's risk aversion. The residual weight
+    where \(\rho_i>0\) is the agent's risk aversion. Equivalently, the agent
+    weighs the horizon return \(\breve{\mathbf r}_{i,t}\) against the horizon risk
+    \(\mathcal H_i\Sigma_t\) of independent per-step returns. Scaling the
+    fundamentalist forecast by a mean-reversion time in this way follows
+    Chiarella, Iori and Perell\'o's order-book model. With \(\mathcal H_i=1\) a
+    whole mispricing is treated as a one-step return; at the model's typical
+    volatility nearly every raw weight then falls outside its bounds, so risk
+    aversion and the covariance stop shaping positions. Setting
+    \(\mathcal H_i=1\) reproduces that one-step rule exactly. The residual weight
     \(1-\sum_j w_{i,j,t}\) is held at the risk-free rate implicitly, as in the
     single-asset model. This is an intentionally transparent mean-variance
     allocation rule in the tradition of Markowitz; the behavioural contribution
@@ -632,7 +649,7 @@
     \[
         w_{i,j,t}^{\mathrm{raw}}
         =
-        \frac{\breve r_{i,j,t}}{\rho_i\sigma_{j,t}^{2}},
+        \frac{\breve r_{i,j,t}}{\rho_i\mathcal H_i\sigma_{j,t}^{2}},
     \]
     which for \(n=1\) is exactly the historical scalar mean-variance rule.
 
@@ -741,7 +758,8 @@
     even after a non-hold technical signal if the valuation quote lies inside the
     hold-tolerance band.
 
-    Its expected excess return on asset \(j\) is
+    Its expected excess return on asset \(j\) over the chartist forecast horizon
+    \(\mathcal H^C\) is
     \[
         \hat r_{i,j,t}^{C}=
         \begin{cases}
@@ -765,7 +783,7 @@
             \mathcal{T}_i\!\left(\hat r_{i,j,t}^{C},\sigma_{j,t};\,\varrho_{i,j,t}\right), & \text{agent } i \text{ is assigned CPT},
         \end{cases}
         \\
-        \mu_{i,j,t}^{C}&=r_f+\breve r_{i,j,t}^{C}.
+        \mu_{i,j,t}^{C}&=r_f+\breve r_{i,j,t}^{C}/\mathcal H^{C}.
     \end{align*}
 
     The chartist target weight in every asset is bounded by
@@ -829,7 +847,9 @@
     active order path are governed by the valuation quote and hold-tolerance
     condition in Section~\ref{sec:valuation_quotes}.
 
-    Its expected excess return is
+    Its expected excess return over the fundamentalist forecast horizon
+    \(\mathcal H^F\), the number of steps over which the mispricing is expected
+    to close, is
     \begin{align*}
         \hat r_{i,j,t}^{F}&=\clip(m_{j,t};-1,1),\\
         \breve r_{i,j,t}^{F}&=
@@ -838,7 +858,7 @@
             \mathcal{T}_i\!\left(\hat r_{i,j,t}^{F},\sigma_{j,t};\,\varrho_{i,j,t}\right), & \text{agent } i \text{ is assigned CPT},
         \end{cases}
         \\
-        \mu_{i,j,t}^{F}&=r_f+\breve r_{i,j,t}^{F}.
+        \mu_{i,j,t}^{F}&=r_f+\breve r_{i,j,t}^{F}/\mathcal H^{F}.
     \end{align*}
     The reference log return \(\varrho_{i,j,t}\) is resolved by the configured
     agent-specific reference-point rule in Section~\ref{sec:cpt_reference_points}.
@@ -1074,6 +1094,11 @@
     \begin{equation}
         \tilde P_{i,j,t}^{F}=F_{j,t}\exp\!\left(\kappa o_{i,t}\right).
     \end{equation}
+    Both valuation quotes are the price the agent expects at the end of its
+    forecast horizon: the chartist's uses the whole horizon return
+    \(\breve r_{i,j,t}^{C}\), and the fundamentalist's is the fundamental value
+    the mispricing is expected to close to. The horizon therefore changes
+    position sizes (Section~\ref{sec:allocation}) but not quotes.
     For noise traders, the stochastic quote
     \(\tilde P_{i,j,t}^{N}=P_{j,t}\exp(\zeta_{i,t}^{\mathrm{clip}})\) is generated
     directly from the random-liquidity belief shock rather than from the
@@ -1730,7 +1755,9 @@
     CPT is implemented as a behavioural preference transform applied to the
     strategy-specific expected excess return. It does not create a separate trading
     signal. Instead, it converts the baseline forecast \(\hat r_{i,j,t}\) into the
-    allocation input \(\breve r_{i,j,t}\) for the seeded fraction
+    allocation input \(\breve r_{i,j,t}\), the certainty-equivalent premium of
+    holding the asset for one step over holding cash
+    (Section~\ref{sec:cpt_premium}), for the seeded fraction
     \(\varphi_{\mathrm{CPT}}\) of agents assigned to CPT\@. Agents not assigned to
     CPT use \(\breve r_{i,j,t}=\hat r_{i,j,t}\). This follows the
     behavioural-finance interpretation of Prospect Theory and rank-dependent
@@ -1767,7 +1794,11 @@
     retains the curvature values \(\alpha^G=\alpha^L=0.88\) but treats the
     population loss-aversion level and its cross-sectional dispersion as
     calibrated parameters, so the configured \(\lambda\) is set by the
-    calibration harness rather than fixed at the canonical value.
+    calibration harness rather than fixed at the canonical value. Because the
+    transform reports a certainty equivalent in log-return units and its
+    scenario ladder is moment matched (Sections~\ref{sec:cpt_scenarios}
+    and~\ref{sec:cpt_premium}), a calibrated \(\lambda\) is directly comparable
+    with the empirical values; values calibrated before that correction are not.
 
     \subsection{Probability Weighting}
 
@@ -1820,47 +1851,158 @@
     This rank-dependent construction is important for crisis experiments because it
     allows adverse tail scenarios to receive disproportionate decision weight.
 
-    \subsection{Return Scenario Construction}
+    \subsection{Return Scenario Construction}\label{sec:cpt_scenarios}
+
+    CPT values the trade over the agent's forecast horizon \(\mathcal H_i\)
+    (Section~\ref{sec:allocation}), which is therefore also its evaluation period
+    in the sense of Benartzi and Thaler. Over that horizon the forecast
+    \(\hat r_{i,j,t}\) is the expected excess log return, cash earns
+    \(\mathcal H_i\ell_f\), and, with independent per-step returns, the volatility
+    is
+    \[
+        \sigma_{i,j,t}^{\mathcal H}=\sigma_{j,t}\sqrt{\mathcal H_i}.
+    \]
+    Judging the trade over a single step instead would set a small per-step
+    forecast against a full step of volatility, and loss aversion would then rule
+    out holding the asset at almost any plausible mispricing; this is Benartzi and
+    Thaler's myopic loss aversion. With \(\mathcal H_i=1\) everything below
+    reduces to the one-step valuation.
 
     Let \(n_{\mathrm{CPT}}=2H+1\) be an odd integer greater than or equal to
-    three. For scenario index \(s=0,\ldots,2H\), define the binomial probability
+    three. The ladder represents the agent's subjective distribution of the log
+    return over the horizon, centred on \(\mathcal H_i\ell_f+\hat r_{i,j,t}\) with
+    standard deviation \(\sigma_{i,j,t}^{\mathcal H}\). For scenario index
+    \(s=0,\ldots,2H\), define the binomial probability and the moment-matched step
     \[
         p_s=\binom{2H}{s}2^{-2H},
+        \qquad
+        \Delta_{i,j,t}=\frac{2\,\clip(\sigma_{i,j,t}^{\mathcal H};0,0.95)}{\sqrt{n_{\mathrm{CPT}}-1}},
     \]
     and the subjective return scenario
     \[
         R_{i,j,t,s}^{\mathrm{sc}}
         =
         \clip\!\left(
-                   \clip(\hat r_{i,j,t};-0.95,0.95)
-                   +(s-H)\clip(\sigma_{j,t};0,0.95);
+                   \mathcal H_i\ell_f+\clip(\hat r_{i,j,t};-0.95,0.95)
+                   +(s-H)\,\Delta_{i,j,t};
             -0.95,0.95
         \right).
     \]
+    Because \(\operatorname{Var}(s-H)=H/2\), in the absence of clipping the
+    ladder has mean \(\mathcal H_i\ell_f+\hat r_{i,j,t}\) and variance
+    \((\sigma_{i,j,t}^{\mathcal H})^2\) for every \(n_{\mathrm{CPT}}\), and it
+    converges in distribution to the normal distribution with these moments as
+    \(n_{\mathrm{CPT}}\) grows (de Moivre--Laplace). This is the variance-matching
+    rule of the Cox--Ross--Rubinstein binomial tree. The scenario count therefore
+    controls only the resolution of the tails, never the risk the agent
+    perceives. An unscaled step \(\Delta=\sigma\) would give the perceived
+    variance \(\sigma^2(n_{\mathrm{CPT}}-1)/4\), letting a numerical setting act as
+    a preference parameter. When \(n_{\mathrm{CPT}}=3\), the scenario
+    probabilities are \(\{0.25,0.50,0.25\}\), placed at
+    \(\mathcal H_i\ell_f+\hat r_{i,j,t}\pm\sqrt2\,\sigma_{i,j,t}^{\mathcal H}\) and
+    \(\mathcal H_i\ell_f+\hat r_{i,j,t}\).
+
     The corresponding gain or loss is the scenario return measured relative to the
     reference log return, so it is itself a return:
     \[
         x_{i,j,t,s}=R_{i,j,t,s}^{\mathrm{sc}}-\varrho_{i,j,t}.
     \]
-    The prospect-adjusted excess return is then the CPT value itself; no division
-    by a price or wealth scale is required, because the valuation never left
-    return space:
+
+    \subsection{Certainty Equivalent and Comparison with Cash}\label{sec:cpt_premium}
+
+    CPT is a theory of choice between prospects, so the value of holding the asset
+    is meaningful only against the agent's alternative. Over the horizon the
+    alternative is to sell and hold cash, whose sure outcome relative to the same
+    reference realises today's paper gain or loss:
+    \[
+        x_{i,j,t}^{\mathrm{c}}=\mathcal H_i\ell_f-\varrho_{i,j,t}.
+    \]
+    Applying the value functional of the previous subsections to the scenario
+    ladder and to the sure outcome gives
+    \[
+        \mathcal{V}_{i,j,t}^{\mathrm{hold}}
+        =
+        \mathcal{V}\bigl(\{(x_{i,j,t,s},p_s)\}_{s=0}^{2H}\bigr),
+        \qquad
+        \mathcal{V}_{i,j,t}^{\mathrm{cash}}=v_i\bigl(x_{i,j,t}^{\mathrm{c}}\bigr),
+    \]
+    the latter because a sure outcome carries the single decision weight
+    \(w(1)-w(0)=1\). Prospect values are measured in value units rather than
+    returns, so both are mapped back through the inverse value function
+    \[
+        v_i^{-1}(y)=
+        \begin{cases}
+            y^{1/\alpha_i^G}, & y\ge 0,\\[0.8ex]
+            -\left(-y/\lambda_i\right)^{1/\alpha_i^L}, & y<0,
+        \end{cases}
+    \]
+    which yields each option's certainty equivalent: the sure log return over the
+    horizon, measured from today's price, that the agent values as highly as the
+    option,
+    \[
+        \mathrm{CE}_{i,j,t}^{\mathrm{hold}}
+        =\varrho_{i,j,t}+v_i^{-1}\bigl(\mathcal{V}_{i,j,t}^{\mathrm{hold}}\bigr),
+        \qquad
+        \mathrm{CE}_{i,j,t}^{\mathrm{cash}}
+        =\varrho_{i,j,t}+v_i^{-1}\bigl(\mathcal{V}_{i,j,t}^{\mathrm{cash}}\bigr)=\mathcal H_i\ell_f.
+    \]
+    Tversky and Kahneman measured CPT preferences through such certainty
+    equivalents. The prospect-adjusted excess return is the certainty-equivalent
+    premium of holding over cash,
     \[
         \mathcal{T}_i(\hat r_{i,j,t},\sigma_{j,t};\varrho_{i,j,t})
         =
-        \mathcal{V}_{i,j,t},
-        \qquad
+        \mathrm{CE}_{i,j,t}^{\mathrm{hold}}-\mathrm{CE}_{i,j,t}^{\mathrm{cash}}
+        =
+        v_i^{-1}\bigl(\mathcal{V}_{i,j,t}^{\mathrm{hold}}\bigr)+\varrho_{i,j,t}-\mathcal H_i\ell_f,
+    \]
+    \[
         \breve r_{i,j,t}
         =
         \clip\!\left(
                    \mathcal{T}_i(\hat r_{i,j,t},\sigma_{j,t};\varrho_{i,j,t});
             -1,1
-        \right).
+        \right),
     \]
-    When \(n_{\mathrm{CPT}}=3\), the scenario probabilities are
-    \(\{0.25,0.50,0.25\}\). Larger odd values such as \(5\), \(7\), or \(9\)
-    preserve the symmetric central forecast while giving a richer subjective tail
-    structure.
+    a return over the horizon, which the allocation rule of
+    Section~\ref{sec:allocation} divides by \(\mathcal H_i\).
+
+    The construction has four properties, each pinned by a unit test. First,
+    \(v_i\) is strictly increasing, so \(\breve r_{i,j,t}>0\) exactly when
+    \(\mathcal{V}_{i,j,t}^{\mathrm{hold}}>\mathcal{V}_{i,j,t}^{\mathrm{cash}}\):
+    the sign of the premium is the hold-versus-sell choice. Second, a riskless
+    forecast passes through unchanged: \(\sigma_{j,t}=0\) gives
+    \(\breve r_{i,j,t}=\hat r_{i,j,t}\) for any reference point, so CPT alters how
+    agents treat risk rather than how they read a sure return. Third, with
+    \(\alpha_i^G=\alpha_i^L\) the premium is homogeneous of degree one in
+    \((\hat r,\sigma^{\mathcal H},\varrho,\mathcal H_i\ell_f)\), so it is measured
+    in return units commensurate with the covariance in the Markowitz rule and
+    does not depend on the time unit of a step. Fourth, if a paper loss or gain of
+    size \(\delta\) satisfies
+    \[
+        \delta>|\mathcal H_i\ell_f+\hat r_{i,j,t}|+\sigma_{i,j,t}^{\mathcal H}\sqrt{n_{\mathrm{CPT}}-1},
+    \]
+    every scenario is a loss when \(\varrho_{i,j,t}=+\delta\) and a gain when
+    \(\varrho_{i,j,t}=-\delta\). The convex loss branch then makes the agent risk
+    seeking and the concave gain branch risk averse, the reflection effect of
+    Kahneman and Tversky, so
+    \[
+        \mathcal{T}_i(\hat r_{i,j,t},\sigma_{j,t};+\delta)
+        >\hat r_{i,j,t}>
+        \mathcal{T}_i(\hat r_{i,j,t},\sigma_{j,t};-\delta).
+    \]
+    An agent holding a loser is therefore more willing to keep it than an agent
+    holding a winner, the direction of the disposition effect. When the gamble
+    straddles the reference the ranking is not guaranteed, consistent with the
+    finding that prospect theory predicts the disposition effect only
+    conditionally.
+
+    The premium enters the mean-variance rule of Section~\ref{sec:allocation} as
+    an expected excess return over the horizon, so risk is priced twice: by CPT
+    through the premium and by the allocation rule through \(\rho_i\Sigma_t\).
+    This hybrid is a deliberate simplification. Optimising the CPT value directly
+    over portfolio weights is not used because, with power value functions, that
+    problem is ill-posed or yields corner solutions.
 
     \subsection{Agent-Specific Reference Points}\label{sec:cpt_reference_points}
 

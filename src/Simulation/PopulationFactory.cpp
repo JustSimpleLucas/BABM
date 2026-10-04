@@ -124,6 +124,7 @@ std::unique_ptr<TradingStrategy> createProtagonistStrategy(const SimulationConfi
         settings.volatilityWindow = protagonist.volatilityWindow;
         settings.maxShortWeight = protagonist.maxShortWeight;
         settings.maxGrossExposure = protagonist.allocation.maxGrossExposure;
+        settings.forecastHorizon = protagonist.forecastHorizon;
         settings.riskFreeRate = config.riskFreeRate;
         settings.referencePointMode = config.control.referencePointMode;
         settings.referenceMovingAverageWindow = config.control.referenceMovingAverageWindow;
@@ -152,6 +153,7 @@ std::unique_ptr<TradingStrategy> createProtagonistStrategy(const SimulationConfi
     parameters.referencePointMode = config.control.referencePointMode;
     parameters.referenceMovingAverageWindow = config.control.referenceMovingAverageWindow;
     parameters.maxGrossExposure = protagonist.allocation.maxGrossExposure;
+    parameters.forecastHorizon = protagonist.forecastHorizon;
     return std::make_unique<FundamentalistStrategy>(parameters);
 }
 
@@ -184,6 +186,7 @@ SimulationPopulation PopulationFactory::createPopulation(const SimulationConfig&
     fundamentalistParameters.referenceMovingAverageWindow =
         config.control.referenceMovingAverageWindow;
     fundamentalistParameters.maxGrossExposure = config.fundamentalist.allocation.maxGrossExposure;
+    fundamentalistParameters.forecastHorizon = config.fundamentalist.forecastHorizon;
     const AssetAllocationLine chartistAllocation(config.chartist.allocation.riskAversion,
                                                  config.chartist.allocation.minRiskyWeight,
                                                  config.chartist.allocation.maxRiskyWeight);

@@ -54,6 +54,15 @@ struct ChartistStrategyParameters {
 
     /** Cap on portfolio gross exposure sum_j |w_j| in the multi-asset rule. */
     double maxGrossExposure{1.0};
+
+    /**
+     * Steps over which the technical forecast is expected to play out (at least one).
+     *
+     * The forecast is the log return expected over this horizon: the valuation
+     * quote is the price expected at the horizon, sizing uses the forecast
+     * divided by the horizon, and CPT values the gamble over the horizon.
+     */
+    double forecastHorizon{1.0};
 };
 
 /**
@@ -132,10 +141,11 @@ class ChartistStrategy : public TradingStrategy {
                                                       std::size_t forecastAssetIndex) const = 0;
 
   private:
-    [[nodiscard]] double prospectAdjustedExcessReturn(Agent& agent, const Market& market,
-                                                      std::size_t forecastAssetIndex,
-                                                      double expectedExcessReturn,
-                                                      double volatility, double marketPrice) const;
+    /** Returns the (CPT-adjusted) excess log return expected over the forecast horizon. */
+    [[nodiscard]] double prospectAdjustedHorizonReturn(Agent& agent, const Market& market,
+                                                       std::size_t forecastAssetIndex,
+                                                       double expectedExcessReturn,
+                                                       double volatility, double marketPrice) const;
 
     std::size_t assetIndex_;
     AssetAllocationLine allocationLine_;
@@ -145,6 +155,7 @@ class ChartistStrategy : public TradingStrategy {
     ProspectReferencePointMode referencePointMode_;
     std::size_t referenceMovingAverageWindow_;
     double maxGrossExposure_{1.0};
+    double forecastHorizon_{1.0};
 };
 
 } // namespace abm

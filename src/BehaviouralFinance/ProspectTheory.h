@@ -19,7 +19,8 @@ enum class ProspectDomain : std::uint8_t {
  * One possible outcome in a Prospect Theory valuation.
  *
  * relativeOutcome is already measured relative to the agent's reference point.
- * For example, a value of -2.0 means a loss of two price or wealth units.
+ * In the return-space transform it is a log return, so -0.02 is a loss of two
+ * per cent relative to the reference.
  */
 struct ProspectOutcome {
     double relativeOutcome{0.0};
@@ -47,16 +48,21 @@ struct ProspectTheoryParameters {
 /**
  * Forecast input evaluated under Prospect Theory.
  *
- * All fields are expressed in return units. referenceLogReturn is the
- * reference-point anchor mapped into return space (for example the log ratio
- * of the average entry price to the current price); scenario returns are
- * measured as gains or losses relative to it, which keeps the valuation
- * invariant to the price or wealth level of the underlying asset.
+ * All fields are expressed in one-step log-return units. expectedReturn is the
+ * forecast excess return and volatility its standard deviation.
+ * referenceLogReturn is the reference-point anchor mapped into return space
+ * (for example the log ratio of the average entry price to the current price),
+ * so a positive value is a paper loss and a negative value a paper gain;
+ * scenario returns are measured as gains or losses relative to it, which keeps
+ * the valuation invariant to the price or wealth level of the underlying asset.
+ * riskFreeLogReturn, log(1 + r_f), is the sure return of the cash alternative
+ * that the asset is compared with.
  */
 struct ProspectReturnForecast {
     double expectedReturn{0.0};
     double volatility{0.0};
     double referenceLogReturn{0.0};
+    double riskFreeLogReturn{0.0};
 };
 
 /**
@@ -73,9 +79,10 @@ struct ProspectReturnForecast {
  * Gains are ranked from best to worst and losses from worst to best, so the
  * valuation can overweight distribution tails in the way proposed by
  * Tversky and Kahneman's Cumulative Prospect Theory. The helper
- * prospectAdjustedReturn converts a return forecast into transparent return
- * scenarios so agent strategies can use the score without duplicating CPT
- * equations.
+ * prospectAdjustedReturn turns a return forecast into a moment-matched
+ * scenario ladder, values holding the asset against holding cash, and reports
+ * the difference as a certainty-equivalent premium in log-return units, so
+ * agent strategies can use it without duplicating CPT equations.
  */
 class ProspectTheory {
   public:
@@ -109,6 +116,15 @@ class ProspectTheory {
     /** Evaluates the CPT value function v(x). */
     [[nodiscard]] double valueFunction(double relativeOutcome) const;
 
+    /**
+     * Evaluates the inverse value function v^-1(y).
+     *
+     * Returns the sure gain or loss whose value equals the argument. Applied to
+     * the value of a prospect, it gives the prospect's certainty equivalent
+     * relative to the reference point.
+     */
+    [[nodiscard]] double inverseValueFunction(double value) const;
+
     /** Evaluates the probability weighting function w(p) for a gain/loss domain. */
     [[nodiscard]] double probabilityWeight(double probability, ProspectDomain domain) const;
 
@@ -116,20 +132,31 @@ class ProspectTheory {
     [[nodiscard]] double calculateProspectValue(const std::vector<ProspectOutcome>& outcomes) const;
 
     /**
-     * Converts a return forecast into a prospect-adjusted return.
+     * Builds the subjective one-step return scenarios of holding the asset.
      *
      * The odd scenario count creates symmetric adverse and favourable shocks
-     * around the expected return. Binomial probabilities reproduce the familiar
-     * three-scenario weights {0.25, 0.50, 0.25} when scenarioCount is three.
-     * Scenario outcomes are gains or losses in return space relative to the
-     * reference log return, so identical forecasts produce identical adjusted
-     * returns regardless of the asset's price level.
+     * around the risk-free plus expected return. The binomial ladder is moment
+     * matched: its mean is riskFreeLogReturn + expectedReturn and its variance
+     * is volatility^2 for every scenario count, so the count controls only the
+     * resolution of the tails. Outcomes are returned as gains or losses
+     * relative to the reference log return, with their probabilities.
+     */
+    [[nodiscard]] std::vector<ProspectOutcome>
+    returnScenarios(const ProspectReturnForecast& forecast) const;
+
+    /**
+     * Converts a return forecast into a prospect-adjusted excess return.
+     *
+     * The result is the certainty-equivalent premium of holding the asset for
+     * one step over holding cash, in log-return units:
+     * v^-1(V_hold) + referenceLogReturn - riskFreeLogReturn. It is positive
+     * exactly when CPT prefers holding to selling, equals the forecast when
+     * volatility is zero, and is identical for identical forecasts whatever
+     * the asset's price level.
      */
     [[nodiscard]] double prospectAdjustedReturn(const ProspectReturnForecast& forecast) const;
 
   private:
-    [[nodiscard]] double returnScenarioProspectValue(const ProspectReturnForecast& forecast) const;
-
     double lossAversion_;
     double curvatureForGain_;
     double curvatureForLoss_;

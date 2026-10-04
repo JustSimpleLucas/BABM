@@ -50,6 +50,8 @@ FundamentalistStrategy::FundamentalistStrategy(const FundamentalistStrategyParam
     setRiskFreeRate(parameters.riskFreeRate);
     requireStrictlyPositive(parameters.maxGrossExposure, "Max gross exposure");
     maxGrossExposure_ = parameters.maxGrossExposure;
+    requireAtLeast(parameters.forecastHorizon, 1.0, "Forecast horizon");
+    forecastHorizon_ = parameters.forecastHorizon;
 }
 
 std::string FundamentalistStrategy::strategyType() const {
@@ -123,9 +125,9 @@ std::optional<Order> FundamentalistStrategy::generateOrder(Agent& agent, const M
         strategy_detail::boundedLogReturnVolatility(market, assetIndex_, volatilityWindow_);
     const ProspectAdjustmentInputs prospectInputs{forecastExcessReturn(mispricingValue), sigma,
                                                   prices.marketPrice};
-    const double behaviouralExcessReturn =
-        prospectAdjustedExcessReturn(agent, market, 0, prospectInputs);
-    const double mu = riskFreeRate_ + behaviouralExcessReturn;
+    const double horizonExcessReturn =
+        prospectAdjustedHorizonReturn(agent, market, 0, prospectInputs);
+    const double mu = riskFreeRate_ + (horizonExcessReturn / forecastHorizon_);
     const double riskyWeight = allocationLine_.optimalRiskyWeight(mu, riskFreeRate_, sigma);
 
     const double wealth = agent.getWealth();
@@ -288,10 +290,9 @@ FundamentalistStrategy::buildValuationOrderIntent(const Agent& agent,
     return {{quote->type, quote->price, quantity}};
 }
 
-double
-FundamentalistStrategy::prospectAdjustedExcessReturn(Agent& agent, const Market& market,
-                                                     std::size_t assetIndex,
-                                                     const ProspectAdjustmentInputs& inputs) const {
+double FundamentalistStrategy::prospectAdjustedHorizonReturn(
+    Agent& agent, const Market& market, std::size_t assetIndex,
+    const ProspectAdjustmentInputs& inputs) const {
     if (!agent.usesProspectTheory()) {
         return inputs.expectedExcessReturn;
     }
@@ -300,8 +301,17 @@ FundamentalistStrategy::prospectAdjustedExcessReturn(Agent& agent, const Market&
         agent, market, assetIndex, referencePointMode_, referenceMovingAverageWindow_,
         inputs.marketPrice);
 
-    const ProspectReturnForecast forecast{inputs.expectedExcessReturn, inputs.volatility,
-                                          referenceLogReturn};
+    /*
+     * The mispricing is the log return expected over the forecast horizon, so
+     * CPT values the gamble over that same horizon, the agent's evaluation
+     * period in the sense of Benartzi and Thaler (1995). Volatility grows with
+     * the square root of the horizon (independent per-step returns), and cash,
+     * the alternative the asset is valued against, earns the risk-free log
+     * return for every step of it.
+     */
+    const ProspectReturnForecast forecast{
+        inputs.expectedExcessReturn, inputs.volatility * std::sqrt(forecastHorizon_),
+        referenceLogReturn, forecastHorizon_ * std::log1p(riskFreeRate_)};
     return std::clamp(agent.prospectTheory().prospectAdjustedReturn(forecast), -1.0, 1.0);
 }
 
@@ -344,8 +354,16 @@ std::vector<Order> FundamentalistStrategy::generateOrders(Agent& agent, const Ma
                                                 kMinimumVolatility * kMinimumVolatility));
         const ProspectAdjustmentInputs prospectInputs{
             forecastExcessReturn(mispricing(priceInputs[assetIndex])), sigma, prices[assetIndex]};
+        /*
+         * The Markowitz rule needs a per-step expected return, commensurate
+         * with the per-step covariance (Merton, 1969). The mispricing is
+         * expected to close over the forecast horizon, so it is spread over
+         * that horizon (Chiarella, Iori and Perello, 2009); treating the whole
+         * gap as a one-step return would push nearly every weight to its bound.
+         */
         excessReturns[assetIndex] =
-            prospectAdjustedExcessReturn(agent, market, assetIndex, prospectInputs);
+            prospectAdjustedHorizonReturn(agent, market, assetIndex, prospectInputs) /
+            forecastHorizon_;
     }
 
     const std::vector<AssetWeightBounds> bounds(

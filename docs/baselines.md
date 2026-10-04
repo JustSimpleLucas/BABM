@@ -46,6 +46,55 @@ with fundamentalists/chartists take the optimiser path: verified live by
 observing distinct trajectories under `fundamentalist_max_gross_exposure`
 values of 1.0 versus 0.1 on a 50/50/20 mixed population.
 
+## CPT certainty-equivalent correction (October 2026)
+
+Three corrections to `ProspectTheory::prospectAdjustedReturn`, specified in the
+CPT section of `docs/formalism.tex`:
+
+- **Scaled scenario step.** The binomial ladder step is `2 sigma / sqrt(n - 1)`
+  instead of `sigma`, so the ladder variance is `sigma^2` for every
+  `control_prospect_scenario_count`. Previously the perceived variance was
+  `sigma^2 (n - 1) / 4`: three times too large at the shipped `n = 13`.
+- **Certainty equivalent.** The prospect value is mapped back through the
+  inverse value function, so the adjustment is in log-return units rather than
+  value units. A riskless forecast now passes through unchanged.
+- **Comparison with cash.** Holding the asset is valued against the sure
+  outcome of holding cash, `log(1 + r_f) - r_ref`, instead of against zero.
+  Previously an agent with a paper loss sold and one with a paper gain bought
+  more, the reverse of the disposition effect.
+
+Every trajectory containing CPT agents changes. Agents without CPT are
+untouched: the CPT-off version of the trade-ledger test fixture produces the
+same trades, volume, and final price before and after the change. At the
+break-even point the old ladder made `control_loss_aversion = 3.30` behave like
+`lambda ~ 8.7` in the corrected model, so loss-aversion values calibrated
+before this change are not comparable with the literature and must be
+recalibrated.
+
+One test fixture changed as a consequence. The trade-ledger toggle test used to
+trade only because CPT chartists over-reacted to tiny forecasts; with the
+corrected premium its all-CPT, noise-free population correctly declines small
+positive forecasts and no buyer appears, so the fixture now includes noise
+traders to supply order flow.
+
+## Forecast horizon (October 2026)
+
+`fundamentalist_forecast_horizon`, `chartist_forecast_horizon`, and
+`protagonist_forecast_horizon` set the number of steps over which an agent
+expects its forecast to play out. Sizing divides the forecast by the horizon,
+and CPT values the gamble over it (volatility scaled by the square root of the
+horizon, cash earning the horizon's risk-free return); valuation quotes are
+unchanged. The formal statement is in the Portfolio Allocation and CPT sections
+of `docs/formalism.tex`.
+
+A horizon of 1 reproduces the previous rule exactly. With the shipped
+`config/simulation.cfg` at 3 000 steps, the new binary at horizon 1 and the
+binary built just before this change produce byte-identical
+`asset_timeseries.csv`, `step_timeseries.csv`, `agents_final.csv`,
+`trade_ledger.csv`, `protagonist_timeseries.csv`, and `stylised_facts.csv`.
+The config JSON `schema_version` moved from 8 to 9 because the three horizons
+are now serialised, so config hashes change even when the horizons are 1.
+
 ## Two-asset example
 
 `config/examples/two_asset.cfg` declares two risky assets that share the same

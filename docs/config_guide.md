@@ -119,6 +119,9 @@ reasonably sample across the four technical rules; an identified individual
 whose rule is not known until the seed is drawn cannot be described in a
 write-up.
 
+`protagonist_forecast_horizon` plays the role of the population's forecast
+horizon for his fundamentalist or chartist rule.
+
 Only the rule block matching `protagonist_strategy` is read when his strategy is
 built, but **every** value is validated regardless. A mistyped threshold
 belonging to an unselected rule should fail the run rather than sit unnoticed
@@ -183,8 +186,22 @@ The reference point is the anchor against which gains and losses are judged, and
 
 `control_reference_point` is the fallback scale used when an agent has no
 personal entry price yet. `control_prospect_scenario_count` is the odd number of
-subjective return scenarios CPT values: 3 preserves the original simple
-distribution, and higher counts give richer tails.
+scenarios in the binomial ladder that stands for the agent's belief about next
+step's return. The ladder is moment-matched: its variance equals the estimated
+volatility squared for every count, so the count sets only how finely the tails
+are resolved, never the risk the agent perceives. Results settle by about 13
+scenarios (the shipped value); 3 is a coarse approximation.
+
+What CPT contributes to an agent's forecast is a premium: the certainty-equivalent
+return of holding the asset for one more step minus that of holding cash, both
+judged against the agent's reference point. A riskless forecast passes through
+unchanged. Near the reference point risk lowers the premium (loss aversion); in a
+paper loss it raises it (risk seeking in losses), and in a paper gain it lowers it
+(risk aversion in gains), which is why CPT agents keep losers and realise winners.
+Because the premium is in log-return units, loss-aversion values are comparable
+with the empirical literature (Tversky and Kahneman, 1992, report about 2.25).
+The shipped `control_loss_aversion` was calibrated before this certainty-equivalent
+correction (October 2026) and should be recalibrated before it is interpreted.
 
 ## Social influence
 
@@ -232,6 +249,23 @@ MA-crossover rule. `chartist_breakout_window` is a Donchian-style window —
 breakout chartists compare the latest price with the previous window's high and
 low, and equality counts as no breakout. `chartist_strategy_mode` selects the
 rule, and `random` samples all four with the configured deterministic seed.
+
+**Forecast horizons.** `fundamentalist_forecast_horizon` and
+`chartist_forecast_horizon` set how many steps an agent expects its forecast to
+take to play out. A fundamentalist's forecast is the whole log gap between
+fundamental and price; a chartist's is its rule's signal. Position sizing
+divides the forecast by the horizon, which gives a per-step expected return
+measured in the same units as the per-step covariance of the Markowitz rule.
+When CPT is on, it judges the trade over the same horizon, with volatility
+scaled by the square root of the horizon. The valuation quotes do not change:
+they remain the price the agent expects at the horizon.
+
+With a horizon of 1, a whole mispricing is treated as a one-step return, so
+almost every weight sits at its bound and risk aversion and the covariance have
+little effect. Longer horizons make positions interior. Fundamentalist signals
+are an order of magnitude larger than chartist signals in this model, which is
+why the two have separate horizons. The shipped values are provisional until
+calibrated, and both keys are in the calibration search space.
 
 Note that `chartist_min_risky_weight = -0.30` matches `chartist_max_short_weight`,
 so the effective sizing floor `max(min_risky_weight, -max_short_weight)` stays

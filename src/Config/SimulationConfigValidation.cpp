@@ -337,6 +337,9 @@ void validateFundamentalistConfig(const FundamentalistConfig& fundamentalist) {
     requirePositiveSize(
         fundamentalist.volatilityWindow,
         named("Fundamentalist volatility window", "fundamentalist_volatility_window").c_str());
+    requireAtLeast(
+        fundamentalist.forecastHorizon, 1.0,
+        named("Fundamentalist forecast horizon", "fundamentalist_forecast_horizon").c_str());
     validateAllocationConfig(fundamentalist.allocation, "Fundamentalist", "fundamentalist");
 }
 
@@ -352,6 +355,8 @@ void validateChartistConfig(const ChartistConfig& chartist) {
                         named("Chartist breakout window", "chartist_breakout_window").c_str());
     requirePositiveSize(chartist.volatilityWindow,
                         named("Chartist volatility window", "chartist_volatility_window").c_str());
+    requireAtLeast(chartist.forecastHorizon, 1.0,
+                   named("Chartist forecast horizon", "chartist_forecast_horizon").c_str());
     if (chartist.shortWindow > chartist.longWindow) {
         throw std::invalid_argument("Chartist short window (chartist_short_window) = " +
                                     std::to_string(chartist.shortWindow) +
@@ -427,6 +432,8 @@ void validateProtagonistConfig(const ProtagonistConfig& protagonist) {
     requirePositiveSize(
         protagonist.volatilityWindow,
         named("Protagonist volatility window", "protagonist_volatility_window").c_str());
+    requireAtLeast(protagonist.forecastHorizon, 1.0,
+                   named("Protagonist forecast horizon", "protagonist_forecast_horizon").c_str());
 
     requirePositiveSize(protagonist.shortWindow,
                         named("Protagonist short window", "protagonist_short_window").c_str());

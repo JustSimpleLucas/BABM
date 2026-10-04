@@ -78,6 +78,10 @@ bool applyProtagonistSetting(RuntimeConfig& config, const ConfigSetting& setting
         protagonist.volatilityWindow = parseSizeValue(setting);
         return true;
     }
+    if (key == "protagonist_forecast_horizon") {
+        protagonist.forecastHorizon = parseDoubleValue(setting);
+        return true;
+    }
     if (key == "protagonist_short_window") {
         protagonist.shortWindow = parseSizeValue(setting);
         return true;

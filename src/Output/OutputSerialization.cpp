@@ -122,7 +122,7 @@ std::string buildNormalizedConfigJson(const SimulationConfig& config) {
     std::ostringstream out;
     out << std::fixed << std::setprecision(10);
     out << "{\n";
-    out << R"(  "schema_version": 8,)" << '\n';
+    out << R"(  "schema_version": 9,)" << '\n';
     out << R"(  "assets": {)" << '\n';
     out << R"(    "primary": ")" << jsonEscape(config.assetName()) << R"(",)" << '\n';
     out << R"(    "covariance_window": )" << config.covarianceWindow << ",\n";
@@ -234,6 +234,7 @@ std::string buildNormalizedConfigJson(const SimulationConfig& config) {
     out << R"(    "stop_loss_threshold": )" << config.fundamentalist.stopLossThreshold << ",\n";
     out << R"(    "take_profit_threshold": )" << config.fundamentalist.takeProfitThreshold << ",\n";
     out << R"(    "volatility_window": )" << config.fundamentalist.volatilityWindow << ",\n";
+    out << R"(    "forecast_horizon": )" << config.fundamentalist.forecastHorizon << ",\n";
     out << R"(    "risk_aversion": )" << config.fundamentalist.allocation.riskAversion << ",\n";
     out << R"(    "min_risky_weight": )" << config.fundamentalist.allocation.minRiskyWeight
         << ",\n";
@@ -246,6 +247,7 @@ std::string buildNormalizedConfigJson(const SimulationConfig& config) {
         << ",\n";
     out << R"(    "breakout_window": )" << config.chartist.breakoutWindow << ",\n";
     out << R"(    "volatility_window": )" << config.chartist.volatilityWindow << ",\n";
+    out << R"(    "forecast_horizon": )" << config.chartist.forecastHorizon << ",\n";
     out << R"(    "max_short_weight": )" << config.chartist.maxShortWeight << ",\n";
     out << R"(    "risk_aversion": )" << config.chartist.allocation.riskAversion << ",\n";
     out << R"(    "min_risky_weight": )" << config.chartist.allocation.minRiskyWeight << ",\n";
@@ -287,6 +289,7 @@ std::string buildNormalizedConfigJson(const SimulationConfig& config) {
     out << R"(    "stop_loss_threshold": )" << config.protagonist.stopLossThreshold << ",\n";
     out << R"(    "take_profit_threshold": )" << config.protagonist.takeProfitThreshold << ",\n";
     out << R"(    "volatility_window": )" << config.protagonist.volatilityWindow << ",\n";
+    out << R"(    "forecast_horizon": )" << config.protagonist.forecastHorizon << ",\n";
     out << R"(    "short_window": )" << config.protagonist.shortWindow << ",\n";
     out << R"(    "long_window": )" << config.protagonist.longWindow << ",\n";
     out << R"(    "momentum_signal_threshold": )" << config.protagonist.momentumSignalThreshold

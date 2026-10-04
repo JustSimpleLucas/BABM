@@ -30,6 +30,33 @@ void testSimulationConfigRejectsInvalidAllocationBounds(int& failures) {
         "config validation should reject invalid chartist allocation bounds", failures);
 }
 
+/*
+ * A forecast horizon is the number of steps over which an agent expects its
+ * forecast to play out; it cannot be shorter than the single step on which the
+ * trade is decided, so values below one are rejected for every owner.
+ */
+void testSimulationConfigRejectsForecastHorizonBelowOneStep(int& failures) {
+    abm::SimulationConfig fundamentalistConfig = abm::test::deterministicSmokeConfig();
+    fundamentalistConfig.fundamentalist.forecastHorizon = 0.5;
+    abm::test::expectInvalidConfigContaining(
+        fundamentalistConfig, "fundamentalist_forecast_horizon",
+        "config validation should reject a fundamentalist forecast horizon below one step",
+        failures);
+
+    abm::SimulationConfig chartistConfig = abm::test::deterministicSmokeConfig();
+    chartistConfig.chartist.forecastHorizon = 0.0;
+    abm::test::expectInvalidConfigContaining(
+        chartistConfig, "chartist_forecast_horizon",
+        "config validation should reject a chartist forecast horizon below one step", failures);
+
+    abm::SimulationConfig protagonistConfig = abm::test::deterministicSmokeConfig();
+    protagonistConfig.protagonist.enabled = true;
+    protagonistConfig.protagonist.forecastHorizon = 0.9;
+    abm::test::expectInvalidConfigContaining(
+        protagonistConfig, "protagonist_forecast_horizon",
+        "config validation should reject a protagonist forecast horizon below one step", failures);
+}
+
 void testSimulationConfigRejectsInsufficientWarmupHistory(int& failures) {
     abm::SimulationConfig fundamentalistConfig = abm::test::deterministicSmokeConfig();
     fundamentalistConfig.numChartists = 0;
@@ -380,6 +407,7 @@ void runConfigValidationTests(int& failures) {
     testSimulationConfigRejectsWarmupTooShortForTheProtagonist(failures);
     testSimulationConfigAcceptsProtagonistOnlyPopulation(failures);
     testSimulationConfigRejectsInvalidAllocationBounds(failures);
+    testSimulationConfigRejectsForecastHorizonBelowOneStep(failures);
     testSimulationConfigRejectsInsufficientWarmupHistory(failures);
     testSimulationConfigRejectsInvalidReferenceMovingAverageWindow(failures);
     testSimulationConfigRejectsInvalidProspectTheoryAgentFraction(failures);

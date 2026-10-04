@@ -64,6 +64,15 @@ struct FundamentalistStrategyParameters {
 
     /** Cap on portfolio gross exposure sum_j |w_j| in the multi-asset rule. */
     double maxGrossExposure{1.0};
+
+    /**
+     * Steps over which the mispricing is expected to close (at least one).
+     *
+     * The mispricing is the log return expected over this horizon. Sizing uses
+     * it divided by the horizon, a per-step return commensurate with the
+     * per-step covariance, and CPT values the gamble over the same horizon.
+     */
+    double forecastHorizon{1.0};
 };
 
 /**
@@ -202,9 +211,10 @@ class FundamentalistStrategy : public TradingStrategy {
     [[nodiscard]] static std::optional<OrderIntent>
     buildValuationOrderIntent(const Agent& agent, const SignalDecision& decision,
                               const OrderSizingInputs& inputs, const TradingOrderContext& context);
-    [[nodiscard]] double prospectAdjustedExcessReturn(Agent& agent, const Market& market,
-                                                      std::size_t assetIndex,
-                                                      const ProspectAdjustmentInputs& inputs) const;
+    /** Returns the (CPT-adjusted) excess log return expected over the forecast horizon. */
+    [[nodiscard]] double
+    prospectAdjustedHorizonReturn(Agent& agent, const Market& market, std::size_t assetIndex,
+                                  const ProspectAdjustmentInputs& inputs) const;
 
     std::size_t assetIndex_;
     AssetAllocationLine allocationLine_;
@@ -216,6 +226,7 @@ class FundamentalistStrategy : public TradingStrategy {
     ProspectReferencePointMode referencePointMode_;
     std::size_t referenceMovingAverageWindow_;
     double maxGrossExposure_{1.0};
+    double forecastHorizon_{1.0};
 };
 
 } // namespace abm
