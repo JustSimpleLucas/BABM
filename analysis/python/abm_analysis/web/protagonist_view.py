@@ -113,6 +113,21 @@ def _protagonist_row(agents: pd.DataFrame) -> pd.Series | None:
     return matches.iloc[0]
 
 
+def protagonist_agent_id(agents: pd.DataFrame) -> int | None:
+    """Return the protagonist's agent id, or ``None`` when the run has none.
+
+    Public so that every panel that follows the protagonist — the standing panel
+    and the fills drawn on the price path — finds him by the same rule: the
+    ``is_protagonist`` flag, never an id convention.
+    """
+
+    row = _protagonist_row(agents)
+    if row is None:
+        return None
+    identifier = _numeric(row.get("agent_id"))
+    return None if identifier is None else int(identifier)
+
+
 def _absence_message(
     archive: RunArchive,
     agents: pd.DataFrame,

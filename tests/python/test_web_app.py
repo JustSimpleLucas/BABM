@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
@@ -639,6 +640,74 @@ def test_single_strategy_population_still_renders(data_root: Path) -> None:
     assert len(panel["wealth_distribution"]["strategies"]) == 1
 
 
+def _write_chartist_variants(run_dir: Path) -> None:
+    """Split the synthetic chartists into two rules, as the simulator records them."""
+
+    agents = pd.read_csv(run_dir / "agents_final.csv")
+    agents["current_strategy_type"] = (
+        ["fundamentalist"] * 5 + ["chartist_momentum"] * 4 + ["chartist_breakout"] * 3
+    )
+    agents.to_csv(run_dir / "agents_final.csv", index=False)
+
+
+def test_wealth_densities_are_offered_by_family_on_the_same_bins(data_root: Path) -> None:
+    """Six overlaid curves cannot be told apart; three families can."""
+
+    run_dir = single_asset_run(data_root)
+    _write_chartist_variants(run_dir)
+
+    distribution = build_run_view(run_dir)["agents"]["wealth_distribution"]
+
+    by_label = {entry["strategy"]: entry for entry in distribution["strategies"]}
+    by_family = {entry["strategy"]: entry for entry in distribution["families"]}
+    assert set(by_label) == {"fundamentalist", "chartist_momentum", "chartist_breakout"}
+    assert set(by_family) == {"fundamentalist", "chartist"}
+    assert by_family["chartist"]["count"] == 7
+    assert by_label["chartist_momentum"]["family"] == "chartist"
+    for entry in distribution["families"]:
+        assert len(entry["density"]) == len(distribution["bin_centre"])
+
+
+def test_social_map_ships_every_agent_with_its_colourings(data_root: Path) -> None:
+    run_dir = single_asset_run(data_root)
+    agents = pd.read_csv(run_dir / "agents_final.csv")
+    agents["x_coordinate"] = [index / 12 for index in range(12)]
+    agents["y_coordinate"] = [(index * 5 % 12) / 12 for index in range(12)]
+    agents["final_opinion"] = [(-1) ** index * 0.01 * index for index in range(12)]
+    agents.to_csv(run_dir / "agents_final.csv", index=False)
+
+    social_map = build_run_view(run_dir)["agents"]["social_map"]
+
+    assert social_map["available"] is True
+    for key in ("agent_id", "x", "y", "opinion", "wealth_change", "loss_aversion", "family"):
+        assert len(social_map[key]) == 12, key
+    assert social_map["family"].count("chartist") == 7
+    # The fixture records no loss aversion, so that colouring must read as absent.
+    assert all(value is None for value in social_map["loss_aversion"])
+    assert not any(social_map["is_protagonist"])
+
+
+def test_social_map_is_unavailable_without_coordinates(data_root: Path) -> None:
+    social_map = build_run_view(single_asset_run(data_root))["agents"]["social_map"]
+
+    assert social_map == {"available": False}
+
+
+def test_social_map_marks_the_protagonist(data_root: Path) -> None:
+    run_dir = single_asset_run(data_root)
+    write_synthetic_protagonist(run_dir)
+    agents = pd.read_csv(run_dir / "agents_final.csv")
+    agents["x_coordinate"] = np.linspace(0.0, 1.0, len(agents))
+    agents["y_coordinate"] = np.linspace(1.0, 0.0, len(agents))
+    agents.to_csv(run_dir / "agents_final.csv", index=False)
+
+    social_map = build_run_view(run_dir)["agents"]["social_map"]
+
+    assert sum(social_map["is_protagonist"]) == 1
+    flagged = social_map["is_protagonist"].index(True)
+    assert social_map["agent_id"][flagged] == int(agents["agent_id"].max())
+
+
 # --------------------------------------------------------------------------
 # Application wiring
 # --------------------------------------------------------------------------
@@ -649,7 +718,7 @@ def test_archive_generation_tracks_every_artefact_the_view_reads(multi_asset_run
 
     baseline = _archive_generation(multi_asset_run)
 
-    for filename in ("agents_final.csv", "asset_timeseries.csv", "config.json"):
+    for filename in ("agents_final.csv", "asset_timeseries.csv", "config.json", "trade_ledger.csv"):
         path = multi_asset_run / filename
         path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
         assert _archive_generation(multi_asset_run) != baseline, filename

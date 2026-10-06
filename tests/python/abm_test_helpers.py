@@ -389,6 +389,178 @@ def write_synthetic_protagonist(
     }
 
 
+def write_synthetic_trade_ledger(
+    run_dir: Path,
+    *,
+    assets: list[str] | None = None,
+    trades_per_step: int = 4,
+    seed: int = 11,
+) -> pd.DataFrame:
+    """Replace a synthetic run's ledger with one that records both sides of a trade.
+
+    ``write_synthetic_run`` writes a deliberately crude ledger — one row per
+    trade, random counterparties, lower-case sides — that satisfies the archive
+    validators but cannot support flow statistics. This writes what the simulator
+    writes: every trade as a ``BUY`` row for the buyer and a ``SELL`` row for the
+    seller, so the net flow of all agents balances at every step.
+
+    Participants are drawn from the run's own ``agents_final.csv`` at call time,
+    so calling it after ``write_synthetic_protagonist`` lets the protagonist trade.
+
+    Returns:
+        The ledger as written, so a test derives its expectations from it rather
+        than from the code under test.
+    """
+
+    rng = np.random.default_rng(seed)
+    agent_ids = pd.read_csv(run_dir / "agents_final.csv")["agent_id"].to_numpy()
+    steps = pd.read_csv(run_dir / "step_timeseries.csv")["simulation_step"].dropna().astype(int)
+    prices = pd.read_csv(run_dir / "step_timeseries.csv").set_index("simulation_step")["market_price"]
+
+    rows: list[dict[str, object]] = []
+    trade_id = 0
+    for step in steps:
+        for asset in assets or ["stock"]:
+            for _ in range(trades_per_step):
+                buyer, seller = rng.choice(agent_ids, size=2, replace=False)
+                quantity = float(rng.integers(1, 6))
+                price = float(prices.get(step, 100.0))
+                shared = {
+                    "trade_id": trade_id,
+                    "time": int(step),
+                    "price": price,
+                    "qty": quantity,
+                    "asset": asset,
+                    "gross_notional": price * quantity,
+                    "transaction_cost": 0.0,
+                }
+                rows.append(
+                    {**shared, "agent_id": int(buyer), "counterparty_agent_id": int(seller),
+                     "side": "BUY", "order_id": 2 * trade_id, "counterparty_order_id": 2 * trade_id + 1}
+                )
+                rows.append(
+                    {**shared, "agent_id": int(seller), "counterparty_agent_id": int(buyer),
+                     "side": "SELL", "order_id": 2 * trade_id + 1, "counterparty_order_id": 2 * trade_id}
+                )
+                trade_id += 1
+
+    ledger = pd.DataFrame(rows)
+    ledger.to_csv(run_dir / "trade_ledger.csv", index=False)
+    return ledger
+
+
+def write_synthetic_calibration_study(
+    study_dir: Path,
+    *,
+    trials: int = 30,
+    seed: int = 5,
+    record_weights: bool = True,
+    failed_trials: int = 0,
+    penalty_per_fact: float = 0.75,
+) -> pd.DataFrame:
+    """Write a calibration study whose scores are built the way the scorer builds them.
+
+    Every search score is exactly ``market_distance + stylised_penalty``, with the
+    penalty a whole number of failed facts times ``penalty_per_fact`` — the
+    identity the dashboard checks rather than assumes. The three best candidates
+    are validated on five seeds each, and the candidate table is written in the
+    layout ``write_calibration_tables`` uses.
+
+    Args:
+        record_weights: Write ``score_weights`` into the summary, as a current
+            study does; ``False`` reproduces a study written before they were kept.
+        failed_trials: How many search trials are marked failed (and given the
+            scorer's sentinel score), to check they are left out of every chart.
+
+    Returns:
+        The trial table as written, so a test derives expectations from it.
+    """
+
+    import json
+
+    rng = np.random.default_rng(seed)
+    study_dir.mkdir(parents=True)
+    rows: list[dict[str, object]] = []
+    for trial in range(trials):
+        failed = trial < failed_trials
+        distance = float(rng.uniform(0.5, 3.0))
+        facts_failed = int(rng.choice([1, 1, 1, 2]))
+        penalty = facts_failed * penalty_per_fact
+        rows.append(
+            {
+                "trial_number": trial,
+                "phase": "search",
+                "seed": 55,
+                "status": "failed" if failed else "completed",
+                "score": 1.0e9 if failed else distance + penalty,
+                "component_market_distance": 1.0e9 if failed else distance,
+                "component_stylised_penalty": 0.0 if failed else penalty,
+                "param_control_loss_aversion": float(rng.uniform(1.0, 4.0)),
+                "param_num_chartists": int(rng.integers(100, 400)),
+                "param_agent_activity_rate": float(rng.uniform(0.2, 1.0)),
+            }
+        )
+    trial_table = pd.DataFrame(rows)
+
+    completed = trial_table[trial_table["status"] == "completed"].nsmallest(3, "score")
+    validation_rows = []
+    candidate_rows = []
+    for rank, (_, candidate) in enumerate(completed.iterrows()):
+        validation = [float(candidate["score"]) + float(rng.normal(0.0, 0.2)) for _ in range(5)]
+        for seed_offset, value in enumerate(validation):
+            validation_rows.append(
+                {**candidate.to_dict(), "phase": "validation", "seed": 101 + seed_offset, "score": value}
+            )
+        candidate_rows.append(
+            {
+                "trial_number": int(candidate["trial_number"]),
+                "search_score": float(candidate["score"]),
+                "mean_validation_score": float(np.mean(validation)),
+                "validation_score_std": float(np.std(validation, ddof=1)),
+                "ranking_score": float(np.mean(validation)) + 0.1,
+                "robustness_pass_rate": 0.4,
+                "seed_count": 5,
+                "robust_ranking_score": float(np.mean(validation)) + 0.5,
+                "selected": rank == 0,
+            }
+        )
+    pd.concat([trial_table, pd.DataFrame(validation_rows)], ignore_index=True).to_csv(
+        study_dir / "calibration_trials.csv", index=False
+    )
+
+    (study_dir / "calibration_report").mkdir()
+    pd.DataFrame(candidate_rows).to_csv(
+        study_dir / "calibration_report" / "candidate_validation_summary.csv", index=False
+    )
+
+    summary: dict[str, object] = {
+        "calibration_name": study_dir.name,
+        "created_at_local": "2026-07-11T16:17:12",
+        "benchmark_ids": ["SPX", "NAQ"],
+        "search_seeds": [55],
+        "validation_seeds": [101, 102, 103, 104, 105],
+        "sampler_seed": 55,
+        "best_trial_number": candidate_rows[0]["trial_number"],
+        "best_mean_validation_score": candidate_rows[0]["mean_validation_score"],
+        "best_robust_ranking_score": candidate_rows[0]["robust_ranking_score"],
+        "best_robustness_pass_rate": 0.4,
+    }
+    if record_weights:
+        summary["score_weights"] = {
+            "ks_statistic": 1.0,
+            "normalised_wasserstein": 1.0,
+            "tail_quantile_error": 1.0,
+            "acf_raw_rmse": 0.5,
+            "acf_absolute_rmse": 1.0,
+            "acf_squared_rmse": 1.0,
+            "autocorrelation_penalty": penalty_per_fact,
+            "fat_tail_penalty": penalty_per_fact,
+            "volatility_clustering_penalty": penalty_per_fact,
+        }
+    (study_dir / "calibration_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    return trial_table
+
+
 _make_synthetic_experiment = make_synthetic_experiment
 _make_synthetic_benchmark_dir = make_synthetic_benchmark_dir
 _write_synthetic_run = write_synthetic_run

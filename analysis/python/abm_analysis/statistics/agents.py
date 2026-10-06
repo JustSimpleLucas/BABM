@@ -26,6 +26,12 @@ from abm_analysis.archive.data import read_csv_if_exists, resolve_artifact_path
 #: one present in the frame is the one grouped on.
 AGENT_STRATEGY_COLUMN_CANDIDATES = ("current_strategy_type", "initial_strategy_type")
 
+#: Strategy families in display order. This is the stacking order of every
+#: per-strategy chart and the slot order of the dashboard's strategy colours,
+#: which were validated as an *ordered* set (neighbouring slots are the pairs
+#: that touch), so it must never be re-sorted by population size.
+STRATEGY_FAMILIES = ("fundamentalist", "chartist", "noise_trader", "buy_and_hold")
+
 #: Snapshot columns summarised per group. Each contributes five output columns
 #: (mean, median, std, min, max); columns absent from an archive are skipped
 #: rather than filled, so a legacy run yields fewer columns, never NaN ones.
@@ -127,6 +133,27 @@ def agent_strategy_column(agents: pd.DataFrame) -> str | None:
         if column in agents.columns:
             return column
     return None
+
+
+def strategy_family(strategy_label: object) -> str:
+    """Collapse a recorded strategy label to the family it belongs to.
+
+    The simulator names the chartist rule an agent runs — ``chartist_momentum``,
+    ``chartist_mean_reversion``, ``chartist_breakout`` and so on — but the
+    behavioural-finance question is asked of the family: do fundamentalists,
+    trend-followers and noise traders push the price in different directions?
+    Four colours can carry four families legibly; six cannot, so the dashboard
+    groups by family by default and offers the variants as an opt-in split.
+
+    A label outside the known families is returned unchanged rather than merged
+    into one of them, so a strategy added to the model later appears as its own
+    group instead of silently inflating a neighbour's numbers.
+    """
+
+    label = str(strategy_label).strip()
+    if label == "chartist" or label.startswith("chartist_"):
+        return "chartist"
+    return label
 
 
 def _run_label(run_id: str, run_labels: dict[str, str] | None = None) -> str:

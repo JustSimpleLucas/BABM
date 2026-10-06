@@ -24,6 +24,7 @@ from abm_analysis.archive.archives import RunArchive
 from abm_analysis.statistics.agents import (
     AGENT_STRATEGY_COLUMN_CANDIDATES,
     build_agent_summary_statistics,
+    strategy_family,
 )
 from abm_analysis.web.metrics import (
     SIMULATOR_SUMMARY_SOURCE,
@@ -31,6 +32,7 @@ from abm_analysis.web.metrics import (
     density_on_edges,
     finite_values,
     metric,
+    values_of,
 )
 
 
@@ -91,6 +93,7 @@ def build_agent_view(
             "columns": [],
             "rows": [],
             "wealth_distribution": {"available": False},
+            "social_map": {"available": False},
         }
 
     strategy_column = _strategy_column(agents)
@@ -108,6 +111,7 @@ def build_agent_view(
         ],
         "rows": _strategy_rows(summary, strategy_column),
         "wealth_distribution": _wealth_distribution(agents, strategy_column),
+        "social_map": _social_map(agents, strategy_column),
     }
 
 
@@ -197,26 +201,88 @@ def _wealth_distribution(agents: pd.DataFrame, strategy_column: str | None) -> d
         return {"available": False}
 
     if strategy_column is None:
-        groups: list[tuple[str, pd.Series]] = [("all agents", agents["final_wealth"])]
+        labels = pd.Series("all agents", index=agents.index)
     else:
-        groups = [
-            (str(label), group["final_wealth"])
-            for label, group in agents.groupby(strategy_column, dropna=False)
-        ]
+        labels = agents[strategy_column].astype(str).str.strip()
+    families = labels.map(strategy_family)
 
-    strategies = [
-        {
-            "strategy": label,
-            "count": int(finite_values(values).size),
-            "density": density_on_edges(values, shared["bin_edges"]),
-        }
-        for label, values in groups
-    ]
-    strategies.sort(key=lambda entry: -entry["count"])
+    def densities(keys: pd.Series) -> list[dict[str, Any]]:
+        entries = [
+            {
+                "strategy": str(key),
+                "family": strategy_family(key),
+                "count": int(finite_values(values).size),
+                "density": density_on_edges(values, shared["bin_edges"]),
+            }
+            for key, values in agents["final_wealth"].groupby(keys, dropna=False)
+        ]
+        entries.sort(key=lambda entry: -entry["count"])
+        return entries
 
     return {
         "available": True,
         "bin_centre": shared["bin_centre"],
         "bin_width": shared["bin_width"],
-        "strategies": strategies,
+        # Exact labels, kept for the split view and for archives whose labels
+        # carry information the family discards (the chartist rule).
+        "strategies": densities(labels),
+        # The same agents merged into families, on the same bins, so the two
+        # views can be toggled without the curves changing scale.
+        "families": densities(families),
+    }
+
+
+def _social_map(agents: pd.DataFrame, strategy_column: str | None) -> dict[str, Any]:
+    """Build the per-agent arrays behind the social-space map.
+
+    Agents sit at fixed coordinates in the model's social space, and the social
+    channel moves an agent's opinion towards its neighbours'. Whether that channel
+    does anything shows up as structure on this map: opinions that cluster in
+    space mean the neighbourhood is shaping them, and opinions scattered at random
+    mean it is not. The same map coloured by wealth change asks whether
+    neighbours fare alike, and coloured by loss aversion whether the prospect
+    heterogeneity is spread evenly or clumped.
+
+    Columns an archive lacks are shipped as ``null`` per agent rather than
+    omitted, so the interface can offer only the colourings that have data.
+    """
+
+    coordinates = {
+        axis: pd.to_numeric(agents.get(column), errors="coerce")
+        for axis, column in (("x", "x_coordinate"), ("y", "y_coordinate"))
+        if column in agents.columns
+    }
+    if len(coordinates) < 2:
+        return {"available": False}
+    located = coordinates["x"].notna() & coordinates["y"].notna()
+    if int(located.sum()) < 2:
+        return {"available": False}
+    mapped = agents[located]
+
+    def column(name: str) -> list[float | None]:
+        if name not in mapped.columns:
+            return [None] * len(mapped)
+        return values_of(mapped[name])
+
+    labels = (
+        mapped[strategy_column].astype(str).str.strip()
+        if strategy_column
+        else pd.Series("all agents", index=mapped.index)
+    )
+    flags = (
+        pd.to_numeric(mapped["is_protagonist"], errors="coerce").fillna(0) != 0
+        if "is_protagonist" in mapped.columns
+        else pd.Series(False, index=mapped.index)
+    )
+    return {
+        "available": True,
+        "agent_id": column("agent_id"),
+        "x": values_of(coordinates["x"][located]),
+        "y": values_of(coordinates["y"][located]),
+        "opinion": column("final_opinion"),
+        "wealth_change": column("wealth_change"),
+        "loss_aversion": column("prospect_loss_aversion"),
+        "strategy": [str(label) for label in labels],
+        "family": [strategy_family(label) for label in labels],
+        "is_protagonist": [bool(flag) for flag in flags],
     }

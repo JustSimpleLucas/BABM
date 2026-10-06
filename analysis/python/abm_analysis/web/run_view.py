@@ -53,12 +53,14 @@ from abm_analysis.web.asset_view import (
     build_series,
     resolve_asset_context,
 )
+from abm_analysis.web.crisis_view import build_crisis_view
 from abm_analysis.web.metrics import (
     SIMULATOR_SUMMARY_SOURCE,
     asset_metric,
     evidence,
     read_agent_snapshot,
 )
+from abm_analysis.web.order_flow_view import build_order_flow_view
 from abm_analysis.web.protagonist_view import build_protagonist_view
 from abm_analysis.web.serialisation import json_safe, numeric_or_none
 
@@ -122,9 +124,26 @@ def build_run_view(
     )
     primary = diagnostics_by_asset.get(context.names[0], {})
 
+    # Built before the payload so the crisis rows can be reindexed onto exactly
+    # the steps the price chart draws, at the same thinning stride.
+    series = build_series(
+        run_path, analysed, phase=phase, price_column=price_column, context=context
+    )
+    crisis = build_crisis_view(
+        run_path,
+        analysed,
+        phase=phase,
+        price_column=price_column,
+        context=context,
+        series=series,
+    )
+
     # Read once and share: the agent panel and the protagonist panel must be
     # describing the same population, and the file is not small.
     agents = read_agent_snapshot(archive)
+    order_flow = build_order_flow_view(
+        archive, agents, context, series=series, analysed=analysed
+    )
 
     return json_safe(
         {
@@ -143,9 +162,9 @@ def build_run_view(
                 diagnostics_by_asset, summary_metrics, market_metrics, context
             ),
             "stylised_facts": _build_stylised_facts(diagnostics_by_asset, context),
-            "series": build_series(
-                run_path, analysed, phase=phase, price_column=price_column, context=context
-            ),
+            "series": series,
+            "crisis": crisis,
+            "order_flow": order_flow,
             "return_distribution": build_return_distributions(returns_by_asset),
             "autocorrelation": build_autocorrelations(returns_by_asset),
             "cross_asset": build_cross_asset_view(run_path, phase=phase, context=context),

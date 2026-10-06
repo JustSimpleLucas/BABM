@@ -259,16 +259,55 @@ For the selected run the page shows:
 - **Agents** — population size, strategy count, wealth Gini, and a per-strategy table of agent
   count, mean/median/s.d. final wealth, mean wealth change, mean trades, and mean traded volume,
   with the final-wealth distribution drawn per strategy.
-- **Charts** — price against fundamental, the log-return series, the return distribution against a
-  fitted Gaussian, and the autocorrelation of raw, absolute, and squared returns. Colour identifies
-  the market; the price chart has a `Level | Indexed` switch so markets at different price levels
-  share one axis, and the autocorrelation panel switches between raw, |r|, and r².
+- **Market story** — one figure of rows on a shared time axis, so a crash, the volume that came with
+  it and the spread that opened beside it read at one position, under one crosshair and one hover
+  label: price against fundamental, `ln(price / fundamental)`, log returns, rolling volatility with
+  its stress threshold, drawdown, traded volume, and bid–ask spread. When the run archived a trade
+  ledger it adds net order flow by strategy, and — for a run with a protagonist — his risky-weight and
+  wealth-percentile rows. Colour identifies the
+  market; the price row has a `Level | Indexed` switch so markets at different price levels share one
+  axis, and rows can be hidden with the chips above the figure. A `Raw | MA 5 | MA 20 | MA 50`
+  switch smooths the price line: the raw price steps back to a faint line beneath a bold moving
+  average, and a second switch picks its kind. **Simple** is the trailing average the model's
+  chartists read; **exponential** weights recent prices more and never drops one abruptly; **centred**
+  has no lag but uses prices from after each step, so it shows the shape of a finished run and not
+  what a trader could have seen. A `Raw price` chip takes the faint line away, and a note beside the
+  chart says what the chosen average is, that a trailing one starts once a full window exists and
+  lags the price by (window − 1) / 2 steps, and that the centred one is blank at both ends. The
+  averages are computed on every step by `statistics/smoothing.py` before the chart is thinned, so a
+  20-step window is always 20 steps, and the table and CSV beside the figure carry the smoothed
+  columns.
+- **Crisis lens** — stress windows are shaded on the market story, and a normal-versus-stress table
+  and the printed rule sit beneath it. *Stress* is offered under three definitions, because the two
+  triggers are different things: **volatility** (rolling volatility at or above its 80th percentile
+  — an event), **drawdown** (a fall of 10% or more from the running peak — a state, which persists
+  until the price recovers), or **either**. The default is volatility: on a market that falls and
+  does not recover, the combined flag shades nearly the whole chart and says nothing about where the
+  turbulence was. The volatility trigger flags about a fifth of any series by construction, so its
+  shaded share does not say how turbulent a run was; the rule and thresholds are printed for that
+  reason.
+- **Who trades with whom** (needs `trade_ledger_enabled = 1`) — a buyer-by-seller matrix of strategy
+  families, or of the four chartist rules, as volume or as each buyer's share of its purchases. Each
+  trade is counted once. Net flow by strategy sums to zero at every step — every unit bought is sold —
+  and the page warns when a ledger does not balance.
+- **Social space** — every agent at its place in the model's social space, coloured by final
+  opinion, wealth change, or loss aversion λ, with strategy family as marker shape and the
+  protagonist ringed. Opinions that cluster in space mean the neighbourhood is shaping them.
+- **Distribution and dependence** — the return distribution against a fitted Gaussian, and the
+  autocorrelation of raw, absolute, and squared returns; the autocorrelation panel switches between
+  raw, |r|, and r².
 
 The `Phase` and `Price column` selectors at the top re-run the diagnostics on a different window or a
-different price series, the same way `--phase` and `--price-column` do on the command line.
+different price series, the same way `--phase` and `--price-column` do on the command line. The
+`Strategies` selector draws the four chartist rules as one family (the default) or apart, in every
+view that groups agents. A strategy keeps its colour in every run and every chart: colour follows
+the family, never its place in a list.
 
-Four things are worth knowing:
+Five things are worth knowing:
 
+- **Every new chart has a table and a CSV.** The `Table` and `CSV` buttons under a chart show and
+  download the numbers it plots, so a figure can be cited as data. The download happens in your
+  browser; the dashboard still writes nothing to `data/`, and it has no image export.
 - **It is read-only.** The dashboard never simulates and never writes to `data/`, so it is safe to
   leave open while a long experiment is running.
 - **The numbers are the exported numbers.** Every statistic is recomputed by the same
@@ -316,6 +355,11 @@ For the selected cohort the page shows:
   (`2 of 3 runs`), per condition and per market. This is what replaces a single run's verdict.
 - **Condition comparison** — one column per condition, each cell the cross-seed mean with its 95%
   confidence interval, coefficient of variation, and seed count.
+- **Price histories across seeds** — each condition's median price path and the band its seeds stay
+  inside, as indexed price or as `ln(price / fundamental)` (which removes the fact that each seed has
+  its own fundamental). With fewer than ten seeds the band is the full range, with ten or more the
+  10th–90th percentile; either way it describes where histories went and is not an interval for the
+  median. Individual seeds can be drawn behind the band.
 - **Seed convergence** — the running mean and CI half-width as seeds accumulate, per condition. This
   is the figure that justifies a replication count. Conditions are never pooled into one path: that
   would show the contrast between them as if it were dispersion within them.
@@ -380,6 +424,17 @@ Defaults for trials, seeds, and scoring live in `config/calibration/calibration_
 | `calibration_report/` | The candidate ranking and every robustness verdict, as CSV — *why* the winner won. |
 | `best_runs_robustness_report/` | Cross-seed robustness tables for the winner's validation runs. |
 | `holdout_validation/` | Out-of-sample check against benchmark series held back from the search. |
+
+**Reading a study in the dashboard.** Studies under `data/` are listed beneath the runs in the
+sidebar. A study page shows the best score reached so far against every trial's score, so a search
+that stalled is visible as a flat line; the score split into distance from the benchmarks and the
+stylised-fact penalty (the score is exactly their sum, and the page checks that rather than assuming
+it); each searched parameter against the score it earned; and each validated candidate's score on
+every validation seed beside its one-seed search score, which shows how much of a search score was
+the seed. The score weights are recorded in `calibration_summary.json`; a study written before they
+were recorded is read with the library defaults, and the page says so. A study is a snapshot of a
+search against one version of the simulator, so read its creation date against the model's history
+before quoting it.
 
 **4. Run the tuned model:**
 
@@ -465,7 +520,7 @@ analysis/python/abm_analysis/
   cli.py                   The console-script entry point; everything else CLI-shaped is below
   commands/                One module per subcommand, the parser, and the options they share
   archive/                 Reading run archives, run-ids, manifests, benchmarks, compression
-  statistics/              Stylised-fact tests, stress diagnostics, robustness verdicts, convergence
+  statistics/              Stylised-fact tests, stress diagnostics, order flow, path bands, robustness verdicts, convergence, calibration-study decomposition
   calibration/             Optuna study, scoring, execution, seed validation, trial worker
   exports/                 The CSV tables written beside an experiment: robustness, ranking, holdout
   database/                Optional PostgreSQL schema, imports, exports, validation

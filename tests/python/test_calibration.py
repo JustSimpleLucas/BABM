@@ -811,6 +811,9 @@ def test_run_calibration_writes_robustness_outputs(tmp_path: Path) -> None:
     assert summary["estimated_total_runs"] == 1 + 1 * 6
     assert summary["best_robustness_pass_rate"] is not None
     assert summary["robustness_penalty_weight"] == 1.0
+    # The score weights are recorded so the score can be decomposed afterwards.
+    assert summary["score_weights"]["autocorrelation_penalty"] == 0.75
+    assert summary["score_weights"]["acf_raw_rmse"] == 0.5
     assert summary["outputs"]["calibration_tables"] == "calibration_report"
     assert summary["outputs"]["best_runs_robustness_tables"] == "best_runs_robustness_report"
 

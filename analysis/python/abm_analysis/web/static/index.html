@@ -31,6 +31,13 @@
           <option value="fundamental_price">fundamental_price</option>
         </select>
       </label>
+      <label class="control" title="Group agents by strategy family, or keep each recorded rule apart">
+        <span>Strategies</span>
+        <select id="strategy-grouping">
+          <option value="family">Families</option>
+          <option value="label">Variants</option>
+        </select>
+      </label>
       <div class="archive-root" id="archive-root" title="Archive root being served"></div>
     </div>
   </header>
@@ -42,6 +49,7 @@
         <div class="sidebar-count" id="sidebar-count"></div>
       </div>
       <nav class="run-list" id="run-list"></nav>
+      <nav class="study-list" id="study-list" aria-label="Calibration studies" hidden></nav>
       <div class="cohort-bar" id="cohort-bar" hidden>
         <span class="cohort-bar-count" id="cohort-bar-count"></span>
         <button type="button" id="cohort-clear">Clear</button>
@@ -55,13 +63,14 @@
         <p>
           Every archived run under the data root is listed on the left. Choosing one
           recomputes its statistics from the run's own artefacts — the same functions
-          the static HTML reports use — with one column per traded market.
+          that write the exported CSV tables — with one column per traded market.
         </p>
         <p>
           Tick two or more runs and press <b>Compare</b> to read them as a cohort:
           runs that differ only in the seed are aggregated into one condition with
           its dispersion and reproduction rates, and runs that differ in a control
-          become separate conditions side by side.
+          become separate conditions side by side. A calibration study, when the
+          archive holds one, is listed beneath the runs.
         </p>
       </div>
 
@@ -82,22 +91,52 @@
 
         <section id="metric-sections"></section>
 
-        <section class="panel">
+        <section class="panel" id="stack-panel">
           <div class="panel-heading">
-            <h2>Price path</h2>
-            <div class="segmented" id="price-scale" role="group" aria-label="Price scale">
-              <button type="button" data-value="level">Level</button>
-              <button type="button" data-value="indexed">Indexed</button>
+            <h2>Market story</h2>
+            <div class="panel-controls">
+              <div class="segmented" id="price-scale" role="group" aria-label="Price scale">
+                <button type="button" data-value="level">Level</button>
+                <button type="button" data-value="indexed">Indexed</button>
+              </div>
+              <div class="segmented" id="price-smoothing" role="group"
+                   aria-label="Price smoothing" hidden></div>
+              <div class="segmented" id="price-smoothing-method" role="group"
+                   aria-label="Kind of moving average" hidden></div>
+              <button type="button" class="chip-toggle" id="raw-price-toggle"
+                      aria-pressed="true" hidden
+                      title="Draw the raw price faintly beneath the average">Raw price</button>
+              <div class="segmented" id="stress-definition" role="group"
+                   aria-label="Stress is defined by">
+                <button type="button" data-value="volatility">Volatility</button>
+                <button type="button" data-value="drawdown">Drawdown</button>
+                <button type="button" data-value="either">Either</button>
+              </div>
+              <div class="segmented" id="focus-asset" role="group"
+                   aria-label="Market in focus" hidden></div>
             </div>
           </div>
-          <div class="chart" id="chart-price"></div>
+          <div class="row-toggles" id="row-toggles" role="group" aria-label="Rows shown"></div>
+          <div class="chart" id="chart-stack"></div>
+          <p class="panel-message" id="stack-message" hidden></p>
+          <div class="stack-rule" id="smoothing-note" hidden></div>
+          <div class="stack-rule" id="stack-rule"></div>
+          <div class="table-scroll" id="stress-table"></div>
         </section>
 
-        <section class="panel">
+        <section class="panel" id="flow-panel" hidden>
           <div class="panel-heading">
-            <h2>Log returns</h2>
+            <h2>Who trades with whom</h2>
+            <div class="panel-controls">
+              <div class="segmented" id="flow-matrix-mode" role="group"
+                   aria-label="Matrix measure">
+                <button type="button" data-value="share">Share of buyer's purchases</button>
+                <button type="button" data-value="volume">Volume</button>
+              </div>
+            </div>
           </div>
-          <div class="chart" id="chart-returns"></div>
+          <div class="chart" id="chart-counterparty"></div>
+          <p class="panel-message" id="flow-message" hidden></p>
         </section>
 
         <section class="panel" id="cross-asset-panel" hidden>
@@ -150,6 +189,18 @@
           <div class="metric-grid" id="agent-metrics"></div>
           <div class="table-scroll" id="agent-table"></div>
           <div class="chart" id="chart-agent-wealth"></div>
+          <div class="agent-map" id="agent-map" hidden>
+            <div class="panel-heading">
+              <h3>Social space</h3>
+              <div class="segmented" id="map-colour" role="group" aria-label="Colour agents by">
+                <button type="button" data-value="opinion">Opinion</button>
+                <button type="button" data-value="wealth_change">Wealth change</button>
+                <button type="button" data-value="loss_aversion">Loss aversion λ</button>
+              </div>
+            </div>
+            <div class="chart" id="chart-social-map"></div>
+            <p class="panel-message" id="social-map-message" hidden></p>
+          </div>
           <p class="panel-message" id="agent-message" hidden></p>
         </section>
 
@@ -185,6 +236,20 @@
 
         <section class="panel">
           <div class="panel-heading">
+            <h2>Price histories across seeds</h2>
+            <div class="panel-controls">
+              <div class="segmented" id="path-measure" role="group"
+                   aria-label="Measure"></div>
+              <button type="button" class="chip-toggle" id="path-members"
+                      aria-pressed="false">Show individual seeds</button>
+            </div>
+          </div>
+          <div class="chart" id="chart-paths"></div>
+          <p class="panel-message" id="paths-message" hidden></p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
             <h2>Seed convergence</h2>
             <div class="segmented" id="convergence-metric" role="group"
                  aria-label="Convergence metric"></div>
@@ -214,6 +279,56 @@
         </div>
 
         <footer class="run-footer" id="cohort-footer"></footer>
+      </article>
+
+      <article class="calibration-view" id="calibration-view" hidden>
+        <section class="run-heading">
+          <h1 id="calibration-title"></h1>
+          <div class="run-parameters" id="calibration-chips"></div>
+        </section>
+
+        <div class="metric-grid" id="calibration-metrics"></div>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Search progress</h2>
+          </div>
+          <div class="chart" id="chart-calibration-progress"></div>
+          <p class="panel-message" id="calibration-progress-message" hidden></p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>What the score is made of</h2>
+            <div class="segmented" id="decomposition-order" role="group"
+                 aria-label="Order of trials">
+              <button type="button" data-value="trial">Trial order</button>
+              <button type="button" data-value="score">Score order</button>
+            </div>
+          </div>
+          <div class="chart" id="chart-calibration-decomposition"></div>
+          <p class="panel-message" id="calibration-decomposition-message" hidden></p>
+          <div class="table-scroll" id="calibration-levels"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Parameters against score</h2>
+          </div>
+          <div class="small-multiples" id="calibration-parameters"></div>
+          <p class="panel-message" id="calibration-parameters-message" hidden></p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Validated candidates</h2>
+          </div>
+          <div class="table-scroll" id="calibration-candidates"></div>
+          <div class="chart" id="chart-calibration-validation"></div>
+          <p class="panel-message" id="calibration-validation-message" hidden></p>
+        </section>
+
+        <footer class="run-footer" id="calibration-footer"></footer>
       </article>
 
       <div class="status" id="status" hidden></div>

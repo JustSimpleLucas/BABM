@@ -24,10 +24,17 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from abm_analysis.environment import configure_analysis_environment
+from abm_analysis.web.calibration_view import (
+    build_calibration_view,
+    describe_calibration_study,
+)
 from abm_analysis.web.catalogue import (
     build_catalogue,
+    discover_calibration_studies,
     discover_runs,
+    relative_path_text,
     resolve_run_path,
+    resolve_study_path,
 )
 from abm_analysis.web.cohort_view import (
     MAXIMUM_COHORT_RUNS,
@@ -50,6 +57,7 @@ CACHE_KEY_ARTEFACTS = (
     "asset_timeseries.csv",
     "agents_final.csv",
     "protagonist_timeseries.csv",
+    "trade_ledger.csv",
     "summary_metrics.csv",
     "config.json",
     "metadata.json",
@@ -148,6 +156,40 @@ def create_app(data_root: Path | str = DEFAULT_DATA_ROOT) -> FastAPI:
             raise HTTPException(status_code=404, detail=f"No archived runs under: {path}")
         relative = [str(run_path.relative_to(resolved_data_root)) for run_path in members]
         return _cohort_response(resolved_data_root, relative, phase, price_column)
+
+    @application.get("/api/calibration")
+    def read_calibration_catalogue() -> dict[str, Any]:
+        """List every calibration study beneath the data root."""
+
+        studies: list[dict[str, Any]] = []
+        for study_path in discover_calibration_studies(resolved_data_root):
+            try:
+                studies.append(
+                    describe_calibration_study(
+                        study_path, relative_path_text(study_path, resolved_data_root)
+                    )
+                )
+            except (OSError, ValueError, KeyError):
+                # One unreadable study — a trial table being written, a truncated
+                # file — must not hide the others from the sidebar.
+                continue
+        return {"count": len(studies), "studies": studies}
+
+    @application.get("/api/calibration/study")
+    def read_calibration_study_view(
+        path: str = Query(..., description="Study directory, relative to the data root."),
+    ) -> dict[str, Any]:
+        """Return the explorer payload for one calibration study."""
+
+        try:
+            study_path = resolve_study_path(path, resolved_data_root)
+        except ValueError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+
+        try:
+            return build_calibration_view(study_path, path)
+        except (KeyError, FileNotFoundError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
     @application.get("/vendor/plotly.min.js")
     def read_plotly_bundle() -> FileResponse:

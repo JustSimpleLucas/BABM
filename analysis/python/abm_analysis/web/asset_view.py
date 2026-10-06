@@ -22,6 +22,7 @@ CSV tables.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,7 @@ import pandas as pd
 from scipy import stats
 from statsmodels.tsa.stattools import acf
 
+from abm_analysis.archive.timeseries import step_axis_column
 from abm_analysis.statistics.diagnostics import (
     diagnose_return_series,
     run_asset_stylised_fact_diagnostics,
@@ -43,6 +45,13 @@ from abm_analysis.statistics.multi_asset import (
     list_assets,
     load_asset_panel,
     load_multi_asset_configuration,
+)
+from abm_analysis.statistics.smoothing import (
+    DEFAULT_SMOOTHING_METHOD,
+    SMOOTHING_ALIGNMENTS,
+    SMOOTHING_METHODS,
+    compute_price_average,
+    usable_smoothing_windows,
 )
 from abm_analysis.web.metrics import (
     column_mean,
@@ -357,6 +366,14 @@ def build_series(
     asset's first finite market price, which the interface divides by when the
     reader indexes the price chart — assets priced at 100 and at 40 cannot
     otherwise share one axis.
+
+    Each track also carries ``price_moving_average``: the moving averages of the
+    price, keyed first by the average (``simple``, ``exponential``, ``centred``;
+    see ``statistics.smoothing``) and then by the window as a string, for every
+    window in ``series["smoothing"]["windows"]``. The averages are taken over the
+    *full-resolution* price and only then sampled at the stride. Averaging the
+    thinned series instead would make a "20-step" window span ``20 * stride`` steps
+    without saying so.
     """
 
     if not context.uses_asset_timeseries:
@@ -375,21 +392,30 @@ def build_series(
     index = panels["price"].index
     stride = stride_for(len(index))
     sampled_index = index[::stride]
+    windows = usable_smoothing_windows(len(index))
 
     assets: dict[str, Any] = {}
     for name in context.names:
+        full_resolution_price = _panel_column(panels["price"], name)
         track = {
             key: values_of(_panel_column(panel, name).reindex(sampled_index))
             for key, panel in panels.items()
         }
-        track["base_price"] = first_finite(_panel_column(panels["price"], name))
+        track["base_price"] = first_finite(full_resolution_price)
+        track["price_moving_average"] = _price_averages(
+            full_resolution_price,
+            windows,
+            lambda averaged: averaged.reindex(sampled_index),
+        )
         assets[name] = track
 
     return {
         "stride": stride,
         "downsampled": stride > 1,
         "point_count": int(len(sampled_index)),
+        "step_axis": str(index.name or "simulation_step"),
         "step": values_of(pd.Series(sampled_index)),
+        "smoothing": _smoothing_description(windows),
         "assets": assets,
     }
 
@@ -528,15 +554,30 @@ def _step_series_payload(
     stride = stride_for(len(analysed))
     sampled = analysed.iloc[::stride]
 
-    steps = series_values(sampled, "simulation_step")
-    if not steps or all(value is None for value in steps):
-        steps = series_values(sampled, "row_index")
+    # Chosen on the whole frame, not the sample. With warm-up rows in view
+    # ``simulation_step`` is blank for them, and plotting against a column with
+    # gaps silently drops those rows — the reader asked for them and would see a
+    # chart that starts after the warm-up with no hint that it had been cut.
+    step_axis = step_axis_column(analysed)
+    steps = series_values(sampled, step_axis)
+
+    # The averages are taken on every row and then sampled, as in ``build_series``.
+    # A run without the price column has no price line, so no window is offered.
+    prices = (
+        analysed[price_column] if price_column in analysed.columns else pd.Series(dtype="float64")
+    )
+    windows = usable_smoothing_windows(len(prices))
+    price_moving_average = _price_averages(
+        prices, windows, lambda averaged: averaged.iloc[::stride]
+    )
 
     return {
         "stride": stride,
         "downsampled": stride > 1,
         "point_count": int(len(sampled)),
+        "step_axis": step_axis,
         "step": steps,
+        "smoothing": _smoothing_description(windows),
         "assets": {
             context.names[0]: {
                 "price": series_values(sampled, price_column),
@@ -545,8 +586,54 @@ def _step_series_payload(
                 "traded_volume": series_values(sampled, "traded_volume"),
                 "bid_ask_spread": series_values(sampled, "bid_ask_spread"),
                 "base_price": first_finite(numeric_column(sampled, price_column)),
+                "price_moving_average": price_moving_average,
             }
         },
+    }
+
+
+def _price_averages(
+    prices: pd.Series,
+    windows: tuple[int, ...],
+    sample: Callable[[pd.Series], pd.Series],
+) -> dict[str, dict[str, list[float | None]]]:
+    """Return every offered average of ``prices``, as ``{method: {window: values}}``.
+
+    ``prices`` is the full-resolution series. Each average is computed on all of it
+    and only then passed through ``sample``, which picks the steps the chart draws,
+    so a window always counts steps and not thinned points. Empty when no window is
+    on offer, so the interface has nothing to draw and nothing to misread.
+    """
+
+    if not windows:
+        return {}
+    return {
+        method: {
+            str(window): values_of(sample(compute_price_average(method, prices, window)))
+            for window in windows
+        }
+        for method in SMOOTHING_METHODS
+    }
+
+
+def _smoothing_description(windows: tuple[int, ...]) -> dict[str, Any]:
+    """Describe the price smoothing on offer, so the interface builds its controls from it.
+
+    The windows are decided once, here, from the run's length. The interface lists
+    exactly these and the averages named here, and never carries a list of its own,
+    so a choice it offers is always one the payload has numbers for. ``alignment``
+    says whether an average uses only the prices up to a step (``trailing``) or
+    prices on both sides of it (``centred``): a reader needs to know which before
+    taking the line for something a trader could have seen.
+    """
+
+    return {
+        "default_method": DEFAULT_SMOOTHING_METHOD,
+        "methods": [
+            {"key": method, "alignment": SMOOTHING_ALIGNMENTS[method]}
+            for method in SMOOTHING_METHODS
+        ],
+        "windows": list(windows),
     }
 
 

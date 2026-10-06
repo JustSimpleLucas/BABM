@@ -18,6 +18,7 @@ from pathlib import Path
 
 from abm_analysis.archive.archives import resolve_artifact_path
 from abm_analysis.archive.run_ids import parse_run_id
+from abm_analysis.statistics.calibration_study import is_calibration_study
 from abm_analysis.web.serialisation import json_safe
 
 
@@ -224,4 +225,51 @@ def resolve_run_path(relative_path: str, data_root: Path) -> Path:
         raise ValueError(f"Run path is outside the data root: {relative_path}")
     if not is_run_directory(candidate):
         raise ValueError(f"Not an archived run directory: {relative_path}")
+    return candidate
+
+
+def discover_calibration_studies(data_root: Path) -> list[Path]:
+    """Return every calibration study beneath ``data_root``.
+
+    A study is any directory holding ``calibration_trials.csv``. The walk does not
+    descend into one: what sits beneath a study — its trial configs, its best runs,
+    its reports — belongs to the study, and the best runs are already listed by
+    ``discover_runs`` where they can be opened as runs.
+    """
+
+    root = data_root.expanduser().resolve()
+    if not root.is_dir():
+        return []
+
+    studies: list[Path] = []
+    for current_dir, subdirectory_names, _ in os.walk(root):
+        current_path = Path(current_dir)
+        if len(current_path.relative_to(root).parts) >= MAXIMUM_SEARCH_DEPTH:
+            subdirectory_names.clear()
+            continue
+        if is_calibration_study(current_path):
+            studies.append(current_path)
+            subdirectory_names.clear()
+            continue
+        subdirectory_names[:] = sorted(
+            name
+            for name in subdirectory_names
+            if name not in NON_RUN_DIRECTORY_NAMES and not name.startswith(".")
+        )
+    return sorted(studies, key=lambda path: str(path))
+
+
+def resolve_study_path(relative_path: str, data_root: Path) -> Path:
+    """Resolve a client-supplied study handle to a study directory inside the data root.
+
+    Raises ``ValueError`` when the resolved path escapes the data root or is not a
+    calibration study, on the same terms as ``resolve_run_path``.
+    """
+
+    root = data_root.expanduser().resolve()
+    candidate = (root / relative_path).resolve()
+    if candidate != root and root not in candidate.parents:
+        raise ValueError(f"Study path is outside the data root: {relative_path}")
+    if not is_calibration_study(candidate):
+        raise ValueError(f"Not a calibration study: {relative_path}")
     return candidate

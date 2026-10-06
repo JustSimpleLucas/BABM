@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -9,11 +10,29 @@ import pandas as pd
 
 from abm_analysis.archive.benchmarks import BenchmarkSeries
 from abm_analysis.archive.data import compute_log_returns, load_step_timeseries
+from abm_analysis.archive.timeseries import load_asset_timeseries, step_axis_column
+from abm_analysis.statistics.multi_asset import has_asset_timeseries, list_assets
 
 
 DEFAULT_STRESS_ROLLING_WINDOW = 30
 DEFAULT_STRESS_VOLATILITY_QUANTILE = 0.80
 DEFAULT_STRESS_DRAWDOWN_THRESHOLD = 0.10
+
+
+@dataclass(frozen=True)
+class StressFrame:
+    """One traded asset's series, annotated with the stress diagnostics.
+
+    ``step_column`` names the column that keys the rows to the chart's x-axis.
+    It is carried with the frame because it is not always the same: per-asset
+    artefacts are keyed by ``simulation_step``, while a single-asset step series
+    that includes warm-up rows has to fall back to ``row_index`` — the simulator
+    leaves ``simulation_step`` blank before the simulation phase begins.
+    """
+
+    asset: str
+    step_column: str
+    data: pd.DataFrame
 
 
 def annotate_stress_regimes(
@@ -70,6 +89,156 @@ def annotate_stress_regimes(
     return result
 
 
+def compute_log_mispricing(prices: pd.Series, fundamentals: pd.Series) -> pd.Series:
+    """Return ``ln(price / fundamental)``, the scale-free gap to fundamental value.
+
+    A log ratio rather than a difference, so a market priced at 50 against a
+    fundamental of 100 reads the same as one priced at 5 against 10, and equal
+    proportional over- and under-valuation sit symmetrically about zero. The gap
+    is the quantity behind the excess-volatility argument of Shiller (1981):
+    when prices wander persistently from the value the fundamentals justify,
+    something other than news is moving them.
+
+    A non-positive or missing price or fundamental yields ``NaN`` rather than an
+    exception, because a crashed market can legitimately print a zero price.
+    """
+
+    price = pd.to_numeric(prices, errors="coerce")
+    fundamental = pd.to_numeric(fundamentals, errors="coerce")
+    valid = np.isfinite(price) & np.isfinite(fundamental) & (price > 0) & (fundamental > 0)
+    mispricing = pd.Series(np.nan, index=price.index, dtype="float64")
+    mispricing.loc[valid] = np.log(price.loc[valid] / fundamental.loc[valid])
+    return mispricing
+
+
+def find_stress_intervals(
+    stress_flags: pd.Series | np.ndarray,
+    step_values: pd.Series | np.ndarray,
+) -> list[tuple[float, float]]:
+    """Return the first and last step of every unbroken run of stress rows.
+
+    The runs are found on the full-resolution flag. A chart thins a long series
+    to a point cap before drawing it, and thinning the *flag* instead would drop
+    any stress window shorter than the stride — which are precisely the brief,
+    violent episodes a crisis chart exists to show.
+
+    Args:
+        stress_flags: One boolean per row, true where the row is in stress.
+        step_values: The step each row belongs to, in the same order.
+
+    Returns:
+        ``(first_step, last_step)`` pairs, both ends inclusive. A single stressed
+        row yields a pair whose two ends are equal.
+    """
+
+    flags = pd.Series(stress_flags).fillna(False).to_numpy(dtype=bool)
+    steps = pd.to_numeric(pd.Series(step_values), errors="coerce").to_numpy(dtype=float)
+    if flags.size != steps.size:
+        raise ValueError(
+            f"Stress flags ({flags.size}) and step values ({steps.size}) must be the same length."
+        )
+
+    # Pad both ends with "not stressed" so a run touching either edge still has a
+    # rising and a falling edge; the changes then alternate start, stop, start...
+    padded = np.concatenate(([False], flags, [False]))
+    changes = np.flatnonzero(padded[1:] != padded[:-1])
+    starts, stops = changes[0::2], changes[1::2] - 1
+    return [
+        (float(steps[first]), float(steps[last]))
+        for first, last in zip(starts, stops, strict=True)
+        if np.isfinite(steps[first]) and np.isfinite(steps[last])
+    ]
+
+
+def build_step_stress_frame(
+    time_series: pd.DataFrame,
+    *,
+    asset: str,
+    price_column: str = "market_price",
+) -> StressFrame:
+    """Annotate a single-asset step series with stress diagnostics.
+
+    Takes the frame ``load_step_timeseries`` produced, already restricted to the
+    analysed phase, so the volatility quantile that defines stress is taken over
+    exactly the rows the reader is looking at.
+    """
+
+    annotated = annotate_stress_regimes(time_series, price_column=price_column)
+    annotated["log_mispricing"] = compute_log_mispricing(
+        annotated[price_column],
+        annotated["fundamental_price"]
+        if "fundamental_price" in annotated.columns
+        else pd.Series(np.nan, index=annotated.index),
+    )
+    return StressFrame(asset=asset, step_column=step_axis_column(annotated), data=annotated)
+
+
+def build_asset_stress_frames(
+    run_dir: Path | str,
+    *,
+    phase: str = "simulation",
+    price_column: str = "market_price",
+) -> dict[str, StressFrame]:
+    """Annotate every traded asset of a multi-asset run with stress diagnostics.
+
+    ``asset_timeseries.csv`` is read once and split by asset, rather than pivoted
+    column by column, because each stress frame carries a dozen columns (volume,
+    spread, depth, order mix) for the normal-versus-stress comparison.
+
+    Rows without a ``simulation_step`` are dropped, which is the same restriction
+    ``load_asset_panel`` applies: the simulator leaves the step blank on initial
+    and warm-up rows, so per-asset series always cover the simulation phase. The
+    per-asset return column is the simulator's own ``log_return``, matching the
+    per-asset diagnostics, so the returns behind the shading are the returns
+    behind the stylised-fact verdicts.
+
+    Returns:
+        Stress frames keyed by asset name in declared order, or an empty mapping
+        for a run with no per-asset artefact.
+    """
+
+    if not has_asset_timeseries(run_dir):
+        return {}
+    asset_data = load_asset_timeseries(run_dir)
+    if "asset" not in asset_data.columns:
+        return {}
+
+    if phase.lower() != "all" and "phase" in asset_data.columns:
+        phase_rows = asset_data[asset_data["phase"].astype(str).str.lower() == phase.lower()]
+        if not phase_rows.empty:
+            asset_data = phase_rows
+
+    step_column = "simulation_step" if "simulation_step" in asset_data.columns else "row_index"
+    asset_data = asset_data.copy()
+    asset_data[step_column] = pd.to_numeric(asset_data[step_column], errors="coerce")
+    asset_data = asset_data.dropna(subset=[step_column])
+
+    frames: dict[str, StressFrame] = {}
+    for asset in list_assets(run_dir):
+        rows = (
+            asset_data[asset_data["asset"].astype(str) == asset]
+            .drop_duplicates(subset=step_column, keep="last")
+            .sort_values(step_column)
+            .reset_index(drop=True)
+        )
+        if rows.empty:
+            continue
+        resolved_price_column = price_column if price_column in rows.columns else "market_price"
+        annotated = annotate_stress_regimes(
+            rows,
+            price_column=resolved_price_column,
+            return_column="log_return",
+        )
+        annotated["log_mispricing"] = compute_log_mispricing(
+            annotated[resolved_price_column],
+            annotated["fundamental_price"]
+            if "fundamental_price" in annotated.columns
+            else pd.Series(np.nan, index=annotated.index),
+        )
+        frames[asset] = StressFrame(asset=asset, step_column=step_column, data=annotated)
+    return frames
+
+
 def build_simulation_stress_diagnostics(
     experiment_dir: Path | str,
     run_ids: list[str],
@@ -85,7 +254,7 @@ def build_simulation_stress_diagnostics(
         time_series = load_step_timeseries(experiment_path / run_id, price_column=price_column)
         time_series = _filter_phase(time_series, phase)
         annotated = annotate_stress_regimes(time_series, price_column=price_column)
-        rows.extend(_stress_summary_rows(annotated, series_id=run_id, source_type="simulation"))
+        rows.extend(summarise_stress_regimes(annotated, series_id=run_id, source_type="simulation"))
     return pd.DataFrame(rows)
 
 
@@ -102,7 +271,7 @@ def build_benchmark_stress_diagnostics(
             return_column="computed_log_return",
         )
         rows.extend(
-            _stress_summary_rows(
+            summarise_stress_regimes(
                 annotated,
                 series_id=benchmark_id,
                 source_type="benchmark",
@@ -112,13 +281,20 @@ def build_benchmark_stress_diagnostics(
     return pd.DataFrame(rows)
 
 
-def _stress_summary_rows(
+def summarise_stress_regimes(
     annotated: pd.DataFrame,
     *,
     series_id: str,
     source_type: str,
     source_file: str | None = None,
 ) -> list[dict[str, object]]:
+    """Summarise an annotated series over all rows, normal rows, and stress rows.
+
+    Public so the dashboard's normal-versus-stress table and the CSV builders
+    above are one implementation: a number read on the page and the same number
+    in an exported table cannot disagree.
+    """
+
     rows: list[dict[str, object]] = []
     regimes = [
         ("all", annotated),

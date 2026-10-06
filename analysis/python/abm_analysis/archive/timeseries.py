@@ -102,6 +102,26 @@ def load_asset_timeseries(run_dir: Path | str, asset: str | None = None) -> pd.D
     return asset_data
 
 
+def step_axis_column(time_series: pd.DataFrame) -> str:
+    """Return the column that keys a step series' rows to a time axis.
+
+    ``simulation_step`` is the natural axis, but the simulator leaves it blank on
+    initial and warm-up rows. A series that includes those rows cannot use it:
+    plotting against a column with gaps silently discards every row without a
+    step, so the warm-up the reader asked to see would vanish from the chart.
+    Such a series falls back to ``row_index``, which every row carries.
+
+    The choice is made on the whole frame, never on a thinned sample of it, so
+    that thinning a long series cannot change which axis a chart is drawn on.
+    """
+
+    if "simulation_step" in time_series.columns:
+        steps = pd.to_numeric(time_series["simulation_step"], errors="coerce")
+        if bool(np.isfinite(steps).all()):
+            return "simulation_step"
+    return "row_index" if "row_index" in time_series.columns else "simulation_step"
+
+
 @lru_cache(maxsize=32)
 def _load_step_timeseries_cached(
     csv_path: str,

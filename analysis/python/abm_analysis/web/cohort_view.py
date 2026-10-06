@@ -37,6 +37,12 @@ from abm_analysis.exports.seed_robustness import (
 )
 from abm_analysis.statistics.diagnostics import SIGNIFICANCE_LEVEL
 from abm_analysis.statistics.multi_asset import asset_series_id
+from abm_analysis.statistics.path_bands import (
+    PATH_MEASURES,
+    build_path_measures,
+    load_run_price_paths,
+    summarise_path_band,
+)
 from abm_analysis.statistics.robustness import CONDITION_COLUMNS
 from abm_analysis.statistics.robustness_verdicts import (
     MINIMUM_SEEDS_FOR_VERDICTS,
@@ -58,6 +64,21 @@ MAXIMUM_COHORT_RUNS = 64
 #: Fewest runs that make a cohort. One run has no dispersion to report and is
 #: better served by the single-run view.
 MINIMUM_COHORT_RUNS = 2
+
+#: Points per path in the fan chart. A cohort draws a median, two band edges and
+#: up to ``MAXIMUM_MEMBER_PATHS`` individual histories for every condition,
+#: market and measure, so the cap is lower than the single-run chart's.
+MAXIMUM_PATH_POINTS = 600
+
+#: Individual histories are drawn behind the band only while there are few
+#: enough to tell apart; beyond this the band alone carries the picture.
+MAXIMUM_MEMBER_PATHS = 12
+
+#: Axis titles and number formats for the fan chart's measures.
+PATH_MEASURE_LABELS: dict[str, tuple[str, str]] = {
+    "indexed_price": ("Price, indexed to 100 at the start of the window", "decimal"),
+    "log_mispricing": ("ln(price / fundamental)", "decimal"),
+}
 
 #: The label shown for a condition column, and how its value should be read.
 #: Only these are offered as a condition's distinguishing parameters; the rest
@@ -226,6 +247,14 @@ def build_cohort_view(
             "convergence": _build_convergence(computed, conditions, assets),
             "spread": _build_spread(computed, conditions, assets),
             "distribution": _build_distribution(computed, conditions, assets, condition_by_run),
+            "paths": _build_paths(
+                resolved,
+                conditions,
+                assets,
+                condition_by_run,
+                phase=phase,
+                price_column=price_column,
+            ),
             "notes": _build_notes(computed, conditions, assets, phase),
         }
     )
@@ -869,6 +898,88 @@ def _build_distribution(
         }
 
     return {"available": bool(per_asset), "assets": per_asset}
+
+
+def _build_paths(
+    run_paths: list[Path],
+    conditions: list[_Condition],
+    assets: list[str],
+    condition_by_run: dict[str, str],
+    *,
+    phase: str,
+    price_column: str,
+) -> dict[str, Any]:
+    """Summarise each condition's price histories across its seeds.
+
+    The question is how much of a market's history is the draw, so the histories
+    are grouped exactly as the other cohort panels group them — by condition,
+    with the markets never pooled — and each group becomes a median path and a
+    band. Runs that cannot be read are skipped rather than failing the cohort:
+    the band then says how many seeds it really rests on.
+    """
+
+    collected: dict[tuple[str, str], dict[str, list[pd.Series]]] = {}
+    for run_path in run_paths:
+        condition_id = condition_by_run.get(run_path.name)
+        if condition_id is None:
+            continue
+        try:
+            by_asset = load_run_price_paths(
+                run_path,
+                phase=phase,
+                price_column=price_column,
+                single_asset_name=assets[0] if assets else "market",
+            )
+        except (KeyError, ValueError, FileNotFoundError):
+            continue
+        for asset, frame in by_asset.items():
+            if asset not in assets:
+                continue
+            for measure, path in build_path_measures(frame).items():
+                collected.setdefault((condition_id, asset), {}).setdefault(measure, []).append(
+                    path
+                )
+
+    series: list[dict[str, Any]] = []
+    for condition in conditions:
+        for asset in assets:
+            for measure in PATH_MEASURES:
+                band = summarise_path_band(
+                    collected.get((condition.condition_id, asset), {}).get(measure, [])
+                )
+                if band is None:
+                    continue
+                stride = max(1, math.ceil(band.step.size / MAXIMUM_PATH_POINTS))
+                keep = slice(None, None, stride)
+                series.append(
+                    {
+                        "condition_id": condition.condition_id,
+                        "asset": asset,
+                        "measure": measure,
+                        "seed_count": band.seed_count,
+                        "band_kind": band.band_kind,
+                        "stride": stride,
+                        "step": band.step[keep],
+                        "median": band.median[keep],
+                        "lower": band.lower[keep],
+                        "upper": band.upper[keep],
+                        "members": (
+                            [member[keep] for member in band.members]
+                            if band.seed_count <= MAXIMUM_MEMBER_PATHS
+                            else []
+                        ),
+                    }
+                )
+
+    return {
+        "available": bool(series),
+        "measures": [
+            {"key": measure, "label": PATH_MEASURE_LABELS[measure][0],
+             "format": PATH_MEASURE_LABELS[measure][1]}
+            for measure in PATH_MEASURES
+        ],
+        "series": series,
+    }
 
 
 def _split_series_key(series_key: str, assets: list[str]) -> tuple[str, str]:

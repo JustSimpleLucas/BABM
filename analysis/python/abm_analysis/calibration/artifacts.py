@@ -8,6 +8,7 @@ file layout decisions.
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime
 import json
 from pathlib import Path
@@ -201,6 +202,10 @@ def _write_summary(
         "search_space": str(search_space_path),
         "robustness_penalty_weight": settings.ranking.robustness_penalty_weight,
         "borderline_credit": settings.ranking.borderline_credit,
+        # Recorded so the score can be taken apart afterwards: the trials CSV holds
+        # each component's raw value, and without the weights that combined them
+        # a reader cannot tell how much of a score a stylised-fact penalty was.
+        "score_weights": asdict(settings.score_weights),
         "best_trial_number": best_validation["trial_number"],
         "best_search_score": best_validation["search_score"],
         "best_mean_validation_score": best_validation["mean_validation_score"],

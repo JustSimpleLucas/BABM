@@ -43,7 +43,7 @@ flowchart LR
         holdoutTables["holdout_validation out-of-sample comparison against held-back benchmark series"]
         benchmarkImport["empirical benchmark CSV and manifest import"]
         inspectRun["db inspect-run provenance summary"]
-        webDashboard["abm_analysis web read-only local dashboard over data/ with per-asset statistics and agent outcomes"]
+        webDashboard["abm_analysis web read-only local dashboard over data/ with per-asset statistics, agent outcomes, stress windows, order flow from trade_ledger.csv, and calibration studies from calibration_trials.csv"]
     end
 
     subgraph calibrationStore["Calibration Study Outputs"]
@@ -62,6 +62,7 @@ flowchart LR
     artifactWriter --> timeSeries
     artifactWriter --> assetTimeSeries
     artifactWriter --> agents
+    artifactWriter --> optionalProtagonist
     artifactWriter --> optionalLedger
     artifactWriter --> metrics
 
@@ -127,7 +128,9 @@ flowchart LR
     calibrationDir --> webDashboard
     assetTimeSeries --> webDashboard
     agents --> webDashboard
-    noteWebReadOnly["web serves statistics recomputed by statistics/diagnostics.py and statistics/multi_asset.py, plus agent outcomes via plots/agents.py; it never simulates and never writes to data/"]
+    optionalLedger --> webDashboard
+    optionalProtagonist --> webDashboard
+    noteWebReadOnly["web serves statistics recomputed by statistics/diagnostics.py and statistics/multi_asset.py, plus agent outcomes via statistics/agents.py, stress windows via statistics/stress.py, order flow via statistics/order_flow.py, the price line's moving averages via statistics/smoothing.py, and calibration studies via statistics/calibration_study.py; it never simulates and never writes to data/"]
     webDashboard --> noteWebReadOnly
     noteWebAssetGate["web reports per-asset statistics only when asset_timeseries.csv records two or more assets, so an archive whose per-asset artefact disagrees with its step series keeps the single-asset numbers"]
     webDashboard --> noteWebAssetGate
@@ -139,7 +142,7 @@ flowchart LR
     classDef policy fill:#fef3c7,stroke:#d97706,stroke-width:1px,color:#0f172a
 
     class runtimeConfig,dataWorkflow,runManager,artifactWriter,pythonRunner producer
-    class runFolder,configSnapshot,metadata,timeSeries,assetTimeSeries,agents,optionalLedger,metrics staging
+    class runFolder,configSnapshot,metadata,timeSeries,assetTimeSeries,agents,optionalProtagonist,optionalLedger,metrics staging
     class calibrationDir,calibrationTrials,calibrationBest,calibrationTables staging
     class experiments,runs,sqlTimeSeries,sqlAssetTimeSeries,sqlAgents,sqlLedger,sqlMetrics,sqlMechanisms,sqlBenchmarks,audit database
     class dbCli,compressCli,seedReplication,calibrateCli,seedRobustnessTables,holdoutTables,benchmarkImport,inspectRun,webDashboard analysis
